@@ -2132,6 +2132,7 @@ describe("失败重试", () => {
 
   it.each([
     AGENT_FAILURE_PROFILES.find((profile) => profile.code === "internal_error")!,
+    AGENT_FAILURE_PROFILES.find((profile) => profile.code === "context_window_exceeded")!,
     AGENT_FAILURE_PROFILES.find((profile) => profile.code === "model_unavailable" && profile.retryable)!,
   ])("Agent terminal $code retryable=$retryable 后 retry 不重发原 user", async (profile) => {
     buildEngine()

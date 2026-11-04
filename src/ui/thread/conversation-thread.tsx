@@ -77,6 +77,8 @@ export type ConversationThreadProps = {
 
 function agentFailureCopyKey(code: AgentFailureCode): MessageKey {
   switch (code) {
+    case "context_window_exceeded":
+      return "fail.contextWindow"
     case "token_budget_exceeded":
       return "fail.tokenBudget"
     case "recursion_limit_exceeded":

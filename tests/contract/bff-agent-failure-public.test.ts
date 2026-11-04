@@ -12,9 +12,9 @@ import YAML from "yaml"
 import { messageRecordSchema } from "../../src/contract/chat"
 import { BFF_CHAT_MESSAGE_ROLES } from "../../src/generated/bff-agent-failure"
 
-const BFF_OWNER_COMMIT = "091cd5022cf517d243a6390b933f9dded7e3b4a9"
-const BFF_PUBLIC_OPENAPI_SHA256 = "35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082"
-const BFF_PUBLIC_OPENAPI_VERSION = "28.18.0"
+const BFF_OWNER_COMMIT = "d166a514d672d100c49b71491deb8fd62cacd658"
+const BFF_PUBLIC_OPENAPI_SHA256 = "27032917fb272601b6da8ba9227bab5324ac305682a72c94adca72e4f9e25577"
+const BFF_PUBLIC_OPENAPI_VERSION = "28.19.0"
 const ROOT = process.cwd()
 const SNAPSHOT = resolve(ROOT, "src/generated/bff-public-openapi.yaml")
 const GENERATOR = resolve(ROOT, "scripts/generate-bff-agent-failure.mjs")
@@ -32,6 +32,7 @@ const CODES = [
   "dependency_unavailable",
   "model_access_denied",
   "model_settlement_pending",
+  "context_window_exceeded",
 ] as const
 const TRUE_CODES = ["model_unavailable", "dependency_unavailable"] as const
 const EXPECTED_TUPLES = [
@@ -207,7 +208,7 @@ describe("pinned BFF Agent failure public contract", () => {
     const bytes = await readFile(SNAPSHOT)
     const spec = YAML.parse(bytes.toString("utf8")) as { info?: { version?: string } }
 
-    expect(BFF_OWNER_COMMIT).toBe("091cd5022cf517d243a6390b933f9dded7e3b4a9")
+    expect(BFF_OWNER_COMMIT).toBe("d166a514d672d100c49b71491deb8fd62cacd658")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(BFF_PUBLIC_OPENAPI_SHA256)
     expect(spec.info?.version).toBe(BFF_PUBLIC_OPENAPI_VERSION)
   })
@@ -241,7 +242,7 @@ describe("pinned BFF Agent failure public contract", () => {
     ])
   })
 
-  it("derives the exact 13 safe tuples with the owner two-role contract", async () => {
+  it("derives the exact 14 safe tuples with the owner two-role contract", async () => {
     const generator = await loadGenerator()
     const inspected = generator.inspectBffAgentFailureContract(await readSpec())
 

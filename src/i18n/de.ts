@@ -533,6 +533,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "thread.verbActive": "{verb} in…",
   "thread.verbActiveShort": "{verb} in",
   "thread.retry": "Versuchen Sie es erneut",
+  "fail.contextWindow": "Dieser Durchlauf wurde gestoppt, weil der Kontext das Modelllimit überschritten hat.",
   "fail.tokenBudget": "Diese Runde hat das Nutzungsbudget überschritten und wurde automatisch gestoppt. Sie können die Aufgabe optimieren und es erneut versuchen.",
   "fail.recursion": "Zu viele Schritte in dieser Runde lösten den Schutzschalter aus. Versuchen Sie es noch einmal mit einer spezifischeren Aussage.",
   "fail.assembly": "Diese Runde konnte nicht gestartet werden. Prüfen Sie den ausgewählten Connector, die API oder die Modelleinstellungen.",

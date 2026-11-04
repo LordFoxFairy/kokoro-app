@@ -610,6 +610,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "thread.verbActive": "{verb} で…",
   "thread.verbActiveShort": "{verb}インチ",
   "thread.retry": "もう一度やり直してください",
+  "fail.contextWindow": "コンテキストがモデルの上限を超えたため、このターンは停止しました。",
   "fail.tokenBudget": "このラウンドは使用量の予算を超えたため、自動的に停止されました。タスクを合理化して再試行できます。",
   "fail.recursion": "このラウンドでステップが多すぎると、保護回路ブレーカーが作動しました。より具体的なステートメントを使用して再試行してください。",
   "fail.assembly": "このラウンドを開始できませんでした。選択したコネクタ、API、またはモデル設定を確認してください。",

@@ -533,6 +533,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "thread.verbActive": "{verb} en…",
   "thread.verbActiveShort": "{verb} po",
   "thread.retry": "Essayer à nouveau",
+  "fail.contextWindow": "Ce tour s’est arrêté parce que le contexte dépassait la limite du modèle.",
   "fail.tokenBudget": "Ce cycle a dépassé le budget d'utilisation et a été automatiquement arrêté. Vous pouvez rationaliser la tâche et réessayer.",
   "fail.recursion": "Trop d'étapes dans ce tour ont déclenché le disjoncteur de protection. Réessayez avec une déclaration plus précise.",
   "fail.assembly": "Impossible de démarrer ce tour. Vérifiez les paramètres du connecteur, de l’API ou du modèle sélectionné.",

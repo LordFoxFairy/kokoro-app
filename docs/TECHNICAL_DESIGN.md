@@ -1,3 +1,7 @@
+## T‑09：Public 28.19 非重试超窗终态
+
+沿用现有生成 failure tuple、AG‑UI 和快照 parser。ConversationThread 显示本地化超窗失败文案，保留已有正文，不展示原请求 Retry。未知提交重试与独立重新生成语义不变，不加第二套映射协议。
+
 > D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
 
 ## I-56 HTTPS Cookie 安全模式（2026-11-03，源码候选，待 Root 复验）

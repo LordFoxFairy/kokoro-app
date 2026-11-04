@@ -533,6 +533,7 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "thread.verbActive": "{verb} em…",
   "thread.verbActiveShort": "{verb} em",
   "thread.retry": "Tente novamente",
+  "fail.contextWindow": "Este turno foi interrompido porque o contexto ultrapassou o limite do modelo.",
   "fail.tokenBudget": "Esta rodada excedeu o orçamento de uso e foi interrompida automaticamente. Você pode agilizar a tarefa e tentar novamente.",
   "fail.recursion": "Muitas etapas nesta rodada acionaram o disjuntor de proteção. Tente novamente com uma afirmação mais específica.",
   "fail.assembly": "Não foi possível iniciar esta rodada. Verifique as configurações do conector, API ou modelo selecionado.",

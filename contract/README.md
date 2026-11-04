@@ -1,4 +1,8 @@
-## T-07 当前 Public28.18 provenance（2026-11-01）
+## T‑09：Public 28.19 非重试超窗终态
+
+唯一 Public OpenAPI 快照来自 BFF `d166a514d672d100c49b71491deb8fd62cacd658`／28.19.0／SHA-256 `27032917fb272601b6da8ba9227bab5324ac305682a72c94adca72e4f9e25577`，原样消费。沿用十二个生成入口；failure tuples 只增 `context_window_exceeded / false`。其余原件、private 状态及 IAM relay policy 不动。
+
+## T-07 历史 Public28.18 provenance（2026-11-01）
 
 唯一完整snapshot固定BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9`／28.18.0／SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082`，本轮不改其原字节。12个既有public生成器通过原 `--write` 重出，current pins原子同步；独立private与policy3不变。新 test-only `tests/contract/bff-account-profile-read-parent.ts` 验完整child hash后仅逆账户资料GET/schema/version，并验完整28.17 parent hash，再进入原Custom API及后续父链。以下28.17段为历史，不是第二当前snapshot；实际验证见 `docs/CURRENT.md`。
 

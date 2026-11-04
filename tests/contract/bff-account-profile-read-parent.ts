@@ -4,6 +4,14 @@ import { createHash } from "node:crypto"
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
 
 export function restorePublic2817AccountProfileReadContract(source: string) {
+  if (/^  version: 28\.19\.0$/mu.test(source)) {
+    if (hash(source) !== "27032917fb272601b6da8ba9227bab5324ac305682a72c94adca72e4f9e25577") {
+      throw Error("Context window Public28.19 child drift")
+    }
+    const failure = "                - context_window_exceeded\n"
+    if (source.split(failure).length !== 3) throw Error("Context window Public28.19 exact delta drift")
+    source = source.replaceAll(failure, "").replace("  version: 28.19.0\n", "  version: 28.18.0\n")
+  }
   if (!/^  version: 28\.18\.0$/mu.test(source)) {
     if (source.includes("      operationId: readAccountProfile\n") || source.includes("    AccountProfileReadResponse:\n")) {
       throw Error("Account profile read Public28.18 version drift")

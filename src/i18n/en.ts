@@ -723,6 +723,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "thread.verbActive": "{verb}…",
   "thread.verbActiveShort": "{verb}",
   "thread.retry": "Retry",
+  "fail.contextWindow": "This turn stopped because the context exceeded the model’s window.",
   "fail.tokenBudget": "This turn exceeded its usage budget and stopped. Trim the task and retry.",
   "fail.recursion": "This turn hit the loop-guard from too many steps. Try a more specific request.",
   "fail.assembly": "This turn could not start. Check the selected connector, API, or model settings.",

@@ -282,7 +282,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("failureCopyKey — generated 11-code safe profile localization", () => {
+describe("failureCopyKey — generated safe profile localization", () => {
   it("每个闭集码映射到一个存在的、非通用的文案键", () => {
     for (const code of CODES) {
       const key = failureCopyKey(failedThread(code).runFailuresById.run_1 ?? null)
@@ -945,7 +945,8 @@ describe("ConversationThread 失败卡渲染", () => {
       window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
       renderFailure(failedThreadWithProfile(profile), onRetry)
       expect(screen.getByText(expectedAgentFailureZhCopy(profile.code))).toBeTruthy()
-      expect(screen.queryByRole("button", { name: tr("thread.retry") })).toBeNull()
+      expect(screen.getByText("working…")).toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: expectedZhCopy("thread.retry") })).toBeNull()
       expect(onRetry).not.toHaveBeenCalled()
       cleanup()
     },

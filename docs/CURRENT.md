@@ -1,3 +1,7 @@
+## T‑09 当前消费者候选（2026-11-04）
+
+Public 28.19 唯一快照逐字固定 BFF `d166a51`，只新增 `context_window_exceeded / false`。现有 AG‑UI、快照与失败卡承接；保留正文且不出现重发动作。12 个既有生成入口、定向与 `pnpm check` 通过。正式跨仓浏览器和发布配对仍待。
+
 ## I24 原生退出上游 JSON 规范化（2026-11-01，本地候选，待真实复验）
 
 Root 在精确 App `1d54`／Root `325d` 组合实测：冷登录 303、session/project 200，但实际 App sign-out 415，旧 cookie replay 仍 200；原 minimal 四检查及 cleanup 通过未覆盖此缺口。首轮零字节上游修补只证明 transport 接受请求，不证明 IAM 接受媒体类型；其工程门与 RED 记录在下方保留历史。本轮依据锁定 IAM HTTP parser 及既有 owner 退出测试，浏览器入站仍严格零体，adapter 独自构造固定 `Content-Type: application/json` 与 UTF-8 `{}`，上游 `maxRequestBytes` 精确为 2。既不透传浏览器 body/Content-Type，也不放宽 transport、IAM 或原 Origin/cookie/取消规则，无新协议/helper。

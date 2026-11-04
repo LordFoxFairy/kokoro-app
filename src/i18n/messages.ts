@@ -658,6 +658,7 @@ export const zh = {
   "thread.verbActiveShort": "{verb}中",
   "thread.retry": "重试",
   // run.failed 按已发布安全码展示，不把未知 producer 错误降级成内部错误。
+  "fail.contextWindow": "本轮已停止：上下文超过了模型可处理的长度。",
   "fail.tokenBudget": "这一轮超出了用量预算，已自动停止。可以精简任务后重试。",
   "fail.recursion": "这一轮步骤过多触发了保护熔断。换个更具体的说法再试一次。",
   "fail.assembly": "本轮未能启动，请检查所选连接器、API 或模型设置。",

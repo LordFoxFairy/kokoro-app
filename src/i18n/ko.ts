@@ -533,6 +533,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "thread.verbActive": "{verb}에…",
   "thread.verbActiveShort": "{verb}인치",
   "thread.retry": "다시 시도하세요",
+  "fail.contextWindow": "컨텍스트가 모델의 처리 한도를 초과해 이번 응답이 중단되었습니다.",
   "fail.tokenBudget": "이 라운드는 사용 예산을 초과하여 자동으로 중지되었습니다. 작업을 간소화하고 다시 시도할 수 있습니다.",
   "fail.recursion": "이번 라운드에서 너무 많은 단계로 인해 보호 회로 차단기가 작동되었습니다. 좀 더 구체적인 설명으로 다시 시도해 보세요.",
   "fail.assembly": "이 라운드를 시작하지 못했습니다. 선택한 커넥터, API 또는 모델 설정을 확인하세요.",

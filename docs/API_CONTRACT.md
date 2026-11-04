@@ -1,3 +1,7 @@
+## T‑09：Public 28.19 非重试超窗终态
+
+BFF Public 28.19 在既有普通和 ordered Message failure 表示增加 `context_window_exceeded`，只允许 `retryable: false`。AG‑UI、快照及原路由保持，App 不发送或消费 `personal_context`。
+
 > D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
 
 ## I-56 原生 Cookie 模式配对（2026-11-03，源码候选，待 Root 复验）
@@ -37,9 +41,9 @@ published relay 3.0 的精确两模式与叶名 `session_token`、`session_data`
 
 UI 可以合并只读状态 GET、使用真实 expires_at 安排重读，并以本地 epoch/abort/跨标签无秘密失效事件退休旧视图；这些值不成为认证证明。只读恢复不自动重放业务写入或 unknown 原命令。唯一已固定来源为 BFF code-first 生成的 `contract/openapi/browser/v1/auth-session.json`；待 owner 固定 version/digest 并发布、App 正规生成 decoder，再核错误分类及 rolling/RSC 行为，执行契约、adapter 和真实浏览器冷登录／Admin／退出／撤权／迟到响应验证；本节不报告实现通过。
 
-## T-07 当前完整 Public28.18 pin（2026-11-01）
+## T-07 历史 Public28.18 pin（2026-11-01）
 
-当前唯一 `src/generated/bff-public-openapi.yaml` 精确对应 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9:contract/openapi/v1/openapi.yaml`，版本28.18.0，SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082`。12 条既有 public 生成链和 current consumer assertions 统一此来源，snapshot原字节未改；private artifacts与独立policy3保持原pin。
+当时唯一 `src/generated/bff-public-openapi.yaml` 精确对应 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9:contract/openapi/v1/openapi.yaml`，版本28.18.0，SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082`。12 条既有 public 生成链和 current consumer assertions 统一此来源，snapshot原字节未改；private artifacts与独立policy3保持原pin。
 
 相对 BFF `853ca9a5d8da3500b0c37543c72198a520e46225`／28.17.0，唯一新增操作为 `GET /v1/account/profile`（readAccountProfile），唯一新增schema为 AccountProfileReadResponse；共200操作，原199项顺序及既有PATCH不变。test-only inverse完整恢复SHA256 `ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7` 后再进入原父证明，不覆盖历史hash。版本负控实际改变28.18→28.19；本轮不新增Web同源路由、权限或运行行为，以下版本段按当时状态读取。
 
