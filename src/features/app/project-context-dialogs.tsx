@@ -66,6 +66,9 @@ export function ProjectContextDialogs({ preview, active = true, historyAvailable
   // Radix can retain the previous passive callback after the DOM has unlocked.
   useLayoutEffect(() => { committedInstructionsSaving.current = instructionsSaving }, [instructionsSaving])
   const instructionsHistoryDialogRef = useRef<HTMLDivElement | null>(null)
+  const selectedRevision = projectInstructionHistory.find((revision) => revision.id === selectedInstructionRevision)
+    ?? projectInstructionHistory.find((revision) => revision.current)
+    ?? projectInstructionHistory[0]
   const frozenInstruction = instructionsResult?.status === "unknown" || instructionsResult?.status === "read-error" || instructionsResult?.status === "forbidden"
   const saveInstruction = async () => {
     if (!active || !instructionsAvailable || instructionsSaving || !onSaveProjectInstructions || instructionsResult?.status === "forbidden") return
@@ -98,7 +101,7 @@ export function ProjectContextDialogs({ preview, active = true, historyAvailable
             : instructionsResult?.status === "forbidden" ? "skills.personal.forbidden" : "firstSite.projectInstructionsSaveError")}</p> : null}
         </div>
         <DialogFooter className={dialogStyles.instructionsDialogFooter}>
-          <Button type="button" variant="outline" className={dialogStyles.instructionsHistory} disabled={!historyAvailable} onClick={() => { setSelectedInstructionRevision(projectInstructionHistory[0]?.id ?? null); setInstructionsHistoryOpen(true) }}>{t("firstSite.history")}</Button>
+          <Button type="button" variant="outline" className={dialogStyles.instructionsHistory} disabled={!historyAvailable} onClick={() => { setSelectedInstructionRevision(null); setInstructionsHistoryOpen(true) }}>{t("firstSite.history")}</Button>
           <span className={dialogStyles.instructionsFooterSpacer} />
           <DialogClose asChild><Button type="button" variant="outline" disabled={instructionsSaving}>{t("firstSite.cancel")}</Button></DialogClose>
           <Button type="button" disabled={!instructionsAvailable || instructionsSaving || !onSaveProjectInstructions || instructionsResult?.status === "forbidden"} onClick={() => { void saveInstruction() }}>{t(instructionsResult?.status === "unknown" ? "projectSkills.retryOriginal" : instructionsResult?.status === "read-error" ? "projectSkills.reload" : "firstSite.save")}</Button>
@@ -109,7 +112,7 @@ export function ProjectContextDialogs({ preview, active = true, historyAvailable
     <Dialog open={active && historyAvailable && instructionsHistoryOpen} onOpenChange={setInstructionsHistoryOpen}>
       <DialogContent ref={instructionsHistoryDialogRef} tabIndex={-1} className={dialogStyles.instructionsHistoryDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")} onOpenAutoFocus={(event) => { event.preventDefault(); instructionsHistoryDialogRef.current?.focus() }}>
         <DialogTitle className={dialogStyles.instructionsHistoryTitle}>{t("firstSite.projectInstructionsHistory")}</DialogTitle>
-        <div className={dialogStyles.instructionsHistoryLayout}><ul className={dialogStyles.instructionsRevisionList}>{projectInstructionHistory.length > 0 ? projectInstructionHistory.map((revision, index) => { const selected = (selectedInstructionRevision ?? projectInstructionHistory[0]?.id) === revision.id; const date = new Intl.DateTimeFormat(locale, { weekday: "short", hour: "numeric", minute: "2-digit" }).format(revision.updatedAt); return <li key={revision.id}><Button type="button" variant="ghost" className={dialogStyles.instructionsRevision} data-selected={selected || undefined} aria-pressed={selected} onClick={() => setSelectedInstructionRevision(revision.id)}>{revision.current || index === 0 ? <small>{t("firstSite.currentVersion")}</small> : null}<strong>{date}</strong><span><i aria-hidden="true">{revision.actorName.slice(0, 1).toUpperCase()}</i>{revision.actorName}</span></Button></li> }) : <p className={dialogStyles.instructionsHistoryEmpty}>{t("firstSite.noInstructionHistory")}</p>}</ul><div className={dialogStyles.instructionsRevisionContent}>{projectInstructionHistory.find((revision) => revision.id === (selectedInstructionRevision ?? projectInstructionHistory[0]?.id))?.instruction ?? ""}</div></div>
+        <div className={dialogStyles.instructionsHistoryLayout}><ul className={dialogStyles.instructionsRevisionList}>{projectInstructionHistory.length > 0 ? projectInstructionHistory.map((revision) => { const selected = selectedRevision?.id === revision.id; const date = new Intl.DateTimeFormat(locale, { weekday: "short", hour: "numeric", minute: "2-digit" }).format(revision.updatedAt); return <li key={revision.id}><Button type="button" variant="ghost" className={dialogStyles.instructionsRevision} data-selected={selected || undefined} aria-pressed={selected} onClick={() => setSelectedInstructionRevision(revision.id)}>{revision.current ? <small>{t("firstSite.currentVersion")}</small> : null}<strong>{date}</strong><span><i aria-hidden="true">{revision.actorName.slice(0, 1).toUpperCase()}</i>{revision.actorName}</span></Button></li> }) : <p className={dialogStyles.instructionsHistoryEmpty}>{t("firstSite.noInstructionHistory")}</p>}</ul><div className={dialogStyles.instructionsRevisionContent}>{selectedRevision?.instruction ?? ""}</div></div>
       </DialogContent>
     </Dialog>
 

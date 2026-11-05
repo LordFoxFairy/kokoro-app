@@ -280,7 +280,8 @@ it("不可恢复的幂等冲突不提供同键重试，提示重新选择文件"
   expect(within(dialog).getByRole("list", { name: "文件和资源" })).not.toHaveTextContent("conflict.txt")
 })
 
-it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
+it("项目指令历史按 owner 当前标记选中同毫秒版本，并可切换历史正文", () => {
+  const timestamp = new Date("2026-08-29T10:31:00Z").getTime()
   const { container } = render(
     <LocaleProvider>
       <KokoroProjectWorkspace preview
@@ -289,8 +290,8 @@ it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
         onPrompt={vi.fn()}
         projectInstructions="当前规则"
         projectInstructionHistory={[
-          { id: "current", instruction: "当前规则", updatedAt: new Date("2026-08-29T10:31:00Z").getTime(), actorName: "Kokoro", current: true },
-          { id: "previous", instruction: "上一版规则", updatedAt: new Date("2026-08-28T09:15:00Z").getTime(), actorName: "Kokoro" },
+          { id: "previous", instruction: "上一版规则", updatedAt: timestamp, actorName: "Kokoro", current: false },
+          { id: "current", instruction: "当前规则", updatedAt: timestamp, actorName: "Kokoro", current: true },
         ]}
         workspaceCapabilities={capabilities}
       />
@@ -306,11 +307,18 @@ it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
   fireEvent.click(screen.getByRole("button", { name: "历史记录" }))
 
   const historyDialog = screen.getByRole("dialog", { name: "项目指令历史" })
-  expect(historyDialog).toHaveTextContent("当前版本")
+  expect(within(historyDialog).getAllByText("当前版本")).toHaveLength(1)
   expect(historyDialog).toHaveTextContent("当前规则")
+  expect(historyDialog).not.toHaveTextContent("上一版规则")
   const revisions = within(within(historyDialog).getByRole("list")).getAllByRole("button")
   expect(revisions).toHaveLength(2)
-  fireEvent.click(at(revisions, 1, "previous instruction revision"))
+  const previous = at(revisions, 0, "previous instruction revision")
+  const current = at(revisions, 1, "current instruction revision")
+  expect(previous).toHaveAttribute("aria-pressed", "false")
+  expect(current).toHaveAttribute("aria-pressed", "true")
+  expect(current).toHaveTextContent("当前版本")
+  fireEvent.click(previous)
+  expect(previous).toHaveAttribute("aria-pressed", "true")
   expect(historyDialog).toHaveTextContent("上一版规则")
 })
 
