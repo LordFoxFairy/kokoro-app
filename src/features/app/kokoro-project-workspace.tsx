@@ -107,6 +107,7 @@ export function KokoroProjectWorkspace({
   useLayoutEffect(() => { activePresentation.current = { active: contextActive, token: presentationToken } }, [contextActive, presentationToken])
   const presentationCurrent = () => activePresentation.current.active && activePresentation.current.token === presentationToken && projectContextRoute() === presentationRoute
   const capabilities = workspaceCapabilities
+  const showWebsitePreview = preview && !task && capabilities?.websites === true
   const instructionsAvailable = Boolean(capabilities?.instructions) && (preview ||
     (projectReadBoundary === undefined || projectReadBoundary.admitted && projectReadBoundary.subject !== null)
     && (projectDetail === undefined || projectDetail.status === "ready" && projectDetail.data.id === projectRef))
@@ -408,7 +409,7 @@ export function KokoroProjectWorkspace({
           projectHistoryStatus={projectHistoryStatus} projectHistoryRetryable={projectHistoryRetryable} onRetryProjectRead={onRetryProjectRead}
           onOpenSettings={onOpenSettings} projectMcpRecommendations={projectMcpRecommendations} instructionsAvailable={instructionsAvailable}
           onInstructions={openInstructions} onResources={openResources} onUpload={openResourceUpload}>
-          {!task && capabilities?.websites ? (
+          {showWebsitePreview ? (
             <ProjectContextCard
               kind="websites"
               title={t("firstSite.websites")}
@@ -534,7 +535,7 @@ export function KokoroProjectWorkspace({
       />
       <ProjectWorkspaceDialogs preview={preview}
         {...(brandName === undefined ? {} : { brandName })}
-        websitesOpen={!task && websitesOpen}
+        websitesOpen={showWebsitePreview && websitesOpen}
         setWebsitesOpen={setWebsitesOpen}
         websiteQuery={websiteQuery}
         setWebsiteQuery={setWebsiteQuery}

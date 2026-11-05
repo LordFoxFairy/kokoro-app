@@ -533,6 +533,29 @@ it("网站入口打开项目级选择弹窗而不是向 Composer 注入提示词
   expect(onPrompt).not.toHaveBeenCalled()
 })
 
+it("项目网站预览不会被正式能力开关开启，切换到正式工作区时也关闭已有预览", () => {
+  const workspace = (preview: boolean) => (
+    <LocaleProvider>
+      <KokoroProjectWorkspace preview={preview} brandName="Kokoro" composer={<div>composer</div>}
+        onPrompt={vi.fn()} workspaceCapabilities={capabilities} />
+    </LocaleProvider>
+  )
+  const { container, rerender } = render(workspace(false))
+
+  expect(container.querySelector('[data-context-kind="websites"]')).not.toBeInTheDocument()
+
+  rerender(workspace(true))
+  fireEvent.click(within(contextCard(container, "websites")).getByRole("button", { name: "新增" }))
+  const dialog = screen.getByRole("dialog", { name: "新增网站至当前项目" })
+  fireEvent.click(within(dialog).getByRole("button", { name: /Kokoro 产品网站/ }))
+  expect(within(dialog).getByRole("button", { name: "保存" })).toBeEnabled()
+
+  rerender(workspace(false))
+  expect(container.querySelector('[data-context-kind="websites"]')).not.toBeInTheDocument()
+  expect(screen.queryByRole("dialog", { name: "新增网站至当前项目" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument()
+})
+
 it("网站选择器可以搜索、选择并保存合成网站", async () => {
   render(
     <LocaleProvider>
