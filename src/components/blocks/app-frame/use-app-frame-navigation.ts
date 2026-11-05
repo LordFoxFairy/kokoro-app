@@ -167,11 +167,9 @@ export function useAppFrameNavigation({
           engine?.openConversation(requestedConversation)
         }
       } else if (!projectWorkspace && previousConversation !== null && currentId !== null) {
-        // Direct history returns to a fresh workspace. Project overview only
-        // changes the route projection; retain its pending/run and local index. Do not
-        // clear a blank draft session that is already the current view, as can
-        // happen when a Settings URL is closed without a conversation state.
-        engine?.newConversation()
+        // Returning by history is navigation, not the explicit New/Stop
+        // command. Keep the departed task's original owner and recovery state.
+        engine?.returnToLocalHome()
       }
     }
     const onHashChange = () => setSettingsTab(settingsTabFromLocation())

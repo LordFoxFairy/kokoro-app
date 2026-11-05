@@ -118,6 +118,8 @@ export type SessionEngine = {
   // 打开服务端清单里的会话（本地索引未见则先纳入缓存再水合）。
   openConversation: (id: string) => void
   retireLocalCreationProvenance: () => void
+  /** Navigate to a local direct draft without cancelling or abandoning the previous task. */
+  returnToLocalHome: () => void
   newConversation: () => void
   deleteConversation: (id: string) => Promise<boolean>
   /** Remove one confirmed-nonmember Conversation from this scope's browser index only. */

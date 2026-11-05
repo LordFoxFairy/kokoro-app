@@ -1170,22 +1170,16 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         notify()
       })
       .catch((error: unknown) => {
-        if (
-          disposed ||
-          pendingSubmission !== submission ||
-          machine.phase !== "submitting" ||
-          store?.activeId !== sessionId
-        ) {
-          return
+        const active = !disposed && pendingSubmission === submission && machine.phase === "submitting" && store?.activeId === sessionId
+        const clientError = error instanceof SessionClientError ? error : null
+        const code = clientError?.code ?? null
+        // Keep a known owner error with the original journal after navigation.
+        // Only the active submission may change the current view.
+        if (active || (!disposed && clientError?.reason === "http" && code !== null)) {
+          try { deps.submissionRecovery?.failure(submission, code ?? "submission_outcome_unknown") } catch { /* Keep the frozen intent. */ }
         }
-        // HTTP owner failures expose a reviewed public code. Preserve that
-        // code for recovery UX (credit checks already rely on this), while
-        // keeping unknown/network errors as their local diagnostic detail.
-        const detail = error instanceof SessionClientError && error.code !== null
-          ? error.code
-          : describeUnknown(error)
-        const recoveryCode = error instanceof SessionClientError && error.code !== null ? error.code : "submission_outcome_unknown"
-        try { deps.submissionRecovery?.failure(submission, recoveryCode) } catch { /* The frozen intent remains unknown. */ }
+        if (!active) return
+        const detail = code ?? describeUnknown(error)
         if (recoveringExpiredCursor || connection.status !== "connected") {
           recoveredSubmission = submission
           recoveredSubmissionError = detail
@@ -1580,6 +1574,15 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     activateConversation(next)
   }
 
+  function returnToLocalHome(): void {
+    if (disposed || scope.kind !== "direct") return
+    const id = createId("conv")
+    if (store?.conversations.some(entry => entry.id === id)) return
+    // Browser history changes only the active view. Keep the previous
+    // submission journal and owner run for an exact Forward/reopen.
+    activateConversation(addConversation(store, id, now(), store ? "fast" : pendingMode, deps.draftLifecycle !== undefined), false)
+  }
+
   function newConversation(): void {
     if (disposed) {
       return
@@ -1899,6 +1902,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     selectConversation,
     openConversation,
     retireLocalCreationProvenance,
+    returnToLocalHome,
     newConversation,
     deleteConversation,
     reconcileConversationCache,

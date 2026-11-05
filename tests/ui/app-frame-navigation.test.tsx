@@ -3,8 +3,11 @@ import { afterEach, expect, it, vi } from "vitest"
 
 import { useAppFrameNavigation } from "@/components/blocks/app-frame/use-app-frame-navigation"
 import { createSessionEngine } from "@/engine/machine"
+import { SessionClientError } from "@/engine/client-error"
 import type { ConversationStore } from "@/core/conversations"
-import { createFakeClient, createMemoryStorage } from "../engine/fakes"
+import { makeSnapshot } from "../core/fixtures"
+import { createFakeClient, createMemoryStorage, makeReceipt, settle } from "../engine/fakes"
+import { createBrowserSubmissionRecovery, SUBMISSION_RECOVERY_PREFIX } from "@/ui/shell/browser-submission-recovery"
 
 afterEach(() => {
   cleanup()
@@ -145,3 +148,96 @@ it("an explicit direct query id still owns its existing thread", () => {
   const view = renderHook(() => useAppFrameNavigation(options))
   expect(view.result.current.routeOwnsConversation).toBe(true)
 })
+
+it.each(["unknown", "late-ack", "late-rejection", "accepted"] as const)(
+  "direct browser Back preserves owner/recovery state, and Forward reopens the original session (%s)",
+  async outcome => {
+    const client = createFakeClient()
+    const recovery = createBrowserSubmissionRecovery({
+      subject: "a01-history-subject", scope: options.scope, isCurrent: () => true, storage: () => window.sessionStorage,
+    })
+    const engine = createSessionEngine({
+      client, storage: createMemoryStorage<ConversationStore>(null), submissionRecovery: recovery,
+      draftLifecycle: { isUnsubmitted: () => true, retire: () => true },
+    })
+    const accepted = makeReceipt("run_a01_history")
+    let journal: string | undefined
+    let resolveLate: ((receipt: ReturnType<typeof makeReceipt>) => void) | undefined
+    let rejectLate: ((error: SessionClientError) => void) | undefined
+    client.nextCreate = outcome === "unknown" ? () => Promise.reject(Error("connection closed after dispatch"))
+      : outcome === "late-ack" || outcome === "late-rejection"
+        ? () => new Promise((resolve, reject) => { resolveLate = resolve; rejectLate = reject })
+      : () => Promise.resolve(accepted)
+    const move = async (delta: number) => {
+      await act(async () => {
+        const popped = new Promise<void>(resolve => window.addEventListener("popstate", () => resolve(), { once: true }))
+        window.history.go(delta)
+        await popped
+      })
+    }
+    try {
+      window.history.replaceState(null, "", "/app")
+      expect(engine.submit("first owner command")).toBe(true)
+      const sid = engine.getSnapshot().store!.activeId
+      journal = `${SUBMISSION_RECOVERY_PREFIX}a01-history-subject:direct:${encodeURIComponent(sid)}`
+      const first = client.createCalls[0]
+      if (!first) throw new Error("missing initial Message command")
+      const original = structuredClone(first)
+      expect(original.sessionId).toBe(sid)
+      window.history.pushState(null, "", `/app?conversation=${sid}`)
+      renderHook(() => useAppFrameNavigation({ ...options, engine, activeId: sid }))
+      await act(async () => { await settle() })
+      const before = window.sessionStorage.getItem(journal)
+      expect(JSON.parse(before!).state).toBe(outcome === "accepted" ? "acknowledged" : "pending")
+      await move(-1)
+      expect(window.location.pathname + window.location.search).toBe("/app")
+      const home = engine.getSnapshot()
+      expect(home.store?.activeId).not.toBe(sid)
+      expect(home.locallyCreatedSessionId).toBe(home.store?.activeId)
+      expect(client.snapshotCalls).toEqual([])
+      if (outcome === "late-ack") {
+        await act(async () => { resolveLate!(accepted); await settle() })
+        expect(client.controlCalls).toEqual([])
+        expect(JSON.parse(window.sessionStorage.getItem(journal)!).state).toBe("acknowledged")
+      } else if (outcome === "late-rejection") {
+        await act(async () => { rejectLate!(new SessionClientError("http", "Not enough credits", "insufficient_credits", 402)); await settle() })
+        expect(engine.getSnapshot().machine.error).toBeNull()
+      } else if (outcome === "accepted") {
+        expect(client.controlCalls).toEqual([])
+        expect(window.sessionStorage.getItem(journal)).toBe(before)
+      } else {
+        expect(window.sessionStorage.getItem(journal)).toBe(before)
+      }
+      expect(client.createCalls).toEqual([original])
+      expect(engine.getSnapshot().thread.messages).toEqual([])
+      if (outcome === "late-ack" || outcome === "accepted") {
+        client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+          sessionId: sid, activeRun: { run_id: accepted.run_id, status: "running" },
+          messages: [{ message_id: accepted.user_message_id, role: "user", content: "first owner command",
+            status: "completed", created_at: "2026-07-02T00:00:00Z" }],
+        }))
+      }
+      await move(1)
+      await act(async () => { await settle() })
+      expect(window.location.search).toBe(`?conversation=${sid}`)
+      expect(engine.getSnapshot().store?.activeId).toBe(sid)
+      expect(client.createCalls).toEqual([original])
+      expect(client.snapshotCalls).toEqual([sid])
+      if (outcome === "unknown") {
+        expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+        client.nextCreate = () => Promise.resolve(accepted)
+        await act(async () => { engine.retry(); await settle() })
+        expect(client.createCalls).toEqual([original, original])
+      } else if (outcome === "late-rejection") {
+        expect(engine.getSnapshot().machine.error).toBe("insufficient_credits")
+      } else {
+        expect(engine.getSnapshot().machine.runId).toBe(accepted.run_id)
+        expect(engine.getSnapshot().thread.messages.map(message => message.id)).toContain(accepted.user_message_id)
+      }
+      expect(client.controlCalls).toEqual([])
+    } finally {
+      engine.dispose()
+      if (journal) window.sessionStorage.removeItem(journal)
+    }
+  },
+)

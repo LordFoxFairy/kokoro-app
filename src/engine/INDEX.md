@@ -17,7 +17,7 @@ CHAT-1当前：`ownerConfirmedSessionId`只投影当前视图的正向snapshot/c
 PROJECT-1（2026-10-24）：EngineSnapshot.missingSessionId 是本 active 的权威缺席观察，不是本地创建或持久状态。new／switch／hydrate／accepted create 清退；同 session pending/unknown、本页新建及非空正文不因 null 改缺失。openConversation 对当前 missing ID 允许原 ID 只读 Retry；null 与 exact deferred receipt 竞态采用 ACK、零重复 POST，GC 原驱逐保持。
 
 <!-- SET47 archive consumer: 2026-10-15 -->
-SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未确认持久化的本地创建任务。首次submit/newConversation同步产生；历史打开、外部store、dispose、subject/logout、owner snapshot/message receipt与当前列表/状态/归档ACK证明后退休。retireLocalCreationProvenance只清证明并通知，不清线程或取消Run。归档请求由页面hook持有，engine不新增归档数据库/网络真源。
+SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未确认持久化的本地创建任务。首次submit／显式newConversation／直接会话浏览器返回裸首页分配本地稿时同步产生；历史打开、外部store、dispose、subject/logout、owner snapshot/message receipt与当前列表/状态/归档ACK证明后退休。retireLocalCreationProvenance只清证明并通知，不清线程或取消Run。归档请求由页面hook持有，engine不新增归档数据库/网络真源。直接会话的浏览器 Back 回裸首页走 returnToLocalHome：只切换到新本地稿，保留旧 owner Run 与原提交 journal；迟到的已解析 owner 错误只写原 journal，不污染当前草稿；显式 New 的原取消语义不变。
 
 ## SET21 停止分享回执
 
@@ -40,7 +40,7 @@ SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未�
 - `machine.ts`
   - `createSessionEngine(deps) → SessionEngine`：唯一的引擎编排入口；submit（运行中插话转
     现 create-message 路径、不动状态机；同步返回本地是否接纳，供调用方在拒绝时保留草稿）/ retry（未回执重试复用首发 key 与完整 options 快照，保持同 digest）/ cancelRun /
-    stageToolDecision / selectConversation / newConversation / deleteConversation /
+    stageToolDecision / selectConversation / returnToLocalHome / newConversation / deleteConversation /
     reconcileConversationCache（只驱逐本地Conversation索引，不调用owner DELETE）/ setMode / dispose。
   - 从 `machine-state.ts` 与 `engine-types.ts` re-export 原有公共入口，保持下游 import 契约。
 - `machine-state.ts`
