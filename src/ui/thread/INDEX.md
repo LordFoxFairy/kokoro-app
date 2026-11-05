@@ -88,8 +88,8 @@ MCP 详情阅读：`activity-result.tsx` 将已验证预览分为无外部资源
 
 2026-10-28 回焦修正：可打开的 ToolCallRow 暴露 opaque activity identity，由 ContextPanel 在关闭后重解析当前 shell 内同一可见行；不依赖鼠标激活是否获得焦点，不按同名/末行选择。
 
-- `completed-turn-sections.ts`：正式 final 优先；只读 display 旁证需 exact Run／唯一完整 parts／确认 revision／真实正文身份，不进入 durable merge。
-- `assistant-turn.tsx`：历史成功轮外层可见时沿原 scope reader 单次取证；折叠区内部是否展开不决定首次读。焦点、旧失败与时间顺序保持。
+- `completed-turn-sections.ts`：只从 canonical terminal final 引用及同 Run 的已确认 ordered parts 划分过程与正文，不从历史正文或只读详情推断 final。
+- `assistant-turn.tsx`：整轮可见不触发 RunDisplay 请求；具名活动需要事实或用户查看详情时，由 `SegmentProcess` 沿同 scope/Run reader 读取。焦点、失败态与时间顺序保持。
 
 过程摘要计数（2026-10-28）：同一 passage 每项活动计一次，包括混合组的 MCP 发现/说明；计数表示观察到的尝试，不表示成功或唯一资源。摘要不再隐去准备次数，原时间顺序、相邻分组、披露与 activity identity 不变。
 

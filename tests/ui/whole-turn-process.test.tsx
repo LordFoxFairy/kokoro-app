@@ -121,3 +121,35 @@ it("defers removing a focused passage header until blur, then ignores its saved 
   expect(container.querySelector('button[data-activity-id="a"]')).toBe(row)
   expect(row.closest("[inert]")).toBeNull()
 })
+
+it("does not read Run display for a visible text-only history turn without a final reference, but still reads an inspected action", async () => {
+  const callbacks = new Set<IntersectionObserverCallback>()
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(private callback: IntersectionObserverCallback) {}
+    observe() { callbacks.add(this.callback) }
+    disconnect() { callbacks.delete(this.callback) }
+  })
+  try {
+    const readDisplay = vi.fn().mockResolvedValue({ run_id: "run", display_skills: [], tool_paths: [], tool_facts: [], activity_details: [] })
+    const boundary = { sessionId: "s", isCurrent: () => true, client: { readDisplay } } as unknown as import("@/ui/thread/answer-action-scope").AnswerActionBoundary
+    const onOpenActivity = vi.fn()
+    const { finalSegmentId, ...withoutFinalReference } = props
+    void finalSegmentId
+    const historical = { ...withoutFinalReference, finalPartsComplete: false, answerActionBoundary: boundary, onOpenActivity }
+    const intersect = () => act(async () => {
+      for (const callback of callbacks) callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)
+    })
+
+    const { rerender } = render(<LocaleProvider><AssistantTurn {...historical} steps={steps.filter(step => step.kind === "text")} /></LocaleProvider>)
+    await intersect()
+    expect(readDisplay).not.toHaveBeenCalled()
+    expect(screen.getByText("Final answer remains visible")).toBeVisible()
+    expect(screen.queryByRole("button", { name: "Process" })).toBeNull()
+
+    rerender(<LocaleProvider><AssistantTurn {...historical} /></LocaleProvider>)
+    fireEvent.click(screen.getByRole("button", { name: /File/u }))
+    await intersect()
+    expect(onOpenActivity).toHaveBeenCalledExactlyOnceWith("a")
+    expect(readDisplay).toHaveBeenCalledExactlyOnceWith({ sessionId: "s", runId: "run" }, expect.any(AbortSignal))
+  } finally { vi.unstubAllGlobals() }
+})

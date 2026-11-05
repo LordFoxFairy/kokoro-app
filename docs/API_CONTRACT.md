@@ -2471,7 +2471,7 @@ Web在上传body实际超过原1MiB且尚未发送BFF的413分支独占`x-kokoro
 
 ## Public28.15 最终答复只读旁证（配对候选）
 
-原私有 RunDisplay optional `final_answer` 为 closed `{segment_id, revision}`；已由 BFF `38b942742574bccb12d58546301ee0c7cf4014c3` 正式 Public28.15 生成。不是 durable final 事件、权限或历史补写入口。客户端仅在 exact Run 完整 parts 与确认 revision 满足时使用，正式 final 始终优先。无新 HTTP 路由、Share 字段或执行行为。
+原私有 RunDisplay optional `final_answer` 为 closed `{segment_id, revision}`；已由 BFF `38b942742574bccb12d58546301ee0c7cf4014c3` 正式 Public28.15 生成。不是 durable final 事件、权限或历史补写入口。App 当前只以 canonical terminal final 和确认 parts 划分正文，不再将详情字段接作第二条 final 路径或因历史轮进入视口而自动取证。无新 HTTP 路由、Share 字段或执行行为。
 
 ## 2026-10-28 私有 snapshot：已发送 MCP 选择
 
