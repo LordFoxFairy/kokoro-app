@@ -15,7 +15,6 @@ import styles from "./settings-sections.module.css";
 
 export function TaskDeliveryPreferencesSection({ preview }: { preview: boolean }) {
   const t = useT();
-  const steeringReasonId = useId();
   const previewReasonId = useId();
   const [delivery, setDelivery] = useState(() => preview ? "queue" : readChatDelivery());
   const [saveFailed, setSaveFailed] = useState(false);
@@ -34,7 +33,7 @@ export function TaskDeliveryPreferencesSection({ preview }: { preview: boolean }
           <p className={styles.chatPreferenceHint}>{t("settings.taskDeliveryHint")}</p>
         </div>
         <Select value={delivery} onValueChange={(value) => {
-          if (preview || (value !== "queue" && value !== "interrupt")) return;
+          if (preview || (value !== "queue" && value !== "interrupt" && value !== "steer")) return;
           const saved = writeChatDelivery(value);
           if (saved) setDelivery(value);
           setSaveFailed(!saved);
@@ -48,9 +47,8 @@ export function TaskDeliveryPreferencesSection({ preview }: { preview: boolean }
             <SelectValue />
           </SelectTrigger>
           <SelectContent className={styles.deliveryOptions}>
-            <p id={steeringReasonId} className={styles.chatPreferenceHint}>{t("settingsServices.steeringUnavailable")}</p>
             {preview ? <p id={previewReasonId} className={styles.chatPreferenceHint}>{t("settings.taskDeliveryPreview")}</p> : null}
-            <SelectItem value="send" disabled aria-describedby={steeringReasonId}>{t("settingsServices.sendWithoutInterrupt")}</SelectItem>
+            <SelectItem value="steer" disabled={preview} aria-describedby={preview ? previewReasonId : undefined}>{t("settingsServices.sendWithoutInterrupt")}</SelectItem>
             <SelectItem value="queue">{t("settings.taskDeliveryQueue")}</SelectItem>
             <SelectItem value="interrupt" disabled={preview} aria-describedby={preview ? previewReasonId : undefined}>{t("settingsServices.interruptAndSend")}</SelectItem>
           </SelectContent>

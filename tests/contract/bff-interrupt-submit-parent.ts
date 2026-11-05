@@ -16,7 +16,29 @@ const delta = field + [
   "",
 ].join("\n")
 
+const steerReceiptDelta = [
+  "        message_id:\n",
+  "          type: string\n",
+  "          minLength: 1\n",
+  "          description: Only present for run.steer; the BFF-owned user Message ID, not the client intent ID. Pending does not prove injection.\n",
+].join("")
+
+// Exact Public28.22 -> Public28.21; earlier owner proofs retain their old bytes.
+export function restorePublic2821SteerReceiptContract(source: string): string {
+  const version = "  version: 28.22.0\n"
+  if (!source.includes(version)) {
+    if (source.includes(steerReceiptDelta)) throw Error("Steer receipt Public28.22 version drift")
+    return source
+  }
+  if (hash(source) !== "a3d71aa845265084f7965c06dc903e2a5bf24c47d23bceb9a19bcd5d991c08b4") throw Error("Steer receipt Public28.22 child drift")
+  if (source.split(steerReceiptDelta).length !== 2) throw Error("Steer receipt Public28.22 exact delta drift")
+  const parent = source.replace(steerReceiptDelta, "").replace(version, "  version: 28.21.0\n")
+  if (hash(parent) !== "a5ea4bb0ef1458a536e3b54e01049267aec2913d147f2ad7bb99a481197d0525") throw Error("Steer receipt Public28.21 parent drift")
+  return parent
+}
+
 export function restorePublic2820InterruptSubmitContract(source: string): string {
+  source = restorePublic2821SteerReceiptContract(source)
   const version = "  version: 28.21.0\n"
   if (!/^  version: 28\.21\.0$/mu.test(source)) {
     if (source.includes(field)) throw Error("Interrupt submit Public28.21 version drift")

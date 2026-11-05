@@ -1,6 +1,12 @@
+## A‑03：Public 28.22 原 Run 补充回执
+
+唯一当前快照固定 BFF `99f946e67bec19d0bead1d29d7f3fd32ce4e95bf`／28.22.0／SHA-256 `a3d71aa845265084f7965c06dc903e2a5bf24c47d23bceb9a19bcd5d991c08b4` 的 Git blob；原十三个 Public 生成入口消费同一来源。现 `ControlReceipt` 仅 `run.steer` 可携带 BFF 所属 `message_id`；pending 不证明注入。打断、独立认证和 MCP policy 契约不变。
+
+测试专用 `tests/contract/bff-interrupt-submit-parent.ts` 逆回精确 28.21 原字节后继续原历史完整哈希链，不是运行兼容。
+
 ## A‑03：Public 28.21 打断并发送
 
-唯一当前快照为已推 BFF `2cf1c14d5007c0c89d24e5461e9d01d24f8a4656`／28.21.0／SHA-256 `a5ea4bb0ef1458a536e3b54e01049267aec2913d147f2ad7bb99a481197d0525` 的 Git blob。原十三个 Public 生成入口消费同一来源；独立认证和 MCP policy 不变。现 Message POST 增可选 `interrupt_run_id`；只有「打断并发送」才指定同会话当前已开始的 Run，`202` 仅表示后继已接纳，`409 run_delivery_conflict` 不接纳新消息。
+该阶段快照为已推 BFF `2cf1c14d5007c0c89d24e5461e9d01d24f8a4656`／28.21.0／SHA-256 `a5ea4bb0ef1458a536e3b54e01049267aec2913d147f2ad7bb99a481197d0525` 的 Git blob。原十三个 Public 生成入口消费同一来源；独立认证和 MCP policy 不变。现 Message POST 增可选 `interrupt_run_id`；只有「打断并发送」才指定同会话当前已开始的 Run，`202` 仅表示后继已接纳，`409 run_delivery_conflict` 不接纳新消息。
 
 测试专用 `tests/contract/bff-interrupt-submit-parent.ts` 仅逆字段和版本，核对完整 28.20 原字节后进入 A‑07 及原历史证明链，不作为运行兼容。
 

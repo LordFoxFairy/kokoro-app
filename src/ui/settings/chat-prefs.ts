@@ -6,7 +6,7 @@
 import { z } from "zod"
 
 const CHAT_PREFS_KEY = "kokoro.web.chat-prefs.v2"
-const chatDeliverySchema = z.enum(["queue", "interrupt"])
+const chatDeliverySchema = z.enum(["queue", "interrupt", "steer"])
 type ChatDelivery = z.infer<typeof chatDeliverySchema>
 
 const chatPrefsSchema = z

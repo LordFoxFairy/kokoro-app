@@ -237,6 +237,7 @@ export type RunControlBody = z.infer<typeof runControlBodySchema>
 export const runControlReceiptSchema = z.object({
   run_id: z.string().min(1),
   command_id: z.string().min(1),
+  message_id: z.string().min(1).optional(),
   request_digest: z.string().min(1),
   status: z.enum(["pending", "succeeded", "failed"]),
   error_code: z.string().min(1).nullable().optional(),
@@ -255,8 +256,6 @@ export type RenameSessionReceipt = z.infer<typeof renameSessionReceiptSchema>
 export const shareReceiptSchema = z.object({ share_id: z.string().min(1) }).strict()
 export type ShareReceipt = z.infer<typeof shareReceiptSchema>
 
-export const controlReceiptViewSchema = z.object({ command_id: z.string().min(1), status: z.enum(["pending", "succeeded", "failed"]), replayed: z.boolean().optional() }).strict()
-export type ControlReceiptView = z.infer<typeof controlReceiptViewSchema>
 
 export const deleteSessionReceiptSchema = z.object({ status: z.string().min(1) }).strict()
 export type DeleteSessionReceipt = z.infer<typeof deleteSessionReceiptSchema>

@@ -2527,7 +2527,7 @@ describe("service detail previews", () => {
   });
 });
 
-it("saves interrupt delivery without discarding the existing model or enabling unsupported steering", async () => {
+it("saves same-Run delivery without discarding the existing model", async () => {
   const prefsKey = "kokoro.web.chat-prefs.v2";
   localStorage.setItem(prefsKey, JSON.stringify({ model: "prior:stable" }));
   const mounted = renderSettings(() => {}, undefined, false, undefined, "appearance");
@@ -2535,20 +2535,21 @@ it("saves interrupt delivery without discarding the existing model or enabling u
   expect(trigger).toHaveTextContent("添加到队列");
   fireEvent.keyDown(trigger, { key: "ArrowDown" });
   const list = await screen.findByRole("listbox");
-  expect(within(list).getByRole("option", { name: "发送但不中断" })).toHaveAttribute("aria-disabled", "true");
+  const steer = within(list).getByRole("option", { name: "发送但不中断" });
+  expect(steer).not.toHaveAttribute("aria-disabled", "true");
   const interrupt = within(list).getByRole("option", { name: "打断并发送" });
   expect(interrupt).not.toHaveAttribute("aria-disabled", "true");
-  fireEvent.click(interrupt);
-  expect(trigger).toHaveTextContent("打断并发送");
-  expect(JSON.parse(localStorage.getItem(prefsKey)!)).toEqual({ model: "prior:stable", taskDelivery: "interrupt" });
+  fireEvent.click(steer);
+  expect(trigger).toHaveTextContent("发送但不中断");
+  expect(JSON.parse(localStorage.getItem(prefsKey)!)).toEqual({ model: "prior:stable", taskDelivery: "steer" });
 
   const { readChatDelivery, writeChatModel } = await import("@/ui/settings/chat-prefs");
   expect(writeChatModel("new:model")).toBe(true);
-  expect(readChatDelivery()).toBe("interrupt");
-  expect(JSON.parse(localStorage.getItem(prefsKey)!)).toEqual({ model: "new:model", taskDelivery: "interrupt" });
+  expect(readChatDelivery()).toBe("steer");
+  expect(JSON.parse(localStorage.getItem(prefsKey)!)).toEqual({ model: "new:model", taskDelivery: "steer" });
   mounted.unmount();
   renderSettings(() => {}, undefined, false, undefined, "appearance");
-  expect(screen.getByTestId("settings-task-delivery")).toHaveTextContent("打断并发送");
+  expect(screen.getByTestId("settings-task-delivery")).toHaveTextContent("发送但不中断");
 });
 
 it("preview shows the queue and leaves a saved live delivery choice unchanged", async () => {

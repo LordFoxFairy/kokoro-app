@@ -71,8 +71,8 @@ export type EngineSnapshot = {
   canRetryPendingSubmission: boolean
   // This admission failure is independent of the current Run and its controls.
   pendingSubmissionFailureCode?: string
-  canRestoreRejectedInterrupt?: boolean
-  // Same-document scope leases retain the exact create intent until its receipt settles.
+  canRestoreRejectedDelivery?: boolean
+  // Same-document scope leases retain the exact delivery intent until its receipt settles.
   hasPendingSubmission?: boolean
 }
 
@@ -105,6 +105,11 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
 /** A mounted route may read ordered bodies only for this exact conversation and scope. */
 export type MessagePartsReadTarget = Readonly<{ scope: SessionScope; conversationId: string }>
 
+export type SubmitDelivery = Readonly<
+  { interruptRunId: string; steerRunId?: never } |
+  { steerRunId: string; interruptRunId?: never }
+>
+
 export type SessionEngine = {
   getSnapshot: () => EngineSnapshot
   subscribe: (listener: () => void) => () => void
@@ -113,10 +118,10 @@ export type SessionEngine = {
   subscribeTaskNotifications?: (listener: (signal: TaskNotification) => void) => () => void
   // true only when this call synchronously accepted the intent into the local
   // submission lifecycle. Callers must retain drafts and route intent on false.
-  submit: (content: string, delivery?: Readonly<{ interruptRunId: string }>) => boolean
+  submit: (content: string, delivery?: SubmitDelivery) => boolean
   /** The original request was rejected before any owner write; keep its text before clearing the journal. */
-  restoreRejectedInterrupt?: (saveDraft: (content: string) => boolean) => boolean
-  // 仅恢复未获 create receipt 的冻结提交；owner terminal 不经本入口重发。
+  restoreRejectedDelivery?: (saveDraft: (content: string) => boolean) => boolean
+  // 仅恢复未获回执的冻结提交；owner terminal 不经本入口重发。
   retryResume: () => void
   retry: () => void
   // 连接 hard failure 的只读恢复：重新 snapshot-first，不重发 user/message。

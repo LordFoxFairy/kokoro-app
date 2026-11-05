@@ -89,8 +89,8 @@ export function useAppFrameActions({
   const { startTrial, selectCurrentDraft: selectSkillForCurrentDraft, submitCurrentDraft, selectedSkill, clearSelectedSkill } = useAppFrameSkillTrial({ engine, preview, boundary: readBoundary })
 
   const directSelectionAtRender = engine?.getSnapshot().store?.activeId ?? null
-  const interruptTargetAtRender = engine === null ? null : interruptibleRunId(engine.getSnapshot())
-  const interruptPreference = !preview && readChatDelivery() === "interrupt"
+  const deliveryTargetAtRender = engine === null ? null : interruptibleRunId(engine.getSnapshot())
+  const deliveryPreference = preview ? "queue" : readChatDelivery()
   const conversationAtRender = conversationIdFromLocation()
   const routeAtRender = typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`
   let actorAtRender: string | null | undefined
@@ -145,13 +145,13 @@ export function useAppFrameActions({
       }
     }
     const allocate = projectWorkspace && routedConversationId == null
-    let interruptRunId: string | undefined
-    if (interruptPreference && !allocate) {
+    let delivery: Parameters<SessionEngine["submit"]>[1]
+    if (deliveryPreference !== "queue" && !allocate) {
       const target = interruptibleRunId(engine.getSnapshot())
-      if (target !== interruptTargetAtRender) { focusComposer(); return }
-      interruptRunId = target ?? undefined
+      if (target !== deliveryTargetAtRender) { focusComposer(); return }
+      if (target !== null) delivery = deliveryPreference === "interrupt" ? { interruptRunId: target } : { steerRunId: target }
     }
-    const accepted = submitCurrentDraft(content, allocate, projectComposerDraft, interruptRunId)
+    const accepted = submitCurrentDraft(content, allocate, projectComposerDraft, delivery)
     if (!accepted) {
       // A synchronous guard (for example, a create receipt still in flight)
       // leaves the user's draft and creation/route intent untouched.
@@ -174,7 +174,7 @@ export function useAppFrameActions({
     // blank conversation cannot inherit a stale Website/App capsule.
     setDeploymentIntent(null)
     focusComposer()
-  }, [actorAtRender, projectComposerDraft, onProjectDraftAccepted, chatHref, conversationAtRender, directSelectionAtRender, interruptPreference, interruptTargetAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, submitCurrentDraft, syncConversationUrl])
+  }, [actorAtRender, projectComposerDraft, onProjectDraftAccepted, chatHref, conversationAtRender, directSelectionAtRender, deliveryPreference, deliveryTargetAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, submitCurrentDraft, syncConversationUrl])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -352,7 +352,7 @@ export function useAppFrameActions({
 
   return {
     submitDraft,
-    interruptsCurrentRun: interruptPreference && interruptTargetAtRender !== null && (!projectWorkspace || routedConversationId != null),
+    activeDelivery: deliveryPreference !== "queue" && deliveryTargetAtRender !== null && (!projectWorkspace || routedConversationId != null) ? deliveryPreference : undefined,
     handleSubmit,
     handleKeyDown,
     handlePrompt,

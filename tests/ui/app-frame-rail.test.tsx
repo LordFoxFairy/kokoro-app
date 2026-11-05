@@ -1701,7 +1701,7 @@ it.each(["unknown", "active"] as const)("project overview Send visibly disables 
     if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
     if (state === "active") await waitFor(() => expect(projectClient.streams).toHaveLength(1))
     fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "root cannot reset this task" } })
-    expect(screen.getByRole("button", { name: /发送消息|发送插话/ })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /发送消息|添加到队列/ })).toBeDisabled()
     expect(projectClient.createCalls).toHaveLength(1)
     expect(projectEngine.getSnapshot().store?.activeId).toBe(convB)
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }

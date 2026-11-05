@@ -472,6 +472,8 @@ BFF现chat-turn-commit以tenant/subject/conversation/key和request_digest读取�
 
 Public 28.21 的显式打断复用同一入口和记录：只把渲染与当前引擎同时证明的 exact active head 冻结入提交，和原键一起重试。已被 BFF 明确拒绝才允许用户恢复原稿；当前浏览器路由／主体变更后旧按钮不发请求。停止、等待审批和后继 FIFO 仍由正式事件/快照决定，前端不乐观伪造已取消。
 
+Public 28.22 的同 Run 补充复用同源 control 和同一会话提交记录；记录种类区分首发／队列／打断与原 Run 补充的实际 wire。后者不发普通 Message POST、不触发 create late-ACK 自动取消、不产生 Run/assistant 或重开当前 SSE。渲染与提交都检查原目标，刷新后仅显式重试精确原键；已接纳消息的后续状态以现 Snapshot 的 exact canonical ID 为准。设置预览不会写偏好或发补充。
+
 实施先补503→engine重建→404、ACK前刷新、200不精确配对、scope/subject、quota、取消与晚ACK回归；再正常页面复现对比及owner受影响门。Manus该失败窗口未观察，不声称其内部持久化实现相同。独立只读接缝审查已完成；验收状态见CURRENT，不因设计存在勾完成。
 
 ## CHAT-1：空草稿刷新恢复与提交前来源退休（2026-10-24，既有App边界）

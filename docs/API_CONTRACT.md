@@ -292,6 +292,10 @@ standalone `src/hub/project-mcp-recommendations-client.ts`只GET/PUT当前Projec
 
 本地Try不新增API或改wire：私有server的exact `connection_id`经现engine选择进入新草稿，用户明确Send时才沿既有Public24 `selected_mcp_connection_ids`冻结到原消息请求；connector/server/provider ID及显示名不替代运行Connection。Try本身零消息/Prepare/授权请求，未知原请求不被新草稿覆盖。缺可用性、未ready或缺Connection不伪造试用；Prepare/重新授权保留各自正式操作与恢复语义。
 
+## A‑03：发送但不中断（Public 28.22）
+
+浏览器只向现同源 Control POST 提交 `run.steer`：URL 绑定原 Conversation、Run 与 direct/project scope，`Idempotency-Key` 及 `message_id`（客户端意图标识）和正文精确冻结。BFF 202 的 `message_id` 是独立 canonical user Message ID；原 Run、原 key、状态和 owner ID 验证后才对账。现 Snapshot 是后续消息状态的读回入口，无 GET control 子路由。已接纳但后来未确认不表示模型没有看到，客户端不自动重投或改为排队。未接纳的明确过期目标才允许用户恢复原草稿。
+
 ## A‑03：打断并发送（Public 28.21）
 
 同一 Message POST 增可选 `interrupt_run_id`。只有当前已开始的 Run 才携带精确 ID；未开始仍沿队列，不新增控制 POST。原请求记录冻结目标、键与输入；显式重试不改目标。BFF 409 `run_delivery_conflict` 确认该次未接纳时，可把原文恢复进输入框，不自动换目标、换键或发送。202 只代表后继已接纳。

@@ -29,9 +29,6 @@ export function controlPath(sessionId: string, runId: string): string {
 export function runProcessPath(sessionId: string, runId: string): string {
   return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/process`
 }
-export function controlReceiptPath(sessionId: string, runId: string, commandId: string): string {
-  return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/control/${opaquePathSegment(commandId)}`
-}
 export function sessionsPath(): string {
   return `/sessions`
 }

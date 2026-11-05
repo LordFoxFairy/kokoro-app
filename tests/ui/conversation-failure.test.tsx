@@ -1013,12 +1013,16 @@ it("an unconfirmed admission is not described as a failed execution, and only ex
   expect(retry).toHaveBeenCalledTimes(1)
 })
 
-it("offers original submission recovery without replacing or stealing focus from the active Run's approval", () => {
+it("keeps one focused approval when same-Run text surrounds an admitted supplement", () => {
   const thread = stateFromSnapshot(makeSnapshot({
     sessionId: "ses_1",
     activeRun: { run_id: "run_1", status: "waiting_input" },
     pendingPauses: [makePendingPause()],
-    messages: [{ message_id: "m_a", role: "assistant", run_id: "run_1", content: "Already written", status: "streaming", created_at: "now" }],
+    messages: [
+      { message_id: "m_a", role: "assistant", run_id: "run_1", content: "Already written", status: "streaming", created_at: "now" },
+      { message_id: "m_steer", role: "user", run_id: "run_1", content: "Same-Run supplement", status: "completed", created_at: "now" },
+      { message_id: "m_b", role: "assistant", run_id: "run_1", content: "After the supplement", status: "streaming", created_at: "now" },
+    ],
   }))
   const retry = vi.fn()
   const props: ConversationThreadProps = {
@@ -1033,7 +1037,11 @@ it("offers original submission recovery without replacing or stealing focus from
   approve.focus()
   rerender(<ConversationThread {...props} pendingSubmissionFailureCode="submission_outcome_unknown" canRetryPendingSubmission />)
 
-  expect(screen.getByText("Already written")).toBeVisible()
+  const before = screen.getByText("Already written")
+  const supplement = screen.getByText("Same-Run supplement")
+  const after = screen.getByText("After the supplement")
+  expect(before.compareDocumentPosition(supplement) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+  expect(supplement.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
   expect(approve).toBeEnabled()
   expect(approve).toHaveFocus()
   expect(screen.getByText(tr("thread.submissionUnconfirmed"))).toBeVisible()

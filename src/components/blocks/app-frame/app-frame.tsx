@@ -759,7 +759,7 @@ function AppFrameRuntime({
 
   const hasMessages = thread.messages.length > 0
   const showConversation = hasMessages && !standaloneSurface && navigationState.routeOwnsConversation
-  const { canRetryPendingSubmission = false, pendingSubmissionFailureCode, canRestoreRejectedInterrupt = false } = engine?.getSnapshot() ?? {}
+  const { canRetryPendingSubmission = false, pendingSubmissionFailureCode, canRestoreRejectedDelivery = false } = engine?.getSnapshot() ?? {}
   const initialSnapshotFailed = machine.phase === "error"
     && !canRetryPendingSubmission
     && store !== null
@@ -807,9 +807,9 @@ function AppFrameRuntime({
     engine.retry()
     window.requestAnimationFrame(() => { if (submissionViewIsCurrent()) focusComposer() })
   }, [engine, focusComposer, submissionViewIsCurrent])
-  const restoreInterruptDraft = useCallback(() => {
+  const restoreDeliveryDraft = useCallback(() => {
     if (!submissionViewIsCurrent() || !draftRouteIsCurrent()) return
-    if (engine?.restoreRejectedInterrupt?.(restoreDraft)) focusComposer()
+    if (engine?.restoreRejectedDelivery?.(restoreDraft)) focusComposer()
   }, [draftRouteIsCurrent, engine, focusComposer, restoreDraft, submissionViewIsCurrent])
 
   const retryConversationHydration = useCallback(() => {
@@ -849,7 +849,7 @@ function AppFrameRuntime({
     isReconnecting: connection.status === "reconnecting",
     hasFailed,
     ...(pendingSubmissionFailureCode === undefined ? {} : { pendingSubmissionFailureCode }),
-    ...(canRestoreRejectedInterrupt ? { onRestoreInterruptDraft: restoreInterruptDraft } : {}),
+    ...(canRestoreRejectedDelivery ? { onRestoreDeliveryDraft: restoreDeliveryDraft } : {}),
     canRetryPendingSubmission,
     canRetryResume: engine?.getSnapshot().canRetryResume ?? false,
     onRetryResume: () => engine?.retryResume(),
@@ -907,7 +907,7 @@ function AppFrameRuntime({
     onRemoveSelectedSkill: actions.clearSelectedSkill,
     onKeyDown: actions.handleKeyDown,
     onSubmit: actions.handleSubmit,
-    interruptsCurrentRun: actions.interruptsCurrentRun,
+    ...(actions.activeDelivery === undefined ? {} : { activeDelivery: actions.activeDelivery }),
     isStreaming,
     isAwaitingApproval: (machine.phase === "waiting" || machine.phase === "resuming"),
     canSend,
