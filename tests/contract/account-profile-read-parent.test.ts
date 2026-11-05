@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import { expect, it } from "vitest"
 import YAML from "yaml"
 import { restorePublic2819ProjectTaskContract } from "./bff-project-tasks-parent"
+import { restorePublic2820InterruptSubmitContract } from "./bff-interrupt-submit-parent"
 import { restorePublic2817AccountProfileReadContract } from "./bff-account-profile-read-parent"
 import { restorePublic2816CustomApiSelectionContract } from "./bff-custom-api-selection-parent"
 
@@ -10,12 +11,13 @@ const raw = readFileSync("src/generated/bff-public-openapi.yaml", "utf8")
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
 
 it("restores the entire Public28.17 parent and preserves its 199 operations in order", () => {
-  expect(hash(raw)).toBe("c5fc7225901fa5b815cdb7ee5286354d7c4cabed9919676e6e86651fb9910783")
+  expect(hash(raw)).toBe("a5ea4bb0ef1458a536e3b54e01049267aec2913d147f2ad7bb99a481197d0525")
   const parent = restorePublic2817AccountProfileReadContract(raw)
   expect(hash(parent)).toBe("ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7")
-  const public2819 = restorePublic2819ProjectTaskContract(raw)
+  const public2820 = restorePublic2820InterruptSubmitContract(raw)
+  const public2819 = restorePublic2819ProjectTaskContract(public2820)
   expect(hash(public2819)).toBe("27032917fb272601b6da8ba9227bab5324ac305682a72c94adca72e4f9e25577")
-  const publishedSpec = YAML.parse(raw), currentSpec = YAML.parse(public2819), parentSpec = YAML.parse(parent)
+  const publishedSpec = YAML.parse(public2820), currentSpec = YAML.parse(public2819), parentSpec = YAML.parse(parent)
   const operations = (spec: typeof currentSpec) => Object.entries(spec.paths).flatMap(([path, methods]) =>
     Object.entries(methods as Record<string, unknown>)
       .filter(([method]) => ["get", "post", "put", "patch", "delete", "head", "options", "trace"].includes(method))
@@ -42,7 +44,7 @@ it.each([
   ["new schema", raw.replace("    AccountProfileReadResponse:\n", "    ChangedAccountProfileReadResponse:\n")],
   ["existing PATCH operation", raw.replace("operationId: updateAccountProfile", "operationId: changedUpdateAccountProfile")],
   ["unrelated operation", raw.replace("listTeamMembers", "changedListTeamMembers")],
-  ["version", raw.replace("version: 28.20.0", "version: 28.21.0")],
+  ["version", raw.replace("  version: 28.21.0\n", "  version: 28.22.0\n")],
   ["extra byte", raw + "\n"],
 ])("rejects %s drift before entering the historical parent chain", (_label, changed) => {
   expect(changed).not.toBe(raw)

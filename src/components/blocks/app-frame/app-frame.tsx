@@ -420,7 +420,7 @@ function AppFrameRuntime({
     return !projectWorkspace || routedConversationId === null ||
       engine?.getSnapshot().store?.activeId === routedConversationId
   }, [draftRoute, draftSelectionMatches, engine, projectWorkspace, routedConversationId])
-  const { draft, updateDraft: updateScopedDraft, clearDraft: clearScopedDraft } = draftController
+  const { draft, updateDraft: updateScopedDraft, clearDraft: clearScopedDraft, restoreDraft } = draftController
   const updateDraft = useCallback((value: string) => {
     if (draftRouteIsCurrent()) updateScopedDraft(value)
   }, [updateScopedDraft, draftRouteIsCurrent])
@@ -759,7 +759,7 @@ function AppFrameRuntime({
 
   const hasMessages = thread.messages.length > 0
   const showConversation = hasMessages && !standaloneSurface && navigationState.routeOwnsConversation
-  const { canRetryPendingSubmission = false, pendingSubmissionFailureCode } = engine?.getSnapshot() ?? {}
+  const { canRetryPendingSubmission = false, pendingSubmissionFailureCode, canRestoreRejectedInterrupt = false } = engine?.getSnapshot() ?? {}
   const initialSnapshotFailed = machine.phase === "error"
     && !canRetryPendingSubmission
     && store !== null
@@ -796,18 +796,21 @@ function AppFrameRuntime({
     return () => window.cancelAnimationFrame(frame)
   }, [focusComposer, hasMessages])
 
+  const submissionViewIsCurrent = useCallback(() => {
+    if (activeId === null || !isVisibleMoveLeaf(moveScopeKey, activeId)) return false
+    if (preview) return true
+    try { return copyAdmitted && window.localStorage.getItem("kokoro.web.auth-index-subject") === copySubject }
+    catch { return false }
+  }, [activeId, copyAdmitted, copySubject, isVisibleMoveLeaf, moveScopeKey, preview])
   const retryAndFocusComposer = useCallback(() => {
-    if (!engine || activeId === null) return
-    const isCurrent = () => {
-      if (!isVisibleMoveLeaf(moveScopeKey, activeId)) return false
-      if (preview) return true
-      try { return copyAdmitted && window.localStorage.getItem("kokoro.web.auth-index-subject") === copySubject }
-      catch { return false }
-    }
-    if (!isCurrent() || !engine.getSnapshot().canRetryPendingSubmission) return
+    if (!submissionViewIsCurrent() || !engine?.getSnapshot().canRetryPendingSubmission) return
     engine.retry()
-    window.requestAnimationFrame(() => { if (isCurrent()) focusComposer() })
-  }, [activeId, copyAdmitted, copySubject, engine, focusComposer, isVisibleMoveLeaf, moveScopeKey, preview])
+    window.requestAnimationFrame(() => { if (submissionViewIsCurrent()) focusComposer() })
+  }, [engine, focusComposer, submissionViewIsCurrent])
+  const restoreInterruptDraft = useCallback(() => {
+    if (!submissionViewIsCurrent() || !draftRouteIsCurrent()) return
+    if (engine?.restoreRejectedInterrupt?.(restoreDraft)) focusComposer()
+  }, [draftRouteIsCurrent, engine, focusComposer, restoreDraft, submissionViewIsCurrent])
 
   const retryConversationHydration = useCallback(() => {
     const requestedConversationId = navigationState.resolvedConversationRouteId ?? activeId
@@ -846,6 +849,7 @@ function AppFrameRuntime({
     isReconnecting: connection.status === "reconnecting",
     hasFailed,
     ...(pendingSubmissionFailureCode === undefined ? {} : { pendingSubmissionFailureCode }),
+    ...(canRestoreRejectedInterrupt ? { onRestoreInterruptDraft: restoreInterruptDraft } : {}),
     canRetryPendingSubmission,
     canRetryResume: engine?.getSnapshot().canRetryResume ?? false,
     onRetryResume: () => engine?.retryResume(),
@@ -903,6 +907,7 @@ function AppFrameRuntime({
     onRemoveSelectedSkill: actions.clearSelectedSkill,
     onKeyDown: actions.handleKeyDown,
     onSubmit: actions.handleSubmit,
+    interruptsCurrentRun: actions.interruptsCurrentRun,
     isStreaming,
     isAwaitingApproval: (machine.phase === "waiting" || machine.phase === "resuming"),
     canSend,

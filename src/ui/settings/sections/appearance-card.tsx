@@ -115,7 +115,7 @@ export function AppearanceCard({ preview = false, readBoundary }: { preview?: bo
           ) : null}
         </div>
       </section>
-      <TaskDeliveryPreferencesSection />
+      <TaskDeliveryPreferencesSection key={preview ? "preview" : "live"} preview={preview} />
       <CommunicationPreferencesSection preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />
     </div>
   );

@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import YAML from 'yaml'
 const source = new URL('../src/generated/bff-public-openapi.yaml', import.meta.url)
 const output = new URL('../src/generated/bff-project-pins.ts', import.meta.url)
-const provenance = { ownerCommit: '846821ae1b46f66663669d20fd5340bb7fa58b87', sourceSha256: 'c5fc7225901fa5b815cdb7ee5286354d7c4cabed9919676e6e86651fb9910783', openapiVersion: '28.20.0' }
+const provenance = { ownerCommit: '2cf1c14d5007c0c89d24e5461e9d01d24f8a4656', sourceSha256: 'a5ea4bb0ef1458a536e3b54e01049267aec2913d147f2ad7bb99a481197d0525', openapiVersion: '28.21.0' }
 function render(s, schemas) {
   if (s.$ref) return render(schemas[s.$ref.split('/').at(-1)], schemas)
   if (s.oneOf) return `z.union([${s.oneOf.map(v => render(v, schemas)).join(',')}])`

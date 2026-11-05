@@ -41,6 +41,7 @@ import {
   type MessageExecutionOptions,
 } from "./execution-adapter"
 import {
+  interruptibleRunId,
   type EngineDeps,
   type EngineSnapshot,
   type ConnectionAvailability,
@@ -371,7 +372,27 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   function canRetryPendingSubmission(): boolean {
     return !hydrating && !submissionRecoveryUnavailable && connection.status === "connected" &&
       pendingSubmissionFailureCode !== null && pendingSubmission !== null &&
+      !hasRejectedInterrupt() && store?.activeId === pendingSubmission.sessionId && !createInFlight.has(pendingSubmission.idempotencyKey)
+  }
+
+  function hasRejectedInterrupt(): boolean {
+    return pendingSubmissionFailureCode === "run_delivery_conflict" && pendingSubmission?.options.interruptRunId !== undefined
+  }
+
+  function canRestoreRejectedInterrupt(): boolean {
+    return !disposed && !hydrating && !submissionRecoveryUnavailable && hasRejectedInterrupt() && pendingSubmission !== null &&
       store?.activeId === pendingSubmission.sessionId && !createInFlight.has(pendingSubmission.idempotencyKey)
+  }
+
+  function restoreRejectedInterrupt(saveDraft: (content: string) => boolean): boolean {
+    const intent = pendingSubmission
+    if (intent === null || !canRestoreRejectedInterrupt() || !saveDraft(intent.content) ||
+      pendingSubmission !== intent || store?.activeId !== intent.sessionId || !abandonPendingSubmission()) return false
+    thread = { ...thread, messages: thread.messages.filter(message => message.id !== intent.optimisticUserId) }
+    if (machine.phase === "error" && machine.error === "run_delivery_conflict") machine = transition(machine, { type: "RESET" })
+    notice = null
+    notify()
+    return true
   }
 
   function buildSnapshot(): EngineSnapshot {
@@ -399,6 +420,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       canSubmitMessage: canSubmitMessage(),
       canRetryPendingSubmission: canRetryPendingSubmission(),
       ...(pendingSubmissionFailureCode === null ? {} : { pendingSubmissionFailureCode }),
+      ...(canRestoreRejectedInterrupt() ? { canRestoreRejectedInterrupt: true } : {}),
       hasPendingSubmission: pendingSubmission !== null || preparedSubmission !== null,
       canRetryResume: retryableResume() !== null,
     }
@@ -1164,7 +1186,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       })
       .catch((error: unknown) => {
         if (disposed) return
-        const code = error instanceof SessionClientError ? error.code : null
+        const clientError = error instanceof SessionClientError ? error : null
+        const errorCode = clientError?.code ?? null
+        const code = errorCode === "run_delivery_conflict" && (clientError?.reason !== "http" || clientError.status !== 409 ||
+          submission.options.interruptRunId === undefined) ? null : errorCode
         const failureCode = code ?? "submission_outcome_unknown"
         try { deps.submissionRecovery?.failure(submission, failureCode) } catch { /* Keep the frozen intent. */ }
         if (store?.activeId !== sessionId || !sameSubmission(pendingSubmission, submission)) return
@@ -1181,11 +1206,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       })
   }
 
-  function submit(content: string): boolean {
+  function submit(content: string, delivery?: Readonly<{ interruptRunId: string }>): boolean {
     const trimmed = content.trim()
     if (!trimmed || !canSubmitMessage()) {
       return false
     }
+    const interruptRunId = delivery?.interruptRunId
+    if (interruptRunId !== undefined && interruptibleRunId({ machine, thread }) !== interruptRunId) return false
+    const executionOptions = (mode: AgentMode) => ({ ...messageExecutionOptions(mode), ...(interruptRunId === undefined ? {} : { interruptRunId }) })
     notice = null
     if (!flushReceipts()) return false
     const fifo = machine.runId !== null
@@ -1195,7 +1223,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         locallyCreatedSessionId = store.activeId
         commitStore(store)
       }
-      const options = messageExecutionOptions(activeMode(store))
+      const options = executionOptions(activeMode(store))
       if (preparedSubmission && (preparedSubmission.content !== trimmed || JSON.stringify(preparedSubmission.options) !== JSON.stringify(options))) {
         notice = { key: "chat.localDraftPersistenceFailed" }
         notify()
@@ -1224,7 +1252,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       sessionId: store.activeId,
       content: trimmed,
       idempotencyKey: createId("idem"),
-      options: messageExecutionOptions(activeMode(store)),
+      options: executionOptions(activeMode(store)),
       optimisticUserId,
     }
     preparedSubmission = null
@@ -1820,6 +1848,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       }
     },
     submit,
+    restoreRejectedInterrupt,
     retry,
     retryMessageParts,
     setMessagePartsReadTarget,

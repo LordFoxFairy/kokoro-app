@@ -2527,7 +2527,34 @@ describe("service detail previews", () => {
   });
 });
 
-it("task delivery options are inspectable while unsupported steering remains unavailable and queue stays unchanged", async () => {
+it("saves interrupt delivery without discarding the existing model or enabling unsupported steering", async () => {
+  const prefsKey = "kokoro.web.chat-prefs.v2";
+  localStorage.setItem(prefsKey, JSON.stringify({ model: "prior:stable" }));
+  const mounted = renderSettings(() => {}, undefined, false, undefined, "appearance");
+  const trigger = screen.getByTestId("settings-task-delivery");
+  expect(trigger).toHaveTextContent("添加到队列");
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  const list = await screen.findByRole("listbox");
+  expect(within(list).getByRole("option", { name: "发送但不中断" })).toHaveAttribute("aria-disabled", "true");
+  const interrupt = within(list).getByRole("option", { name: "打断并发送" });
+  expect(interrupt).not.toHaveAttribute("aria-disabled", "true");
+  fireEvent.click(interrupt);
+  expect(trigger).toHaveTextContent("打断并发送");
+  expect(JSON.parse(localStorage.getItem(prefsKey)!)).toEqual({ model: "prior:stable", taskDelivery: "interrupt" });
+
+  const { readChatDelivery, writeChatModel } = await import("@/ui/settings/chat-prefs");
+  expect(writeChatModel("new:model")).toBe(true);
+  expect(readChatDelivery()).toBe("interrupt");
+  expect(JSON.parse(localStorage.getItem(prefsKey)!)).toEqual({ model: "new:model", taskDelivery: "interrupt" });
+  mounted.unmount();
+  renderSettings(() => {}, undefined, false, undefined, "appearance");
+  expect(screen.getByTestId("settings-task-delivery")).toHaveTextContent("打断并发送");
+});
+
+it("preview shows the queue and leaves a saved live delivery choice unchanged", async () => {
+  const prefsKey = "kokoro.web.chat-prefs.v2";
+  const stored = JSON.stringify({ taskDelivery: "interrupt" });
+  localStorage.setItem(prefsKey, stored);
   renderSettings(() => {}, undefined, true, undefined, "appearance");
   const trigger = screen.getByTestId("settings-task-delivery");
   expect(trigger).toBeEnabled();
@@ -2536,10 +2563,28 @@ it("task delivery options are inspectable while unsupported steering remains una
   for (const name of ["发送但不中断", "打断并发送"]) {
     expect(within(list).getByRole("option", { name })).toHaveAttribute("aria-disabled", "true");
   }
-  expect(list).toHaveTextContent("尚需服务支持");
   fireEvent.keyDown(list, { key: "Escape" });
   expect(trigger).toHaveTextContent("添加到队列");
   expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+  expect(localStorage.getItem(prefsKey)).toBe(stored);
+});
+
+it("an unreadable delivery preference falls back to queue and cannot clobber its stored value", async () => {
+  const prefsKey = "kokoro.web.chat-prefs.v2";
+  const stored = JSON.stringify({ model: "prior:stable", taskDelivery: "interrupt" });
+  localStorage.setItem(prefsKey, stored);
+  const { readChatDelivery, writeChatDelivery } = await import("@/ui/settings/chat-prefs");
+  expect(readChatDelivery()).toBe("interrupt");
+  const getItem = Storage.prototype.getItem;
+  const denied = vi.spyOn(Storage.prototype, "getItem").mockImplementation(function(this: Storage, key) {
+    if (this === localStorage && key === prefsKey) throw new DOMException("unavailable", "SecurityError");
+    return getItem.call(this, key);
+  });
+  try {
+    expect(readChatDelivery()).toBe("queue");
+    expect(writeChatDelivery("queue")).toBe(false);
+  } finally { denied.mockRestore(); }
+  expect(localStorage.getItem(prefsKey)).toBe(stored);
 });
 
 it("shared file management shows unreadable authority rather than an invented empty file list", () => {

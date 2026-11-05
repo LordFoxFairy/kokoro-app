@@ -140,6 +140,44 @@ it("absorbs a FIFO receipt received during automatic stream reconnection without
   } finally { engine.dispose() }
 })
 
+it("freezes an exact started Run and restores the draft only after a definitive interrupt conflict", async () => {
+  const client = createFakeClient()
+  const recovery = journal()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(), submissionRecovery: recovery })
+  try {
+    expect(engine.submit("first message")).toBe(true)
+    await settle()
+    const runId = engine.getSnapshot().machine.runId!
+    expect(engine.submit("original interrupt", { interruptRunId: runId })).toBe(false)
+    client.lastStream().emit([makeEvent("run.created", { run_id: runId }, { run_id: runId })])
+    await settle()
+    expect(engine.submit("original interrupt", { interruptRunId: "different_run" })).toBe(false)
+
+    client.nextCreate = () => Promise.reject(new SessionClientError("network", "lost ACK"))
+    expect(engine.submit("original interrupt", { interruptRunId: runId })).toBe(true)
+    await settle()
+    const original = client.createCalls[1]!
+    expect(original.body.interrupt_run_id).toBe(runId)
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+    expect(engine.restoreRejectedInterrupt?.(() => true)).toBe(false)
+
+    client.nextCreate = () => Promise.reject(new SessionClientError("http", "stale target", "run_delivery_conflict", 409))
+    engine.retry()
+    await settle()
+    expect(client.createCalls[2]).toEqual(original)
+    expect(engine.getSnapshot()).toMatchObject({ canRetryPendingSubmission: false, canRestoreRejectedInterrupt: true })
+    expect(engine.restoreRejectedInterrupt?.(() => false)).toBe(false)
+    expect(recovery.read()?.submission.content).toBe("original interrupt")
+    const drafts: string[] = []
+    expect(engine.restoreRejectedInterrupt?.((draft) => { drafts.push(draft); return true })).toBe(true)
+    expect(drafts).toEqual(["original interrupt"])
+    expect(recovery.read()).toBeNull()
+    expect(engine.getSnapshot().thread.messages.some(row => row.content === "original interrupt")).toBe(false)
+    expect(engine.getSnapshot().machine.runId).toBe(runId)
+    expect(client.createCalls).toHaveLength(3)
+  } finally { engine.dispose() }
+})
+
 it("a cold local home selection preserves another session's original unknown for explicit recovery without cancelling it", async () => {
   const records = new Map<string, { submission: Intent; failureCode: string | null }>()
   let abandoned = 0

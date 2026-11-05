@@ -50,6 +50,7 @@ export type ConversationThreadProps = {
   hasFailed: boolean
   // Message admission can fail while a different Run is still active.
   pendingSubmissionFailureCode?: string
+  onRestoreInterruptDraft?: () => void
   canRetryResume?: boolean
   onRetryResume?: () => void
   canRetryPendingSubmission: boolean
@@ -156,6 +157,7 @@ function ConversationThreadSurface({
   isReconnecting,
   hasFailed,
   pendingSubmissionFailureCode,
+  onRestoreInterruptDraft,
   canRetryResume = false,
   onRetryResume,
   canRetryPendingSubmission,
@@ -231,7 +233,15 @@ function ConversationThreadSurface({
       ? <ExecutionUnavailableFeedback canRetry={canRetryPendingSubmission} onRetry={onRetry} />
       : pendingSubmissionFailureCode === "submission_outcome_unknown"
         ? <UnconfirmedSubmissionFeedback canRetry={canRetryPendingSubmission} onRetry={onRetry} />
-        : genericFailure(null, canRetryPendingSubmission)
+        : pendingSubmissionFailureCode === "run_delivery_conflict"
+          ? <Alert variant="destructive" className={styles.error}>
+              <AlertTitle>{t("thread.interruptRejected")}</AlertTitle>
+              <AlertDescription className={styles.errorLayout}>
+                <span>{t("thread.interruptRejectedHint")}</span>
+                {onRestoreInterruptDraft ? <Button variant="outline" type="button" onClick={onRestoreInterruptDraft}>{t("thread.restoreDraft")}</Button> : null}
+              </AlertDescription>
+            </Alert>
+          : genericFailure(null, canRetryPendingSubmission)
   const failureMessageId = creditRejected ? "credit-error" : "run-error"
   const failureFeedback = !creditRejected && (!hasFailed || (hasSubmissionFailure && thread.unattributedFailure === null)) ? null : (
     <div>

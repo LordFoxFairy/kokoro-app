@@ -71,11 +71,19 @@ export type EngineSnapshot = {
   canRetryPendingSubmission: boolean
   // This admission failure is independent of the current Run and its controls.
   pendingSubmissionFailureCode?: string
+  canRestoreRejectedInterrupt?: boolean
   // Same-document scope leases retain the exact create intent until its receipt settles.
   hasPendingSubmission?: boolean
 }
 
 const EMPTY_THREAD: SessionStreamState = createSessionStreamState()
+
+/** A queued receipt is not proof that the owner started the Run. */
+export function interruptibleRunId({ machine, thread }: Pick<EngineSnapshot, "machine" | "thread">): string | null {
+  const head = thread.executionHead
+  if (head === null || head.run_id !== machine.runId || head.state === "queued") return null
+  return machine.phase === "streaming" || machine.phase === "waiting" || machine.phase === "resuming" ? head.run_id : null
+}
 
 export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   selectedMcpConnectionIds: Object.freeze([]),
@@ -105,7 +113,9 @@ export type SessionEngine = {
   subscribeTaskNotifications?: (listener: (signal: TaskNotification) => void) => () => void
   // true only when this call synchronously accepted the intent into the local
   // submission lifecycle. Callers must retain drafts and route intent on false.
-  submit: (content: string) => boolean
+  submit: (content: string, delivery?: Readonly<{ interruptRunId: string }>) => boolean
+  /** The original request was rejected before any owner write; keep its text before clearing the journal. */
+  restoreRejectedInterrupt?: (saveDraft: (content: string) => boolean) => boolean
   // 仅恢复未获 create receipt 的冻结提交；owner terminal 不经本入口重发。
   retryResume: () => void
   retry: () => void

@@ -1,6 +1,12 @@
+## A‑03：Public 28.21 打断并发送
+
+唯一当前快照为已推 BFF `2cf1c14d5007c0c89d24e5461e9d01d24f8a4656`／28.21.0／SHA-256 `a5ea4bb0ef1458a536e3b54e01049267aec2913d147f2ad7bb99a481197d0525` 的 Git blob。原十三个 Public 生成入口消费同一来源；独立认证和 MCP policy 不变。现 Message POST 增可选 `interrupt_run_id`；只有「打断并发送」才指定同会话当前已开始的 Run，`202` 仅表示后继已接纳，`409 run_delivery_conflict` 不接纳新消息。
+
+测试专用 `tests/contract/bff-interrupt-submit-parent.ts` 仅逆字段和版本，核对完整 28.20 原字节后进入 A‑07 及原历史证明链，不作为运行兼容。
+
 ## A‑07：Public 28.20 Project Todo
 
-唯一当前快照固定已推 BFF `846821ae1b46f66663669d20fd5340bb7fa58b87`／28.20.0／SHA-256 `c5fc7225901fa5b815cdb7ee5286354d7c4cabed9919676e6e86651fb9910783` 的 Git blob。十二个既有 Public 生成入口重钉同一来源，新增 Project Tasks 具名生成器只投影集合 GET／POST 和成员 PATCH／DELETE，保留路径级参数与引用闭包；独立认证／MCP policy 输入不变，不手改生成物。
+该阶段快照固定已推 BFF `846821ae1b46f66663669d20fd5340bb7fa58b87`／28.20.0／SHA-256 `c5fc7225901fa5b815cdb7ee5286354d7c4cabed9919676e6e86651fb9910783` 的 Git blob。十二个既有 Public 生成入口重钉同一来源，新增 Project Tasks 具名生成器只投影集合 GET／POST 和成员 PATCH／DELETE，保留路径级参数与引用闭包；独立认证／MCP policy 输入不变，不手改生成物。
 
 测试专用 `tests/contract/bff-project-tasks-parent.ts` 严格逆回完整 28.19 原字节，再进入原超窗终态及账户资料历史父链；旧版本摘要与既有行为断言保持。下方各旧版本段落只记录历史来源，不构成第二个运行时契约。
 

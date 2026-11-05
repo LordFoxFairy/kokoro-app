@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useState } from "react";
 import { useT } from "@/i18n/context";
 import {
   Select,
@@ -10,17 +10,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { readChatDelivery, writeChatDelivery } from "../chat-prefs";
 import styles from "./settings-sections.module.css";
 
-/**
- * The current durable chat contract admits a message during an active run as a
- * queued successor.  The other two Manus behaviors require one atomic BFF
- * operation that persists the message while steering or cancelling the exact
- * run.  Keep the setting visibly honest until that owner contract exists.
- */
-export function TaskDeliveryPreferencesSection() {
+export function TaskDeliveryPreferencesSection({ preview }: { preview: boolean }) {
   const t = useT();
-  const reasonId = useId();
+  const steeringReasonId = useId();
+  const previewReasonId = useId();
+  const [delivery, setDelivery] = useState(() => preview ? "queue" : readChatDelivery());
+  const [saveFailed, setSaveFailed] = useState(false);
 
   return (
     <section
@@ -35,7 +33,12 @@ export function TaskDeliveryPreferencesSection() {
           <span className={styles.rowLabel}>{t("settings.taskDelivery")}</span>
           <p className={styles.chatPreferenceHint}>{t("settings.taskDeliveryHint")}</p>
         </div>
-        <Select value="queue">
+        <Select value={delivery} onValueChange={(value) => {
+          if (preview || (value !== "queue" && value !== "interrupt")) return;
+          const saved = writeChatDelivery(value);
+          if (saved) setDelivery(value);
+          setSaveFailed(!saved);
+        }}>
           <SelectTrigger
             id="settings-task-delivery"
             className={styles.select}
@@ -45,12 +48,14 @@ export function TaskDeliveryPreferencesSection() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent className={styles.deliveryOptions}>
-            <p id={reasonId} className={styles.chatPreferenceHint}>{t("settingsServices.steeringUnavailable")}</p>
-            <SelectItem value="send" disabled aria-describedby={reasonId}>{t("settingsServices.sendWithoutInterrupt")}</SelectItem>
+            <p id={steeringReasonId} className={styles.chatPreferenceHint}>{t("settingsServices.steeringUnavailable")}</p>
+            {preview ? <p id={previewReasonId} className={styles.chatPreferenceHint}>{t("settings.taskDeliveryPreview")}</p> : null}
+            <SelectItem value="send" disabled aria-describedby={steeringReasonId}>{t("settingsServices.sendWithoutInterrupt")}</SelectItem>
             <SelectItem value="queue">{t("settings.taskDeliveryQueue")}</SelectItem>
-            <SelectItem value="interrupt" disabled aria-describedby={reasonId}>{t("settingsServices.interruptAndSend")}</SelectItem>
+            <SelectItem value="interrupt" disabled={preview} aria-describedby={preview ? previewReasonId : undefined}>{t("settingsServices.interruptAndSend")}</SelectItem>
           </SelectContent>
         </Select>
+        {saveFailed ? <p role="alert">{t("settings.taskDeliveryNotSaved")}</p> : null}
       </div>
     </section>
   );

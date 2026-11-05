@@ -470,6 +470,8 @@ ACK按subject/scope/session/key核同后先写精确receipt，再在owner snapsh
 
 BFF现chat-turn-commit以tenant/subject/conversation/key和request_digest读取正式outbox精确回执，消息ID由原stable identity派生；本片不改保留/删除规则，也不设置超时后重置key。ACK持久化异常保exact RAM receipt，后继发送/原恢复先补本地ACK再GET，不重POST已知成功命令；切回同session/key/body的恢复对象可承接原晚ACK，已落盘ACK也可只读恢复。同一原键只允许一个本地在途请求；无 run_id 的失败 assistant 仍可由精确 assistant message ID 证明终态，不复活 Run。不凭本地错误重做命令，记录损坏或读拒绝时不发送。A‑03 将现有 FIFO 发送也收进同一原提交记录：提交前保存、刷新不重发、失败不改变当前 Run/审批、显式重试沿原键和原输入，迟到回执按精确身份合并。此行为不向当前模型注入消息，也不打断 Run。
 
+Public 28.21 的显式打断复用同一入口和记录：只把渲染与当前引擎同时证明的 exact active head 冻结入提交，和原键一起重试。已被 BFF 明确拒绝才允许用户恢复原稿；当前浏览器路由／主体变更后旧按钮不发请求。停止、等待审批和后继 FIFO 仍由正式事件/快照决定，前端不乐观伪造已取消。
+
 实施先补503→engine重建→404、ACK前刷新、200不精确配对、scope/subject、quota、取消与晚ACK回归；再正常页面复现对比及owner受影响门。Manus该失败窗口未观察，不声称其内部持久化实现相同。独立只读接缝审查已完成；验收状态见CURRENT，不因设计存在勾完成。
 
 ## CHAT-1：空草稿刷新恢复与提交前来源退休（2026-10-24，既有App边界）

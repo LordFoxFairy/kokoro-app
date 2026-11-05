@@ -207,6 +207,7 @@ export const messageCreateParamsSchema = z
     model: z.string().min(1).optional(),
     agent: z.string().min(1).optional(),
     thinking: z.boolean().optional(),
+    interrupt_run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u).optional(),
     selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(),
     selected_mcp_connection_ids: selectedMcpConnectionIdsSchema.optional(),
     selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional(),

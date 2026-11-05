@@ -167,7 +167,8 @@ export function useAppFrameSkillTrial({ engine, preview, boundary }: {
   /** The shell has already checked its route and Send admission. Allocation
    * stays synchronous so no old choice can be rebound by a later callback. */
   const submitCurrentDraft = useCallback((content: string, allocateProjectConversation = false,
-    projectDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; selectedCustomApiProfiles?: readonly CustomApiSelection[]; isCurrent: () => boolean }): boolean => {
+    projectDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; selectedCustomApiProfiles?: readonly CustomApiSelection[]; isCurrent: () => boolean },
+    interruptRunId?: string): boolean => {
     const owner = ownerRef.current
     if (!engine || !owner || owner.context !== lifetime || owner.engine !== engine) return false
     const current = selectionRef.current
@@ -190,7 +191,7 @@ export function useAppFrameSkillTrial({ engine, preview, boundary }: {
         }
         if (transfer && (selectionRef.current !== transfer.selection || !transfer.selection.active || !actionIsCurrent())) return false
       }
-      return engine.submit(content)
+      return interruptRunId === undefined ? engine.submit(content) : engine.submit(content, { interruptRunId })
     } finally {
       if (draftSubmissionRef.current === transfer) draftSubmissionRef.current = null
     }

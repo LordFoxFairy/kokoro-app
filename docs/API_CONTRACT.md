@@ -292,6 +292,10 @@ standalone `src/hub/project-mcp-recommendations-client.ts`只GET/PUT当前Projec
 
 本地Try不新增API或改wire：私有server的exact `connection_id`经现engine选择进入新草稿，用户明确Send时才沿既有Public24 `selected_mcp_connection_ids`冻结到原消息请求；connector/server/provider ID及显示名不替代运行Connection。Try本身零消息/Prepare/授权请求，未知原请求不被新草稿覆盖。缺可用性、未ready或缺Connection不伪造试用；Prepare/重新授权保留各自正式操作与恢复语义。
 
+## A‑03：打断并发送（Public 28.21）
+
+同一 Message POST 增可选 `interrupt_run_id`。只有当前已开始的 Run 才携带精确 ID；未开始仍沿队列，不新增控制 POST。原请求记录冻结目标、键与输入；显式重试不改目标。BFF 409 `run_delivery_conflict` 确认该次未接纳时，可把原文恢复进输入框，不自动换目标、换键或发送。202 只代表后继已接纳。
+
 ## CHAT-1：首发刷新恢复不新增网络协议（2026-10-24）
 
 仅增加App同标签浏览器未决意图adapter，首发/原retry继续原MessageCreateParams与唯一builder；GET snapshot-first、exact MessageCreateReceipt及AG-UI保持。刷新无自动POST、无新key/body、无本地伪会话，503/404/同正文不作为命令未发生或已成功的证据。原控制、身份、project_ref 及 MCP/Skill 有序选择不变。A‑03 运行中 FIFO 沿同一 Message POST 和回执，不加新的网络模式；重试不改变当前 Run 或重开流。设计/本地记录见 TECHNICAL_DESIGN/DATA_MODEL，实际验收见 CURRENT。

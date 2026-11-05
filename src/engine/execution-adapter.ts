@@ -25,6 +25,7 @@ export type MessageExecutionOptions = {
   selectedSkillSourceRefs: readonly string[] | undefined
   selectedCustomApiProfiles?: readonly CustomApiSelection[]
   selectedMcpConnectionIds?: readonly string[]
+  interruptRunId?: string
 }
 
 export type CreateMessageArgs = {
@@ -85,6 +86,7 @@ export function buildMessageCreateParams(args: {
     idempotency_key: args.idempotencyKey,
     content: args.content,
     thinking: options.mode === "thinking",
+    ...(options.interruptRunId === undefined ? {} : { interrupt_run_id: options.interruptRunId }),
     ...(options.model !== null ? { model: options.model } : {}),
     ...(options.selectedSkillSourceRefs === undefined ? {} : { selected_skill_source_refs: [...options.selectedSkillSourceRefs] }),
     ...(options.selectedMcpConnectionIds?.length ? { selected_mcp_connection_ids: [...options.selectedMcpConnectionIds] } : {}),

@@ -60,6 +60,7 @@ export function createBrowserSubmissionRecovery(args: {
         options: { mode: record.request.thinking ? "thinking" : "fast", model: record.request.model ?? null,
           selectedSkillSourceRefs: record.request.selected_skill_source_refs,
           selectedMcpConnectionIds: record.request.selected_mcp_connection_ids ?? [],
+          ...(record.request.interrupt_run_id === undefined ? {} : { interruptRunId: record.request.interrupt_run_id }),
           ...(record.request.selected_custom_api_profiles === undefined ? {} : { selectedCustomApiProfiles: freezeCustomApiSelection(record.request.selected_custom_api_profiles.map(value => ({ profileId: value.profile_id, expectedStateVersion: String(value.expected_state_version) }))) }) },
       } }
     },

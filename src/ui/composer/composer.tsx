@@ -31,6 +31,7 @@ export type ComposerProps = {
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   isStreaming: boolean
+  interruptsCurrentRun?: boolean
   isAwaitingApproval?: boolean
   canSend: boolean
   onStop: () => void
@@ -69,7 +70,7 @@ function creationLabel(t: ReturnType<typeof useT>, intent: CreationIntent | unde
   return null
 }
 
-export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, modelCatalogStatus = "ready", onRetryModels, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, leadingActions, selectedSkill, onRemoveSelectedSkill, onResourceMenuRequest, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
+export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, interruptsCurrentRun = false, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, modelCatalogStatus = "ready", onRetryModels, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, leadingActions, selectedSkill, onRemoveSelectedSkill, onResourceMenuRequest, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
   const t = useT()
   const limitDescriptionId = useId()
   const exceedsLimit = draft.trim().length > MAX_INPUT_LENGTH
@@ -156,7 +157,7 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
           {creationIntent ? <CreationIntentPill intent={creationIntent} label={creationIntentLabel ?? ""} dismissLabel={t("composer.dismissCreationIntent", { label: creationIntentLabel ?? "" })} onDismiss={onCreationIntentDismiss} /> : null}
           <ComposerSelectors modelCatalogStatus={modelCatalogStatus} onRetryModels={onRetryModels} mode={mode} modeLabel={modeLabel} onModeChange={onModeChange} modeLocked={modeLocked} models={models} hideModelSelector={hideModelSelector} currentModel={currentModel} currentSelector={currentSelector} currentModelTriggerLabel={currentModelTriggerLabel} currentModelNewBadgeLabel={currentModelNewBadgeLabel} currentModelTriggerTitle={currentModelTriggerTitle} onModelChange={onModelChange} modelLocked={modelLocked} />
           <ComposerVoiceActions emptyWorkspace={emptyWorkspace} projectWorkspace={projectWorkspace} creationIntent={creationIntent} state={voiceInput.state} onToggle={voiceInput.toggle} />
-          <ComposerSubmitAction isStreaming={isStreaming} isAwaitingApproval={isAwaitingApproval} showSend={showSend} canSend={canSend && !exceedsLimit} onStop={onStop} />
+          <ComposerSubmitAction isStreaming={isStreaming} isAwaitingApproval={isAwaitingApproval} showSend={showSend} interruptsCurrentRun={interruptsCurrentRun} canSend={canSend && !exceedsLimit} onStop={onStop} />
         </div>
       </form>
       {modeLocked ? <p className={styles.disclaimer} data-slot="composer-disclaimer">{t("composer.disclaimer")}</p> : null}

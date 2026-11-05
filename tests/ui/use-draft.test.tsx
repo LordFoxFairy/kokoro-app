@@ -18,6 +18,22 @@ afterEach(() => {
 })
 
 describe("useDraft persistence", () => {
+  it("restores a rejected message synchronously without overwriting a newer draft", () => {
+    const { result } = renderHook(() => useDraft("conversation-restore", true))
+    act(() => result.current.updateDraft("newer text"))
+    act(() => expect(result.current.restoreDraft("rejected text")).toBe(false))
+    expect(result.current.draft).toBe("newer text")
+    act(() => result.current.clearDraft())
+    const before = window.localStorage.getItem(DRAFTS_KEY)
+    const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("full", "QuotaExceededError") })
+    act(() => expect(result.current.restoreDraft("rejected text")).toBe(false))
+    expect(window.localStorage.getItem(DRAFTS_KEY)).toBe(before)
+    write.mockRestore()
+    act(() => expect(result.current.restoreDraft("rejected text")).toBe(true))
+    expect(result.current.draft).toBe("rejected text")
+    expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}")).toEqual({ "conversation-restore": "rejected text" })
+  })
+
   it("debounces storage writes while keeping the latest draft in React", () => {
     vi.useFakeTimers()
     const { result } = renderHook(() => useDraft("conversation-1", true))

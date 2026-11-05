@@ -6,13 +6,13 @@ import { expect, it } from "vitest"
 import YAML from "yaml"
 
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
-const OWNER_COMMIT = "846821ae1b46f66663669d20fd5340bb7fa58b87"
-const OWNER_SHA256 = "c5fc7225901fa5b815cdb7ee5286354d7c4cabed9919676e6e86651fb9910783"
-const OWNER_VERSION = "28.20.0"
+const OWNER_COMMIT = "2cf1c14d5007c0c89d24e5461e9d01d24f8a4656"
+const OWNER_SHA256 = "a5ea4bb0ef1458a536e3b54e01049267aec2913d147f2ad7bb99a481197d0525"
+const OWNER_VERSION = "28.21.0"
 
 it("pins the BFF Artifact Product page, binary and two-part selector", async () => {
   const bytes = await readFile(SNAPSHOT)
-  expect(OWNER_COMMIT).toBe("846821ae1b46f66663669d20fd5340bb7fa58b87")
+  expect(OWNER_COMMIT).toBe("2cf1c14d5007c0c89d24e5461e9d01d24f8a4656")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }

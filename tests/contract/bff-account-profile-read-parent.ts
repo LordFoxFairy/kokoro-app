@@ -1,11 +1,12 @@
 // Test-only exact Public28.18 -> whole28.17; never a runtime fallback.
 import { createHash } from "node:crypto"
 import { restorePublic2819ProjectTaskContract } from "./bff-project-tasks-parent"
+import { restorePublic2820InterruptSubmitContract } from "./bff-interrupt-submit-parent"
 
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
 
 export function restorePublic2817AccountProfileReadContract(source: string) {
-  source = restorePublic2819ProjectTaskContract(source)
+  source = restorePublic2819ProjectTaskContract(restorePublic2820InterruptSubmitContract(source))
   if (/^  version: 28\.19\.0$/mu.test(source)) {
     if (hash(source) !== "27032917fb272601b6da8ba9227bab5324ac305682a72c94adca72e4f9e25577") {
       throw Error("Context window Public28.19 child drift")
