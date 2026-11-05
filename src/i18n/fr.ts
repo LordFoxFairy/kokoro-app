@@ -558,7 +558,6 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "thread.submissionUnconfirmedHint": "Le texte et les options sont conservés. Actualiser ne renvoie rien. La récupération explicite vérifie ou réessaie la même requête, sans créer une nouvelle tâche.",
   "chat.submissionRecoveryFailed": "Le navigateur n’a pas pu enregistrer ou lire l’état de récupération de la requête initiale. Rétablissez le stockage puis relisez cet état. La requête ne sera pas renvoyée automatiquement.",
   "chat.localDraftPersistenceFailed": "Le navigateur n’a pas pu enregistrer l’état de l’envoi. Le message n’a pas été envoyé et votre texte est conservé. Rétablissez le stockage du navigateur et réessayez.",
-  "steer.sendFailed": "Échec de l'envoi de l'interruption : {detail}, veuillez réessayer",
   "todo.plan": "plan",
   "lang.switchAria": "langue de l'interface",
   "lang.zh": "Chinois",

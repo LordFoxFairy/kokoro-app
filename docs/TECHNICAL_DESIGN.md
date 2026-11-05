@@ -468,7 +468,7 @@ Owner导入为原事务/receipt中的整文档原子持久化，不拆成多个R
 
 ACK按subject/scope/session/key核同后先写精确receipt，再在owner snapshot-first原流程消化；已落receipt不再提供POST重试。取消/New先退休恢复资格，晚ACK沿原cancelledSubmissions保护；退休写失败不假完成切换。普通dispose/离开scope保未决记录；身份切换清退当前tab原前缀。sessionStorage复制标签可能复制原记录，仍只允许同key/body人工恢复，不冒跨tab锁。关闭tab/browser清理属于sessionStorage生命周期，不承诺跨设备恢复。
 
-BFF现chat-turn-commit以tenant/subject/conversation/key和request_digest读取正式outbox精确回执，消息ID由原stable identity派生；本片不改保留/删除规则，也不设置超时后重置key。ACK持久化异常保exact RAM receipt，后继发送/原恢复先补本地ACK再GET，不重POST已知成功命令；切回同session/key/body的恢复对象可承接原晚ACK，已落盘ACK也可只读恢复。重复同key在途请求按attempt计数，失败单个请求不清其它attempt的取消意图；无run_id的failed assistant可由exact assistant message ID证明终态，不复活queued。不凭本地错误重做命令；记录损坏/读拒绝fail-closed。运行中pendingSteerReceipts队列的跨刷新持久化不在此首发修复，继续开放。
+BFF现chat-turn-commit以tenant/subject/conversation/key和request_digest读取正式outbox精确回执，消息ID由原stable identity派生；本片不改保留/删除规则，也不设置超时后重置key。ACK持久化异常保exact RAM receipt，后继发送/原恢复先补本地ACK再GET，不重POST已知成功命令；切回同session/key/body的恢复对象可承接原晚ACK，已落盘ACK也可只读恢复。同一原键只允许一个本地在途请求；无 run_id 的失败 assistant 仍可由精确 assistant message ID 证明终态，不复活 Run。不凭本地错误重做命令，记录损坏或读拒绝时不发送。A‑03 将现有 FIFO 发送也收进同一原提交记录：提交前保存、刷新不重发、失败不改变当前 Run/审批、显式重试沿原键和原输入，迟到回执按精确身份合并。此行为不向当前模型注入消息，也不打断 Run。
 
 实施先补503→engine重建→404、ACK前刷新、200不精确配对、scope/subject、quota、取消与晚ACK回归；再正常页面复现对比及owner受影响门。Manus该失败窗口未观察，不声称其内部持久化实现相同。独立只读接缝审查已完成；验收状态见CURRENT，不因设计存在勾完成。
 

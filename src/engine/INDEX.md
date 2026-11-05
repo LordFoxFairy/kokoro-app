@@ -12,7 +12,7 @@ CHAT-1当前：`ownerConfirmedSessionId`只投影当前视图的正向snapshot/c
 
 ## CHAT-1 未决提交刷新恢复（2026-10-24，候选）
 
-`submission-recovery.ts`只定义浏览器恢复意图/adapter，`machine.ts`在首发前确认保存、snapshot-first恢复并保原key/options；明确New/取消须确认退休。精确ACK本地写失败保RAM receipt，下次只补本地写，不重发已接收命令。owner运行相位与未决admission分开，终态后可恢复exact receipt而不复活Run。浏览器I/O在ui/shell，网络协议不变；见三面设计及CURRENT。
+`submission-recovery.ts`只定义浏览器恢复意图/adapter，`machine.ts`在首发或运行中 FIFO 发送前确认保存、snapshot-first 恢复并保原 key/options；明确New/取消须确认退休。精确ACK本地写失败保RAM receipt，下次只补本地写，不重发已接收命令。同会话只留一个未确认提交；下一草稿不会覆盖该记录。owner Run 与未决提交各自展示，排队不清已有 Todo 或重开流；普通重连接纳迟到回执但不重复开流。浏览器I/O在ui/shell，网络协议不变；见三面设计及CURRENT。
 
 PROJECT-1（2026-10-24）：EngineSnapshot.missingSessionId 是本 active 的权威缺席观察，不是本地创建或持久状态。new／switch／hydrate／accepted create 清退；同 session pending/unknown、本页新建及非空正文不因 null 改缺失。openConversation 对当前 missing ID 允许原 ID 只读 Retry；null 与 exact deferred receipt 竞态采用 ACK、零重复 POST，GC 原驱逐保持。
 
@@ -40,8 +40,7 @@ SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未�
 ## 公开 API
 
 - `machine.ts`
-  - `createSessionEngine(deps) → SessionEngine`：唯一的引擎编排入口；submit（运行中插话转
-    现 create-message 路径、不动状态机；同步返回本地是否接纳，供调用方在拒绝时保留草稿）/ retry（未回执重试复用首发 key 与完整 options 快照，保持同 digest）/ cancelRun /
+  - `createSessionEngine(deps) → SessionEngine`：唯一的引擎编排入口；submit（运行中仍走现有 FIFO create-message，保留当前 Run；同步返回是否接纳，false 时保留草稿）/ retry（未回执重试复用首发 key 与完整 options 快照，保持同 digest）/ cancelRun /
     stageToolDecision / selectConversation / returnToLocalHome / newConversation / deleteConversation /
     reconcileConversationCache（只驱逐本地Conversation索引，不调用owner DELETE）/ setMode / dispose。
   - 从 `machine-state.ts` 与 `engine-types.ts` re-export 原有公共入口，保持下游 import 契约。
@@ -57,7 +56,7 @@ SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未�
     cursor、事件批次和错误。
 - `engine-types.ts`
   - `EngineSnapshot`、`SERVER_ENGINE_SNAPSHOT`、`SessionEngine`、`EngineDeps`（SSR 首帧和
-    引擎依赖契约）；`canRetryPendingSubmission` 只暴露同会话、未获 create receipt 且仍处于合法 error 相位的恢复能力；
+    引擎依赖契约）；`canRetryPendingSubmission` 只暴露同会话、可用连接、无在途且原意图失败的恢复能力；不取决于当前 Run 是否在执行；
     `canSubmitMessage` 与 submit 共用唯一同步接纳规则；SSR 为 false，UI 只组合非空草稿，不把它当 owner 回执。
     瞬态通知发 i18n key 不落文案。
 - `client.ts`：`createSessionClient({baseUrl}) → SessionClient`——全部入站过
@@ -120,7 +119,7 @@ SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未�
 
 `setSelectedSkillSourceRefs(undefined)`恢复作用域默认（Project省略继承、Direct为[]），[]明确不选，非空refs显式覆盖。execution adapter只构造wire，machine负责新会话/切换退休与未知提交冻结；重试不重新读取当前偏好。
 
-- `EngineSnapshot.hasPendingSubmission` 只读投影原冻结 create 是否仍未获回执，供浏览器 scope 租约保护使用；不同于仅在合法 error 相位为真的 `canRetryPendingSubmission`。不作为服务端成功或授权证明，不落盘。
+- `EngineSnapshot.hasPendingSubmission` 只读投影原冻结 create 是否仍未获回执，供浏览器 scope 租约保护使用；不同于仅在失败且当前可重试时为真的 `canRetryPendingSubmission`。不作为服务端成功或授权证明，不落盘。
 
 - `client.listModels` 只聚合正式 `feature_key=chat` 目录：逐页传递 opaque cursor，整次读取共用 10 秒预算和 caller 取消；重复 cursor/业务标签、非 chat 候选或超过 100 页均失败，不以部分列表冒完整成功。返回完整列表与 `next_cursor: null`，wire 本身不变。
 

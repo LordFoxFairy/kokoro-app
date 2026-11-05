@@ -160,7 +160,7 @@ reserve 原子保旧，failure 只单调收紧、晚到400/412不清掉 unknown 
 
 新增仅App-owned同标签sessionStorage恢复数据；独立前缀按已验证subject、direct/project scope及conv分键。版本化严格记录保原session、optimistic ID、原idempotency key及唯一builder产出的冻结请求；pending可带公开失败码，ACK保存exact receipt，明确放弃保存退休态。主体由原Product Session准入授予、marker只核变更；无服务端身份/会话/Run/账本真源。单记录1MiB，超限/配额/读写拒绝不截断、不腾空他人数据、不发送。
 
-ACK/退休按原key比较更新，不擦后继意图；没有精确回执时不按正文或404判成功/未执行。主体切换清理当前tab恢复前缀，scope独立，普通dispose保留；tab关闭遵循sessionStorage寿命，无跨设备承诺。损坏记录闭锁而不是空记录；ACK持久化失败不能伪造恢复成功。原Conversation索引、localDraft退休键及BFF durable ledger保持唯一职责，无SQL/Schema/owner变化。
+首发和运行中 FIFO 复用同一会话未决记录；未确认前下一草稿不覆盖它。ACK/退休按原 key 比较更新，不擦后继意图；没有精确回执时不按正文或 404 判成功/未执行。主体切换清理当前tab恢复前缀，scope独立，普通dispose保留；tab关闭遵循sessionStorage寿命，无跨设备承诺。损坏记录闭锁而不是空记录；ACK持久化失败不能伪造恢复成功。原Conversation索引、localDraft退休键及BFF durable ledger保持唯一职责，无SQL/Schema/owner变化。
 
 ## CHAT-1：本地New来源与不可回退的来源退休（2026-10-24）
 

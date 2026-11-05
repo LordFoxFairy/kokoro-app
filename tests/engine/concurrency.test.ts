@@ -1,4 +1,4 @@
-// 并发 / 跨-tab 回归（866965c）：steer 迟到回执守卫、onExternalStore 收束-跟随、
+// 并发 / 跨-tab 回归（866965c）：排队消息迟到回执守卫、onExternalStore 收束-跟随、
 // run 收尾文件面同步。这些是无法用纯 transition 覆盖的引擎级竞态，须在真 engine 上驱动。
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -96,7 +96,7 @@ describe("并发与跨-tab 回归（866965c）", () => {
     expect(engine.getSnapshot().thread.files.map((f) => f.path)).toContain("plan.md")
   })
 
-  it("steer 迟到失败在切走会话后到达：守卫拒绝，不把 steer 通知串到别的会话", async () => {
+  it("排队消息迟到失败在切走会话后到达：不把原请求错误串到别的会话", async () => {
     buildEngine()
     await reachStreaming() // conv_1 streaming
     // 让 steer 的 POST 挂起，可控失败。
@@ -110,11 +110,11 @@ describe("并发与跨-tab 回归（866965c）", () => {
     rejectSteer(new SessionClientError("http", "boom"))
     await settle()
 
-    // 守卫：迟到的 steer 失败通知不得落在 conv_2 上。
-    expect(engine.getSnapshot().notice?.key).not.toBe("steer.sendFailed")
+    expect(engine.getSnapshot().pendingSubmissionFailureCode).toBeUndefined()
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(false)
   })
 
-  it("steer 迟到成功在切走会话后到达：不把旧回执吸收到新会话", async () => {
+  it("排队消息迟到成功在切走会话后到达：不把旧回执吸收到新会话", async () => {
     buildEngine()
     await reachStreaming()
     let resolveSteer: (receipt: ReturnType<typeof makeReceipt>) => void = () => {}
@@ -131,7 +131,7 @@ describe("并发与跨-tab 回归（866965c）", () => {
     expect(engine.getSnapshot().notice).toBeNull()
   })
 
-  it("steer 失败在原会话（未切走）：通知照常可见——对照,证明上面的隔离来自守卫", async () => {
+  it("排队消息在原会话失败时可按原请求恢复", async () => {
     buildEngine()
     await reachStreaming()
     let rejectSteer: (error: unknown) => void = () => {}
@@ -143,6 +143,7 @@ describe("并发与跨-tab 回归（866965c）", () => {
     rejectSteer(new SessionClientError("http", "boom"))
     await settle()
 
-    expect(engine.getSnapshot().notice?.key).toBe("steer.sendFailed")
+    expect(engine.getSnapshot().pendingSubmissionFailureCode).toBe("submission_outcome_unknown")
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
   })
 })

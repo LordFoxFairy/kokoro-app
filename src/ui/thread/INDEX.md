@@ -45,6 +45,8 @@ AnswerActions：独立回答操作栏只持复制与短反馈；重新生成／�
 
 CHAT-1（2026-10-24，候选）：`UnconfirmedSubmissionFeedback`与依赖未就绪共用中性恢复排版，但明确区分未确认admission和owner执行失败；原文/原请求人工恢复，不把已完成Run误说失败，不自动POST。
 
+Task A A‑03：ConversationThread 单独读取 AppFrame 投影的消息提交失败，复用同一「重试原请求」入口，当前 Run 正执行或等审批时也可按 engine 资格显式重试。提交结果不取代当前 Run、工具决策或已生成内容；反馈出现不移动焦点，点击重试仍沿原 Composer 回焦。402 和 owner Run 终态保持原语义。
+
 ## 2026-10-20 执行未就绪反馈
 
 `ExecutionUnavailableFeedback`仅呈现明确pre-admission agent_not_configured且无unattributed RunFailure的状态；中性status＋服务就绪后显式原请求恢复，不伪称已暂停/已执行/已保存，不自动发请求。原真实run.failed/未知失败、归属、402资金分支和machine恢复逻辑保持；同一阅读列内紧凑布局，不改滚动或Composer。模块独立CSS只用现语义token。

@@ -331,31 +331,40 @@ it("a deferred exact failed assistant ACK without run_id never revives its settl
   engine.dispose()
 })
 
-it.each([false, true])("cancellation survives one failed duplicate attempt while another exact request awaits ACK (New first=%s)", async newFirst => {
+it.each([false, true])("New cancels one late exact ACK after navigation (explicit retry=%s)", async retryAfterFailure => {
   const storage = createMemoryStorage<ConversationStore>()
   const client = createFakeClient()
-  let rejectFirst: ((error: Error) => void) | undefined
-  let acceptSecond: ((value: typeof receipt) => void) | undefined
-  let attempts = 0
-  client.nextCreate = () => ++attempts === 1
-    ? new Promise((_resolve, reject) => { rejectFirst = reject })
-    : new Promise(resolve => { acceptSecond = resolve })
+  let finish!: (value: typeof receipt) => void
+  let fail!: (error: Error) => void
+  client.nextCreate = () => new Promise((resolve, reject) => { finish = resolve; fail = reject })
   const engine = createSessionEngine({ client, storage, submissionRecovery: recovery() })
-  engine.newConversation(); engine.submit("original text")
-  const id = engine.getSnapshot().store?.activeId
-  if (!id) throw new Error("missing id")
-  engine.openConversation("conv_other"); await settle()
-  engine.openConversation(id); await settle()
-  engine.retry()
-  expect(client.createCalls).toHaveLength(2)
-  if (newFirst) engine.newConversation()
-  rejectFirst?.(new Error("unknown outcome")); await settle()
-  if (!newFirst) engine.newConversation()
-  acceptSecond?.(receipt); await settle()
-  expect(client.controlCalls).toHaveLength(1)
-  expect(client.controlCalls[0]?.sessionId).toBe(id)
-  expect(client.controlCalls[0]?.runId).toBe(receipt.run_id)
-  engine.dispose()
+  try {
+    engine.newConversation()
+    expect(engine.submit("original text")).toBe(true)
+    const id = engine.getSnapshot().store?.activeId
+    if (!id) throw new Error("missing id")
+    engine.openConversation("conv_other")
+    await settle()
+    engine.openConversation(id)
+    await settle()
+    engine.retry()
+    expect(client.createCalls).toHaveLength(1) // Re-entry does not race its existing POST.
+    if (retryAfterFailure) {
+      fail(new Error("unknown outcome"))
+      await settle()
+      expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+      engine.retry()
+      expect(client.createCalls).toHaveLength(2)
+      expect(client.createCalls[1]).toEqual(client.createCalls[0])
+    }
+    engine.newConversation()
+    finish(receipt)
+    await settle()
+    expect(client.controlCalls).toHaveLength(1)
+    expect(client.controlCalls[0]?.sessionId).toBe(id)
+    expect(client.controlCalls[0]?.runId).toBe(receipt.run_id)
+    expect(engine.getSnapshot().thread.messages).toEqual([])
+  } finally { engine.dispose() }
 })
 
 it("an exact journal receipt learned from another engine is reconciled by GET rather than POST", async () => {

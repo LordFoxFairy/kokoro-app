@@ -558,7 +558,6 @@ export const de: Partial<Record<MessageKey, string>> = {
   "thread.submissionUnconfirmedHint": "Text und Optionen bleiben erhalten. Neuladen sendet nichts erneut. Die ausdrückliche Wiederherstellung prüft oder wiederholt dieselbe Anfrage, statt eine neue Aufgabe anzulegen.",
   "chat.submissionRecoveryFailed": "Der Wiederherstellungsstatus der ursprünglichen Anfrage konnte nicht gespeichert oder gelesen werden. Aktivieren Sie den Browserspeicher und laden Sie ihn erneut. Die Anfrage wird nicht automatisch erneut gesendet.",
   "chat.localDraftPersistenceFailed": "Der Sendestatus konnte nicht im Browser gespeichert werden. Die Nachricht wurde nicht gesendet, Ihre Eingabe bleibt erhalten. Aktivieren Sie den Browserspeicher und versuchen Sie es erneut.",
-  "steer.sendFailed": "Fehler beim Senden des Interrupts: {detail}, bitte versuchen Sie es erneut",
   "todo.plan": "planen",
   "lang.switchAria": "Schnittstellensprache",
   "lang.zh": "chinesisch",

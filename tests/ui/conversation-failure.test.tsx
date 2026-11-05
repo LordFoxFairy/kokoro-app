@@ -18,6 +18,7 @@ import {
   expectedZhCopy,
   makeDispatchFailureEvent,
   makeFailedSnapshot,
+  makePendingPause,
   makeSnapshot,
 } from "../core/fixtures"
 
@@ -54,15 +55,15 @@ function failedThread(code: AgentFailureCode): SessionStreamState {
   return failedThreadWithProfile(failureProfile(code))
 }
 
-function renderFailure(thread: SessionStreamState, onRetry = vi.fn(), submissionFailureCode?: string | null, canRetryPendingSubmission = false) {
+function renderFailure(thread: SessionStreamState, onRetry = vi.fn(), pendingSubmissionFailureCode?: string, canRetryPendingSubmission = false) {
   return render(
     <ConversationThread
       sessionId="ses_1"
       thread={thread}
       isStreaming={false}
       isReconnecting={false}
-      hasFailed={thread.unattributedFailure !== null || submissionFailureCode !== undefined}
-      {...(submissionFailureCode === undefined ? {} : { submissionFailureCode })}
+      hasFailed={thread.unattributedFailure !== null || pendingSubmissionFailureCode !== undefined}
+      {...(pendingSubmissionFailureCode === undefined ? {} : { pendingSubmissionFailureCode })}
       canRetryPendingSubmission={canRetryPendingSubmission}
       creditRejected={false}
       onOpenBilling={vi.fn()}
@@ -302,7 +303,6 @@ describe("failureCopyKey — generated safe profile localization", () => {
   })
 
   it("BFF 明确 Agent 未配置时使用配置说明，而不是误导用户立即重试", () => {
-    expect(failureCopyKey(null, "agent_not_configured")).toBe("fail.agentNotConfigured")
     expect(zh["fail.agentNotConfigured"]).toBeTruthy()
 
     const thread = createSessionStreamState()
@@ -365,7 +365,7 @@ describe("ConversationThread 原生滚动行为", () => {
         currentRunId: phase === "submitting" ? null : "run_2",
         executionPhase: phase === "completed" ? "idle" : phase === "failed" ? "error" : phase === "reconnecting" ? "streaming" : phase,
         hasFailed: phase === "failed",
-        submissionFailureCode: phase === "failed" ? "agent_not_configured" : null,
+        ...(phase === "failed" ? { pendingSubmissionFailureCode: "agent_not_configured" } : {}),
       }))
       const items = [...rendered.container.querySelectorAll('[data-slot="message-scroller-item"]')]
       const elements = harness.configure(rendered.container, items.map((_, index) => rect(20 + index * 108, 80)), {
@@ -750,14 +750,14 @@ describe("ConversationThread 失败卡渲染", () => {
     )
   })
 
-  it("余额不足反馈保留 alert 标题、说明与全部动作", () => {
+  it.each([false, true])("余额不足反馈在当前 Run 运行=%s 时仍保留所有动作", (isStreaming) => {
     render(
       <ConversationThread
         sessionId="ses_1"
         thread={createSessionStreamState()}
-        isStreaming={false}
+        isStreaming={isStreaming}
         isReconnecting={false}
-        hasFailed
+        hasFailed={!isStreaming}
         canRetryPendingSubmission
         creditRejected
         onOpenBilling={vi.fn()}
@@ -1011,6 +1011,39 @@ it("an unconfirmed admission is not described as a failed execution, and only ex
   expect(retry).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole("button", { name: tr("thread.retryOriginal") }))
   expect(retry).toHaveBeenCalledTimes(1)
+})
+
+it("offers original submission recovery without replacing or stealing focus from the active Run's approval", () => {
+  const thread = stateFromSnapshot(makeSnapshot({
+    sessionId: "ses_1",
+    activeRun: { run_id: "run_1", status: "waiting_input" },
+    pendingPauses: [makePendingPause()],
+    messages: [{ message_id: "m_a", role: "assistant", run_id: "run_1", content: "Already written", status: "streaming", created_at: "now" }],
+  }))
+  const retry = vi.fn()
+  const props: ConversationThreadProps = {
+    sessionId: "ses_1", thread, isStreaming: true, isReconnecting: false,
+    hasFailed: false, currentRunId: "run_1", executionPhase: "waiting",
+    canRetryPendingSubmission: false, creditRejected: false,
+    onOpenBilling: vi.fn(), onOpenPricing: vi.fn(), onRetry: retry,
+    mode: "fast", stagingByRun: {}, hitlRunId: "run_1", controlError: null, onToolDecision: vi.fn(),
+  }
+  const { rerender } = render(<ConversationThread {...props} />, { wrapper: LocaleProvider })
+  const approve = screen.getByRole("button", { name: tr("hitl.approve") })
+  approve.focus()
+  rerender(<ConversationThread {...props} pendingSubmissionFailureCode="submission_outcome_unknown" canRetryPendingSubmission />)
+
+  expect(screen.getByText("Already written")).toBeVisible()
+  expect(approve).toBeEnabled()
+  expect(approve).toHaveFocus()
+  expect(screen.getByText(tr("thread.submissionUnconfirmed"))).toBeVisible()
+  expect(retry).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: tr("thread.retryOriginal") }))
+  expect(retry).toHaveBeenCalledTimes(1)
+
+  rerender(<ConversationThread {...props} pendingSubmissionFailureCode="submission_outcome_unknown" />)
+  expect(screen.queryByRole("button", { name: tr("thread.retryOriginal") })).not.toBeInTheDocument()
+  expect(approve).toBeEnabled()
 })
 
 describe("confirmed cancellation presentation", () => {

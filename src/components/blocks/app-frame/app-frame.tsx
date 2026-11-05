@@ -759,7 +759,7 @@ function AppFrameRuntime({
 
   const hasMessages = thread.messages.length > 0
   const showConversation = hasMessages && !standaloneSurface && navigationState.routeOwnsConversation
-  const canRetryPendingSubmission = engine?.getSnapshot().canRetryPendingSubmission ?? false
+  const { canRetryPendingSubmission = false, pendingSubmissionFailureCode } = engine?.getSnapshot() ?? {}
   const initialSnapshotFailed = machine.phase === "error"
     && !canRetryPendingSubmission
     && store !== null
@@ -767,7 +767,7 @@ function AppFrameRuntime({
   const hasFailed = !isStreaming && (
     machine.phase === "error" || thread.unattributedFailure !== null
   )
-  const creditRejected = hasFailed && isCreditInsufficient(machine.error)
+  const creditRejected = isCreditInsufficient(pendingSubmissionFailureCode ?? (hasFailed ? machine.error : null))
   const mode = projectOverview ? projectDraft.mode : store ? activeMode(store) : pendingMode
   const composerHasMessages = !projectOverview && hasMessages
   const modeLocked = composerHasMessages
@@ -797,9 +797,17 @@ function AppFrameRuntime({
   }, [focusComposer, hasMessages])
 
   const retryAndFocusComposer = useCallback(() => {
-    engine?.retry()
-    window.requestAnimationFrame(() => focusComposer())
-  }, [engine, focusComposer])
+    if (!engine || activeId === null) return
+    const isCurrent = () => {
+      if (!isVisibleMoveLeaf(moveScopeKey, activeId)) return false
+      if (preview) return true
+      try { return copyAdmitted && window.localStorage.getItem("kokoro.web.auth-index-subject") === copySubject }
+      catch { return false }
+    }
+    if (!isCurrent() || !engine.getSnapshot().canRetryPendingSubmission) return
+    engine.retry()
+    window.requestAnimationFrame(() => { if (isCurrent()) focusComposer() })
+  }, [activeId, copyAdmitted, copySubject, engine, focusComposer, isVisibleMoveLeaf, moveScopeKey, preview])
 
   const retryConversationHydration = useCallback(() => {
     const requestedConversationId = navigationState.resolvedConversationRouteId ?? activeId
@@ -837,7 +845,7 @@ function AppFrameRuntime({
     executionPhase: machine.phase,
     isReconnecting: connection.status === "reconnecting",
     hasFailed,
-    submissionFailureCode: machine.error,
+    ...(pendingSubmissionFailureCode === undefined ? {} : { pendingSubmissionFailureCode }),
     canRetryPendingSubmission,
     canRetryResume: engine?.getSnapshot().canRetryResume ?? false,
     onRetryResume: () => engine?.retryResume(),

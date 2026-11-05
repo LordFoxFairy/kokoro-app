@@ -12,7 +12,6 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
 import { ArrowDown } from "lucide-react"
-import { Spinner } from "@/components/ui/spinner"
 
 import type { AgentFailureCode } from "@/contract/agent-failure"
 import type { AgentMode } from "@/core/conversations"
@@ -49,8 +48,8 @@ export type ConversationThreadProps = {
   // 重连续传态：在途轮的 live 锚点改为「重连中…」，区别于普通「正在思考…」。
   isReconnecting: boolean
   hasFailed: boolean
-  // Public BFF code for a failed message admission before a Run exists.
-  submissionFailureCode?: string | null
+  // Message admission can fail while a different Run is still active.
+  pendingSubmissionFailureCode?: string
   canRetryResume?: boolean
   onRetryResume?: () => void
   canRetryPendingSubmission: boolean
@@ -108,11 +107,8 @@ function agentFailureCopyKey(code: AgentFailureCode): MessageKey {
   }
 }
 
-export function failureCopyKey(runError: RunFailure | null, submissionFailureCode?: string | null): MessageKey {
+export function failureCopyKey(runError: RunFailure | null): MessageKey {
   if (runError?.kind === "agent") return agentFailureCopyKey(runError.profile.code)
-  // This code is part of the BFF's public mutation error contract. It means a
-  // retry cannot make the local Agent dependency available on its own.
-  if (submissionFailureCode === "agent_not_configured") return "fail.agentNotConfigured"
   return "fail.generic"
 }
 
@@ -159,7 +155,7 @@ function ConversationThreadSurface({
   executionPhase,
   isReconnecting,
   hasFailed,
-  submissionFailureCode,
+  pendingSubmissionFailureCode,
   canRetryResume = false,
   onRetryResume,
   canRetryPendingSubmission,
@@ -212,8 +208,32 @@ function ConversationThreadSurface({
   const showScaffoldTurn = isStreaming && (
     liveRunId === undefined || !items.some((item) => item.kind === "assistant-turn" && item.runId === liveRunId)
   )
+  const genericFailure = (runError: RunFailure | null, canRetry: boolean) => (
+    <Alert variant="destructive" className={styles.error}>
+      <AlertTitle>{t(failureCopyKey(runError))}</AlertTitle>
+      <AlertDescription className={styles.errorLayout}>
+        <div className={styles.errorBody}>
+          {runError?.kind === "agent" && runError.profile.code === "internal_error" ? (
+            <span className={styles.errorHint}>{t("fail.internalHint")}</span>
+          ) : null}
+        </div>
+        {canRetry ? (
+          <Button variant="outline" className={styles.retry} type="button" onClick={onRetry}>
+            {t("thread.retry")}
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  )
+  const hasSubmissionFailure = pendingSubmissionFailureCode !== undefined
+  const submissionFeedback = !hasSubmissionFailure || creditRejected ? null
+    : pendingSubmissionFailureCode === "agent_not_configured"
+      ? <ExecutionUnavailableFeedback canRetry={canRetryPendingSubmission} onRetry={onRetry} />
+      : pendingSubmissionFailureCode === "submission_outcome_unknown"
+        ? <UnconfirmedSubmissionFeedback canRetry={canRetryPendingSubmission} onRetry={onRetry} />
+        : genericFailure(null, canRetryPendingSubmission)
   const failureMessageId = creditRejected ? "credit-error" : "run-error"
-  const failureFeedback = !hasFailed ? null : (
+  const failureFeedback = !creditRejected && (!hasFailed || (hasSubmissionFailure && thread.unattributedFailure === null)) ? null : (
     <div>
       {creditRejected ? (
         <Alert variant="destructive" className={styles.error}>
@@ -234,46 +254,15 @@ function ConversationThreadSurface({
                   variant="outline"
                   className={styles.retry}
                   type="button"
-                  disabled={isStreaming}
-                  aria-busy={isStreaming}
                   onClick={onRetry}
                 >
-                  {isStreaming ? <Spinner aria-hidden="true" /> : null}
                   {t("thread.retry")}
                 </Button>
               ) : null}
             </div>
           </AlertDescription>
         </Alert>
-      ) : thread.unattributedFailure === null && submissionFailureCode === "agent_not_configured" ? (
-        <ExecutionUnavailableFeedback canRetry={canRetryPendingSubmission} retrying={isStreaming} onRetry={onRetry} />
-      ) : thread.unattributedFailure === null && submissionFailureCode === "submission_outcome_unknown" ? (
-        <UnconfirmedSubmissionFeedback canRetry={canRetryPendingSubmission} retrying={isStreaming} onRetry={onRetry} />
-      ) : (
-        <Alert variant="destructive" className={styles.error}>
-          <AlertTitle>{t(failureCopyKey(thread.unattributedFailure, submissionFailureCode))}</AlertTitle>
-          <AlertDescription className={styles.errorLayout}>
-            <div className={styles.errorBody}>
-              {thread.unattributedFailure?.kind === "agent" && thread.unattributedFailure.profile.code === "internal_error" ? (
-                <span className={styles.errorHint}>{t("fail.internalHint")}</span>
-              ) : null}
-            </div>
-            {canRetryPendingSubmission ? (
-              <Button
-                variant="outline"
-                className={styles.retry}
-                type="button"
-                disabled={isStreaming}
-                aria-busy={isStreaming}
-                onClick={onRetry}
-              >
-                {isStreaming ? <Spinner aria-hidden="true" /> : null}
-                {t("thread.retry")}
-              </Button>
-            ) : null}
-          </AlertDescription>
-        </Alert>
-      )}
+      ) : genericFailure(thread.unattributedFailure, canRetryPendingSubmission && !hasSubmissionFailure && !isStreaming)}
     </div>
   )
   return (
@@ -388,6 +377,9 @@ function ConversationThreadSurface({
 
         {failureFeedback ? (
           <MessageScrollerItem messageId={failureMessageId}>{failureFeedback}</MessageScrollerItem>
+        ) : null}
+        {submissionFeedback ? (
+          <MessageScrollerItem messageId="submission-recovery">{submissionFeedback}</MessageScrollerItem>
         ) : null}
 
       </MessageScrollerContent>

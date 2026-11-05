@@ -3,7 +3,8 @@ import { createSessionEngine } from "@/engine/machine"
 import type { CreateMessageArgs } from "@/engine/execution-adapter"
 import { addConversation, type ConversationStore } from "@/core/conversations"
 import { SessionClientError } from "@/engine/client"
-import { createFakeClient, createMemoryStorage, settle } from "./fakes"
+import { makeEvent } from "../core/fixtures"
+import { createFakeClient, createMemoryStorage, makeReceipt, settle } from "./fakes"
 
 type Intent = CreateMessageArgs & { optimisticUserId: string }
 function journal() {
@@ -67,6 +68,76 @@ describe("first submission survives document recreation without dispatching", ()
     expect(engine.getSnapshot().notice?.key).toBe("chat.localDraftPersistenceFailed")
     engine.dispose()
   })
+})
+
+it("retries a lost FIFO receipt with the same intent without interrupting the current run", async () => {
+  const client = createFakeClient()
+  const recovery = journal()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(), submissionRecovery: recovery })
+  try {
+    expect(engine.submit("start the current run")).toBe(true)
+    await settle()
+    const activeRun = engine.getSnapshot().machine.runId
+    const stream = client.lastStream()
+    expect(activeRun).not.toBeNull()
+    const todos = [{ content: "Original progress", status: "in_progress" as const }]
+    stream.emit([makeEvent("todo.updated", { todos }, { run_id: activeRun! })])
+    await settle()
+    expect(engine.getSnapshot().thread.todos).toEqual(todos)
+
+    let savedBeforePost = false
+    client.nextCreate = () => {
+      savedBeforePost = recovery.read()?.submission.content === "queue one follow-up"
+      return Promise.reject(new SessionClientError("network", "lost acknowledgement"))
+    }
+    expect(engine.submit("queue one follow-up")).toBe(true)
+    await settle()
+    expect(savedBeforePost).toBe(true)
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+    expect(engine.getSnapshot().machine.runId).toBe(activeRun)
+    expect(engine.getSnapshot().thread.todos).toEqual(todos)
+    expect(engine.submit("keep this next draft")).toBe(false)
+    expect(client.createCalls).toHaveLength(2)
+
+    const receipt = makeReceipt("queued_successor")
+    client.nextCreate = () => Promise.resolve(receipt)
+    engine.retry()
+    await settle()
+    expect(client.createCalls).toHaveLength(3)
+    expect(client.createCalls[2]).toEqual(client.createCalls[1])
+    expect(engine.getSnapshot().thread.messages.filter(row => row.id === receipt.user_message_id)).toHaveLength(1)
+    expect(engine.getSnapshot().machine.runId).toBe(activeRun)
+    expect(client.lastStream()).toBe(stream)
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(false)
+    expect(recovery.read()).toBeNull()
+  } finally { engine.dispose() }
+})
+
+it("absorbs a FIFO receipt received during automatic stream reconnection without opening a second stream", async () => {
+  const client = createFakeClient()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(), submissionRecovery: journal() })
+  try {
+    engine.submit("current run")
+    await settle()
+    const activeRun = engine.getSnapshot().machine.runId
+    const stream = client.lastStream()
+    let acknowledge!: (receipt: ReturnType<typeof makeReceipt>) => void
+    client.nextCreate = () => new Promise(resolve => { acknowledge = resolve })
+    expect(engine.submit("queued while connected")).toBe(true)
+    stream.reconnecting()
+    const receipt = makeReceipt("queued_while_reconnecting")
+    acknowledge(receipt)
+    await settle()
+    expect(engine.getSnapshot().canSubmitMessage).toBe(false)
+
+    stream.connected()
+    await settle()
+    expect(engine.getSnapshot()).toMatchObject({ hasPendingSubmission: false, canSubmitMessage: true })
+    expect(engine.getSnapshot().thread.messages.filter(row => row.id === receipt.user_message_id)).toHaveLength(1)
+    expect(engine.getSnapshot().machine.runId).toBe(activeRun)
+    expect(client.lastStream()).toBe(stream)
+    expect(client.createCalls).toHaveLength(2)
+  } finally { engine.dispose() }
 })
 
 it("a cold local home selection preserves another session's original unknown for explicit recovery without cancelling it", async () => {

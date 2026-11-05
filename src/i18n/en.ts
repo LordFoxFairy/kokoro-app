@@ -772,7 +772,6 @@ export const en: Partial<Record<MessageKey, string>> = {
   "thread.submissionUnconfirmedHint": "Your original text and options are kept. Refreshing will not resend it. Explicit recovery reconciles or retries the same request, not a new task.",
   "chat.submissionRecoveryFailed": "Your browser could not save or read the original request recovery state. Restore browser storage and read it again. The original request will not be resent automatically.",
   "chat.localDraftPersistenceFailed": "Your browser could not save the send state. The message was not sent and your input is kept. Restore browser storage and retry.",
-  "steer.sendFailed": "Failed to send interjection: {detail}. Please retry.",
   "todo.plan": "Plan",
   "lang.switchAria": "Interface language",
   "lang.zh": "中文",

@@ -558,7 +558,6 @@ export const es: Partial<Record<MessageKey, string>> = {
   "thread.submissionUnconfirmedHint": "El texto y las opciones se conservan. Actualizar no la reenvía. La recuperación explícita verifica o reintenta la misma solicitud, sin crear otra tarea.",
   "chat.submissionRecoveryFailed": "El navegador no pudo guardar o leer el estado de recuperación de la solicitud original. Restablece el almacenamiento y vuelve a leerlo. La solicitud no se reenviará automáticamente.",
   "chat.localDraftPersistenceFailed": "El navegador no pudo guardar el estado del envío. El mensaje no se envió y tu texto se conserva. Restablece el almacenamiento del navegador y vuelve a intentarlo.",
-  "steer.sendFailed": "No se pudo enviar la interrupción: {detail}, inténtelo de nuevo",
   "todo.plan": "plan",
   "lang.switchAria": "idioma de la interfaz",
   "lang.zh": "Chino",

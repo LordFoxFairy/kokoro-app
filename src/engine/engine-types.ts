@@ -69,6 +69,8 @@ export type EngineSnapshot = {
   // 当前失败是否仍有未获 create receipt 的同会话冻结意图可按原 key/body 恢复。
   canRetryResume: boolean
   canRetryPendingSubmission: boolean
+  // This admission failure is independent of the current Run and its controls.
+  pendingSubmissionFailureCode?: string
   // Same-document scope leases retain the exact create intent until its receipt settles.
   hasPendingSubmission?: boolean
 }

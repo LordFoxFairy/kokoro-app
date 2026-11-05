@@ -559,10 +559,11 @@ export function applyChatProjectionEvent(
 
 // —— 本地命令（非事件折叠）：用户动作驱动的纯状态迁移 ——
 
-// 用户输入本地产生、不进 seenEventIds；复位 runStatus 并清空 todo，历史步骤保留。
+// 新轮次清空旧进度；当前 Run 下排队的消息只追加输入，不动已有进度。
 export function appendUserMessage(
   state: SessionStreamState,
   message: { id: string; content: string },
+  preserveRun = false,
 ): SessionStreamState {
   return {
     ...state,
@@ -571,8 +572,7 @@ export function appendUserMessage(
       // 用户消息用自身 id 作 runId：投影据此把它与任一 assistant run 隔开，单独成行。
       { id: message.id, role: "user", content: message.content, runId: message.id },
     ],
-    todos: [],
-    runStatus: "idle",
+    ...(preserveRun ? {} : { todos: [], runStatus: "idle" }),
   }
 }
 
