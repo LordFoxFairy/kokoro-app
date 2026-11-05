@@ -348,8 +348,14 @@ it("项目清单和任务清单分别支持键盘排序，不会互相移动", (
   project.focus()
   fireEvent.keyDown(project, { key: " " })
   fireEvent.keyDown(project, { key: "ArrowDown" })
+  expect(onReorderProjects).not.toHaveBeenCalled()
+  fireEvent.keyDown(project, { key: "Escape" })
+  expect(onReorderProjects).not.toHaveBeenCalled()
+
   fireEvent.keyDown(project, { key: " " })
-  expect(onReorderProjects).toHaveBeenCalledWith(["project_b", "project_a"])
+  fireEvent.keyDown(project, { key: "ArrowDown" })
+  fireEvent.keyDown(project, { key: " " })
+  expect(onReorderProjects).toHaveBeenCalledExactlyOnceWith(["project_b", "project_a"])
   expect(project.getAttribute("aria-expanded")).toBe(expandedBeforeSort)
   expect(onReorderConversations).not.toHaveBeenCalled()
 
@@ -358,6 +364,92 @@ it("项目清单和任务清单分别支持键盘排序，不会互相移动", (
   fireEvent.keyDown(task, { key: " " })
   fireEvent.keyDown(task, { key: "ArrowDown" })
   expect(onReorderConversations).toHaveBeenCalledWith(["task_b", "task_a"])
+})
+
+it("固定列表尚有下一页时仍可排序普通项目，浏览器只恢复当前租户和账号的偏好", () => {
+  const projects = [
+    { id: "project_a", name: "产品规划", href: "/app/project/product" },
+    { id: "project_p", name: "置顶项目", href: "/app/project/pinned" },
+    { id: "project_b", name: "发布清单", href: "/app/project/release" },
+  ]
+  const pins: NonNullable<Parameters<typeof WorkspaceRail>[0]["projectPins"]> = {
+    context: {}, available: true, targets: {},
+    pinned: [{ project_id: "project_p", pinned_at: "2026-10-27T00:00:00.000Z" }],
+    loading: false, failed: false, loaded: true, nextCursor: "next_pin_page",
+    ensure: vi.fn(), check: vi.fn(), set: vi.fn(), loadMore: vi.fn(), refresh: vi.fn(),
+  }
+  const order = () => Array.from(document.querySelectorAll("[data-project-list] [data-project-id]"),
+    row => row.getAttribute("data-project-id"))
+  const mount = (tenant: string, subject: string, projectListStatus: "ready" | "error" = "ready", projectPins = pins) => {
+    window.localStorage.setItem(pageClients.AUTH_INDEX_SUBJECT_KEY, subject)
+    return renderRail({
+      projects: projectListStatus === "ready" ? projects : [],
+      projectListStatus,
+      projectPins,
+      readBoundary: { admitted: true, tenant, subject, generation: 1, authInvalidationHint: window.localStorage.getItem("kokoro.web.auth-invalidation") },
+    })
+  }
+  const current = mount("tenant_a", "subject_a")
+  const alpha = screen.getByRole("button", { name: "产品规划" })
+  const beta = screen.getByRole("button", { name: "发布清单" })
+  const pinned = screen.getByRole("button", { name: "置顶项目" })
+  const dataTransfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() }
+  expect(pinned).not.toHaveAttribute("draggable", "true")
+  fireEvent.dragStart(alpha, { dataTransfer })
+  fireEvent.drop(pinned, { dataTransfer })
+  fireEvent.dragEnd(alpha, { dataTransfer })
+  expect(order()).toEqual(["project_a", "project_b"])
+
+  fireEvent.dragStart(alpha, { dataTransfer })
+  fireEvent.dragOver(beta, { dataTransfer })
+  fireEvent.drop(beta, { dataTransfer })
+  expect(order()).toEqual(["project_b", "project_a"])
+  expect(screen.getByRole("button", { name: "置顶项目" })).toBe(pinned)
+
+  fireEvent.keyDown(beta, { key: " " })
+  fireEvent.keyDown(beta, { key: "ArrowDown" })
+  expect(order()).toEqual(["project_a", "project_b"])
+  // Another tab retired the browser subject before React sees its storage event.
+  window.localStorage.setItem(pageClients.AUTH_INDEX_SUBJECT_KEY, "subject_b")
+  fireEvent.keyDown(beta, { key: " " })
+  expect(order()).toEqual(["project_b", "project_a"])
+
+  window.localStorage.setItem(pageClients.AUTH_INDEX_SUBJECT_KEY, "subject_a")
+  fireEvent.keyDown(beta, { key: " " })
+  fireEvent.keyDown(beta, { key: "ArrowDown" })
+  expect(order()).toEqual(["project_a", "project_b"])
+  // Same subject, but another tab completed logout; its event is still queued.
+  const writes = vi.spyOn(Storage.prototype, "setItem")
+  window.localStorage.setItem("kokoro.web.auth-invalidation", "cross_tab_logout")
+  writes.mockClear()
+  fireEvent.keyDown(beta, { key: " " })
+  expect(writes).not.toHaveBeenCalled()
+  expect(order()).toEqual(["project_b", "project_a"])
+  writes.mockRestore()
+  current.unmount()
+
+  const otherTenant = mount("tenant_b", "subject_a")
+  expect(order()).toEqual(["project_a", "project_b"])
+  otherTenant.unmount()
+  const otherActor = mount("tenant_a", "subject_b")
+  expect(order()).toEqual(["project_a", "project_b"])
+  otherActor.unmount()
+  const failed = mount("tenant_a", "subject_a", "error")
+  expect(order()).toEqual([])
+  failed.unmount()
+  const restored = mount("tenant_a", "subject_a")
+  expect(order()).toEqual(["project_b", "project_a"])
+  restored.unmount()
+
+  // Beta was first in the local order, but the next owner pin page places
+  // it after the newer fixed project. The fixed group follows that fact.
+  mount("tenant_a", "subject_a", "ready", { ...pins, nextCursor: null, pinned: [
+    ...pins.pinned, { project_id: "project_b", pinned_at: "2026-10-26T00:00:00.000Z" },
+  ] })
+  expect(order()).toEqual(["project_a"])
+  expect(Array.from(screen.getByRole("list", { name: "已固定" }).querySelectorAll("[data-project-id]"),
+    row => row.getAttribute("data-project-id"))).toEqual(["project_p", "project_b"])
+  expect(screen.getByRole("button", { name: "发布清单" })).not.toHaveAttribute("draggable", "true")
 })
 
 it("桌面 Rail 暂不呈现独立的邀请朋友推广入口", () => {

@@ -67,6 +67,7 @@ export type WorkspaceRailNavigationProps = Pick<WorkspaceRailProps, "conversatio
   conversationReads?: RailConversationReads
   onRequestDelete: NonNullable<WorkspaceRailProps["onRequestDelete"]>
   awaitingIds: ReadonlySet<string>
+  canDragProject: (id: string) => boolean
   dragProps: (kind: RailDragKind, id: string) => RailDragProps
   dragState: RailDragState | null
   dragOverKey: string | null
@@ -103,6 +104,7 @@ export function WorkspaceRailNavigation({
   conversationMovePending = false,
   conversationMoveFailed = false,
   onRetryConversationMove,
+  canDragProject,
   dragProps,
   dragState,
   dragOverKey,
@@ -248,7 +250,7 @@ export function WorkspaceRailNavigation({
                       type="button"
                       className={itemStyles.itemSelect}
                       isActive={active}
-                      {...dragProps("project", project.id)}
+                      {...(canDragProject(project.id) ? dragProps("project", project.id) : {})}
                       onPointerDown={markPointerFocus}
                       onClick={() => toggleProjectConversations(project.id, conversationsExpanded)}
                       aria-label={project.name}
@@ -535,14 +537,14 @@ export function WorkspaceRailNavigation({
                   <DropdownMenuContent side="right" align="start" sideOffset={10} className={navigationStyles.projectMenu}>
                     {projectReadFeedback}
                     {onCreateProject ? <DropdownMenuItem onSelect={() => setProjectCreateOpen(true)}><Plus aria-hidden="true" />{t("firstSite.newProject")}</DropdownMenuItem> : null}
-                    {orderedProjects.map((project) => {
+                    {[...pinnedProjects, ...ordinaryProjects].map((project) => {
                       const active = (projectActive && project.href === projectHref) || project.active === true
                       return (
                         <DropdownMenuItem key={project.id} asChild>
                           <Link
                             href={project.href}
                             {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
-                            {...dragProps("project", project.id)}
+                            {...(canDragProject(project.id) ? dragProps("project", project.id) : {})}
                             onPointerDown={markPointerFocus}
                             onClickCapture={(event) => {
                               interceptMountedSurfaceNavigation(event, project.href)

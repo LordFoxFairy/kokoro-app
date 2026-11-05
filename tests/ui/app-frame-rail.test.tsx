@@ -593,6 +593,11 @@ async function mountAuthenticatedProjectRail(
     // Native IAM admission is a readonly same-origin session read.
     if (path === "/api/auth/session" && method === "GET") return readSession()
     if (path === "/api/hub/projects") return read(input, init)
+    if (path === "/api/hub/self/project-pins" && method === "GET") {
+      return Response.json({ data: { items: [], next_cursor: null } }, {
+        headers: { "cache-control": "private, no-store", "x-request-id": "req_project_rail_pins" },
+      })
+    }
     return Response.json({ error: { code: "unavailable" } }, { status: 503 })
   })
   const view = render(<ThemeProvider><LocaleProvider><AppGate brandName="站点品牌" /></LocaleProvider></ThemeProvider>)
@@ -600,6 +605,32 @@ async function mountAuthenticatedProjectRail(
   fireEvent.click(await screen.findByRole("button", { name: "展开侧栏" }), { detail: 0 })
   return { ...view, fetchMock }
 }
+
+it("当前账号重新打开项目侧栏时保留已确认的排序，并只展示 owner 当前项目", async () => {
+  const [alpha, beta] = projectReadFixtures
+  const removed = { ...alpha!, id: "project_read_removed", name: "待删除项目", slug: "removed" }
+  const created = { ...alpha!, id: "project_read_created", name: "新项目", slug: "created" }
+  const order = () => Array.from(document.querySelectorAll("[data-project-list] [data-project-id]"),
+    row => row.getAttribute("data-project-id"))
+  let ownerProjects = [alpha!, beta!, removed]
+  const read = async () => projectReadEnvelope(ownerProjects)
+  const first = await mountAuthenticatedProjectRail(read)
+  const source = await screen.findByRole("button", { name: alpha!.name })
+  expect(order()).toEqual([alpha!.id, beta!.id, removed.id])
+
+  source.focus()
+  fireEvent.keyDown(source, { key: " " })
+  fireEvent.keyDown(source, { key: "ArrowDown" })
+  fireEvent.keyDown(source, { key: " " })
+  expect(order()).toEqual([beta!.id, alpha!.id, removed.id])
+
+  first.unmount()
+  document.cookie = "sidebar_state=; Max-Age=0; path=/"
+  ownerProjects = [alpha!, beta!, created]
+  await mountAuthenticatedProjectRail(read)
+  await screen.findByRole("button", { name: created.name })
+  expect(order()).toEqual([beta!.id, alpha!.id, created.id])
+})
 
 it.each(["401", "bad-shape"])("身份重新准入后列表返回 %s，清旧项目且不伪装为空集合", async (failure) => {
   let calls = 0

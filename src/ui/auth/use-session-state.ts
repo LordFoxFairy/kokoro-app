@@ -18,7 +18,13 @@ import {
 } from "@/ui/shell/page-clients"
 
 /** Local read lifecycle only; BFF still authorizes every Project request. */
-export type ProjectReadBoundary = { admitted: boolean; subject: string | null; generation: number }
+export type ProjectReadBoundary = {
+  admitted: boolean
+  subject: string | null
+  generation: number
+  tenant?: string
+  authInvalidationHint?: string | null
+}
 
 export type SessionState = "checking" | "pass" | "anonymous" | "forbidden" | "unavailable"
 export type SessionProbe = {
@@ -59,7 +65,7 @@ let admittedSubject: string | null = null
 let admittedTenant: string | null = null
 let documentSuspended = false
 
-function readBrowserInvalidationHint(): string | null | undefined {
+export function readBrowserInvalidationHint(): string | null | undefined {
   try { return window.localStorage.getItem(AUTH_INVALIDATION_KEY) } catch { return undefined }
 }
 
@@ -378,16 +384,26 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
         clearTimeout(recoveryTimer)
         recoveryTimer = undefined
         recoveryAttempt = 0
-        setProbe((current) => ({
-          state: resolved.mode === "authenticated" ? "pass" : "anonymous",
-          mode: resolved.mode === "authenticated" ? "authenticated" : "checking",
-          projectReadBoundary: resolved.mode === "authenticated" && current.projectReadBoundary.admitted && current.projectReadBoundary.subject === resolved.subject
-            ? current.projectReadBoundary
-            : { admitted: resolved.mode === "authenticated", subject: resolved.subject, generation: currentGeneration },
-          unavailable: false,
-          requestPending: false,
-          retry,
-        }))
+        setProbe((current) => {
+          const previous = current.projectReadBoundary
+          const sameAdmission = resolved.mode === "authenticated" && previous.admitted &&
+            previous.subject === resolved.subject && previous.tenant === resolved.tenant
+          const authInvalidationHint = checking.invalidationHint
+          return {
+            state: resolved.mode === "authenticated" ? "pass" : "anonymous",
+            mode: resolved.mode === "authenticated" ? "authenticated" : "checking",
+            projectReadBoundary: resolved.mode === "authenticated"
+              ? sameAdmission && previous.authInvalidationHint === authInvalidationHint
+                ? previous
+                : { admitted: true, subject: resolved.subject, tenant: resolved.tenant,
+                    generation: sameAdmission ? previous.generation : currentGeneration,
+                    ...(authInvalidationHint === undefined ? {} : { authInvalidationHint }) }
+              : { admitted: false, subject: null, generation: currentGeneration },
+            unavailable: false,
+            requestPending: false,
+            retry,
+          }
+        })
       })
     }
     check()
