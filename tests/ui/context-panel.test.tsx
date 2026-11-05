@@ -666,7 +666,7 @@ it("switching exact activity A to B returns keyboard focus to B when the same pa
 
 // Pointer activation need not focus a button (notably Safari). Identity, not
 // ambient document.activeElement or a repeated tool label, owns the return target.
-it.each(["pointer", "switch", "replace", "hidden", "hidden-after-unrelated-focus"] as const)("activity detail restores an exact visible target after %s", async scenario => {
+it.each(["pointer", "keyboard", "switch", "replace", "hidden", "hidden-after-unrelated-focus"] as const)("activity detail restores an exact visible target after %s", async scenario => {
   const activity = (id: string): Extract<RunProcessActivity, { activity: "tool" }> => ({ activity: "tool", activity_id: id, segment_id: "segment", display_code: "tool.mcp.call", status: "completed", action_title: "Read wiki" })
   function Harness() {
     const [selected, select] = useState<string | null>(null)
@@ -693,6 +693,15 @@ it.each(["pointer", "switch", "replace", "hidden", "hidden-after-unrelated-focus
   if (scenario.startsWith("hidden")) fireEvent.click(screen.getByRole("button", { name: "Hide selected row" }))
   const target = scenario.startsWith("hidden") ? screen.getByRole("textbox", { name: "Composer" }) : rows()[0]!
   const close = screen.getByRole("button", { name: "Close preview" })
-  close.focus(); fireEvent.click(close)
+  if (scenario === "keyboard") {
+    const outside = rows()[1]!
+    outside.focus()
+    fireEvent.keyDown(outside, { key: "Escape" })
+    expect(close).toBeVisible()
+    close.focus()
+    fireEvent.keyDown(close, { key: "Escape" })
+  } else {
+    close.focus(); fireEvent.click(close)
+  }
   await waitFor(() => expect(target).toHaveFocus())
 })
