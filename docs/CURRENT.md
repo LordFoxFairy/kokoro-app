@@ -1,3 +1,7 @@
+## A‑07：Project Todo（源码候选，待原生浏览器验收）
+
+本候选从已推 BFF `846821ae1b46f66663669d20fd5340bb7fa58b87` 的 Public 28.20 原始 Git blob 正规生成 Project Task 类型／校验（无第二 fetch SDK），保持旧父链精确逆证。Project Overview 接手动待办；同源只保 Hub 唯一入口，强版本条件和原键恢复。BFF 真 PG/Nest、App 定向与生成检查已过；原生浏览器、最终组合与 A/B 实际登记尚待，不提前闭环。
+
 ## T‑09 当前消费者候选（2026-11-04）
 
 Public 28.19 唯一快照逐字固定 BFF `d166a51`，只新增 `context_window_exceeded / false`。现有 AG‑UI、快照与失败卡承接；保留正文且不出现重发动作。12 个既有生成入口、定向与 `pnpm check` 通过。正式跨仓浏览器和发布配对仍待。

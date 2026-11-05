@@ -15,6 +15,8 @@ import { ProjectResourceUploadError } from "./project-resource-upload"
 
 import { ProjectContextCard } from "./project-context-card"
 import { ProjectIdentity } from "./project-identity"
+import { ProjectTodoSection, type ProjectTodoClient } from "./project-todo-section"
+import { liveProjectTodoClient } from "./project-todo-client"
 import { ProjectConversations } from "./project-conversations"
 import { ProjectContextComposition } from "./project-context-composition"
 import { ProjectContextDialogs } from "./project-context-dialogs"
@@ -33,7 +35,7 @@ type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
   | "projectInstructionRequest" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary" | "projectMcpRecommendations" | "projectConversationContent" | "projectContextVisible" | "onCloseProjectContext"
->
+> & { projectTodoClient?: ProjectTodoClient }
 
 type InstructionEditorState = {
   draftInitialized: boolean
@@ -91,6 +93,7 @@ export function KokoroProjectWorkspace({
   projectReadBoundary,
   projectMcpRecommendations,
   onCreateProjectScheduledTask,
+  projectTodoClient = liveProjectTodoClient,
 }: ProjectWorkspaceProps) {
   const { locale, t } = useLocale()
   const { surfaceRef, composerRef } = useProjectComposerClearance(projectConversationContent === undefined)
@@ -461,6 +464,10 @@ export function KokoroProjectWorkspace({
             />
           ) : null}
         </ProjectContextComposition>
+        {!task && !preview && projectRef && projectReadBoundary?.admitted && projectReadBoundary.subject &&
+          projectDetail?.status === "ready" && projectDetail.data.id === projectRef ?
+          <ProjectTodoSection projectId={projectDetail.data.id} subject={projectReadBoundary.subject}
+            generation={projectReadBoundary.generation} client={projectTodoClient} /> : null}
         {!task && capabilities?.projectConversations ? <ProjectConversations
           projectConversations={projectConversations}
           projectConversationsLoading={projectConversationsLoading}

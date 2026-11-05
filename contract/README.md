@@ -1,3 +1,9 @@
+## A‑07：Public 28.20 Project Todo
+
+唯一当前快照固定已推 BFF `846821ae1b46f66663669d20fd5340bb7fa58b87`／28.20.0／SHA-256 `c5fc7225901fa5b815cdb7ee5286354d7c4cabed9919676e6e86651fb9910783` 的 Git blob。十二个既有 Public 生成入口重钉同一来源，新增 Project Tasks 具名生成器只投影集合 GET／POST 和成员 PATCH／DELETE，保留路径级参数与引用闭包；独立认证／MCP policy 输入不变，不手改生成物。
+
+测试专用 `tests/contract/bff-project-tasks-parent.ts` 严格逆回完整 28.19 原字节，再进入原超窗终态及账户资料历史父链；旧版本摘要与既有行为断言保持。下方各旧版本段落只记录历史来源，不构成第二个运行时契约。
+
 ## T‑09：Public 28.19 非重试超窗终态
 
 唯一 Public OpenAPI 快照来自 BFF `d166a514d672d100c49b71491deb8fd62cacd658`／28.19.0／SHA-256 `27032917fb272601b6da8ba9227bab5324ac305682a72c94adca72e4f9e25577`，原样消费。沿用十二个生成入口；failure tuples 只增 `context_window_exceeded / false`。其余原件、private 状态及 IAM relay policy 不动。

@@ -23,6 +23,7 @@ import {
 } from "@/lib/server/bff-response"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 import { nativeSessionBffHeaders, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { isProjectTaskFamily } from "@/lib/server/project-tasks"
 
 export const runtime = "nodejs"
 // 每请求实时求值：绝不静态化/缓存代理响应（SSE、鉴权头随信封变）。
@@ -39,6 +40,9 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   if (/^\/api\/session\/sessions\/[^/]+\/(?:archive|restore)$/u.test(new URL(request.url).pathname)) return sessionArchive(request, context.params)
   if (["POST", "DELETE"].includes(request.method) && /^\/api\/session\/sessions\/[^/]+\/share$/u.test(new URL(request.url).pathname)) return sessionShare(request, context.params)
   const requestId = requestIdForRequest(request)
+  const { path } = await context.params
+  const segments = path ?? []
+  if (isProjectTaskFamily(segments)) return webErrorResponse("bff_route_not_found", 404, requestId)
   const config = productBffConfig()
   if (config === null) {
     return webErrorResponse("auth_not_configured", 503, requestId)
@@ -53,8 +57,6 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
     return webErrorResponse("bff_not_configured", 503, requestId)
   }
 
-  const { path } = await context.params
-  const segments = path ?? []
   const isMessageParts = request.method === "GET" && segments.length === 5 && segments[0] === "sessions" && segments[2] === "messages" && segments[4] === "parts"
   if (isMessageParts) {
     const query = new URL(request.url).searchParams

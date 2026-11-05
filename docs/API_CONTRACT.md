@@ -1,3 +1,7 @@
+## A‑07：同源 Project Todo（D0，BFF 发布后生成）
+
+唯一路径 `/api/hub/projects/{projectId}/tasks[/{taskId}]` 映射 BFF 同一 Project Task 资源；在 Hub 通用路径解析前分流，拒绝 `/self` 别名和额外尾段；同样在通用 `/api/session` 拒绝此资源族，不留第二个读写入口。沿用现同源写保护、原生 Cookie/准入服务信封、请求时限及 body 限额。只承接四个精确 operation 的方法、canonical 写路径、写 key、强 `If-Match`、成功与错误；不透传任意 header/路径或增认证凭据。BFF 唯一 OpenAPI 已提交后固定 SHA/摘要并以锁定生成器产生消费者，不手写第二份 DTO。BFF 201 Location 必须与 ACK 的资源身份一致；同源层只返回按同一身份构造的 Hub Location，不透传上游地址。Location 是身份，读取仍走集合。标题按 Unicode 标量计数，不能直接用 UTF‑16 长度限制代替。容量 409 与幂等 409 分别呈现；409 与 412 是明确拒绝，不与未知提交混同；204 没有 JSON body。
+
 ## T‑09：Public 28.19 非重试超窗终态
 
 BFF Public 28.19 在既有普通和 ordered Message failure 表示增加 `context_window_exceeded`，只允许 `retryable: false`。AG‑UI、快照及原路由保持，App 不发送或消费 `personal_context`。

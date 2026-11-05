@@ -1,6 +1,7 @@
 import { proxyProjectSkillContent } from "@/lib/server/project-skill-content";
 import { mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPreparePostErrorAllowed, mcpPrepareReceiptLookupOnly } from "@/hub/mcp-prepare-receipt.schema";
 import { proxyProjectPins } from "@/lib/server/project-pins";
+import { isProjectTaskFamily, proxyProjectTasks } from "@/lib/server/project-tasks";
 import { proxyProjectMcpRecommendations } from "@/lib/server/project-mcp-recommendations";
 import { proxyMcpServerIcon } from "@/lib/server/mcp-server-icon";
 import { mcpPublicationPath } from "@/hub/mcp-project-publication.schema";
@@ -2297,6 +2298,7 @@ async function proxyHubRequest(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params;
+  if (isProjectTaskFamily(path)) return proxyProjectTasks(request, path);
   if ((path[0] === "self" && path[1] === "project-pins") || (path[0] === "projects" && path[2] === "pin") || (path[0] === "self" && path[1] === "projects" && path[3] === "pin") || (path[0] === "self" && path[1] === "self" && path[2] === "project-pins")) return proxyProjectPins(request, path);
   if (path[0] === "mcp" && path[1] === "servers" && path[3] === "icon") return proxyMcpServerIcon(request, path);
   if (mcpPublicationPath(path)) return proxyMcpProjectPublication(request, path);

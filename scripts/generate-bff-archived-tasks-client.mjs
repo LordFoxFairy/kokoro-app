@@ -20,7 +20,7 @@ const sourcePath = join(root, "src/generated/bff-public-openapi.yaml");
 const outputPath = join(root, "src/generated/bff-archived-tasks");
 const configPath = join(root, "openapi-ts.bff-archived-tasks.config.ts");
 const expectedDigest =
-  "27032917fb272601b6da8ba9227bab5324ac305682a72c94adca72e4f9e25577";
+  "c5fc7225901fa5b815cdb7ee5286354d7c4cabed9919676e6e86651fb9910783";
 const operations = [["GET", "/v1/account/archived-tasks"], ["GET", "/v1/sessions/{session_id}/archive"], ["POST", "/v1/sessions/{session_id}/archive"], ["POST", "/v1/sessions/{session_id}/restore"]];
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
