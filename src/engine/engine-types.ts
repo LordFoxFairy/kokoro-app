@@ -48,6 +48,8 @@ export type EngineSnapshot = {
   ownerConfirmedSessionId?: string
   // Last authoritative absent snapshot for this active view; never persisted.
   missingSessionId?: string
+  // Previous active conversation removed from this view's scoped index; never persisted.
+  removedConversationId?: string
   machine: MachineState
   // 瞬态通知（如插话投递失败）：下一次提交时清空；与相位错误（machine.error）分离。
   notice: NoticeSpec | null
@@ -117,6 +119,8 @@ export type SessionEngine = {
   selectConversation: (id: string) => void
   // 打开服务端清单里的会话（本地索引未见则先纳入缓存再水合）。
   openConversation: (id: string) => void
+  /** Retire the exact view removal after the browser has moved on. */
+  acknowledgeConversationRemoval: (id: string) => void
   retireLocalCreationProvenance: () => void
   /** Navigate to a local direct draft without cancelling or abandoning the previous task. */
   returnToLocalHome: () => void

@@ -215,6 +215,7 @@ function AppFrameRuntime({
     hydrating,
     machinePhase: machine.phase,
     ...(engineState.missingSessionId === undefined ? {} : { missingSessionId: engineState.missingSessionId }),
+    ...(engineState.removedConversationId === undefined ? {} : { removedConversationId: engineState.removedConversationId }),
   })
 
   const mcpCatalogScope = useMemo(() => ({ engine, sessionScope, preview, subject: projectReadBoundary?.subject,

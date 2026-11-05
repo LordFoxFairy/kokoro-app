@@ -184,6 +184,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let locallyCreatedSessionId: string | undefined = restoringInitialDraft ? store?.activeId : undefined
   let ownerConfirmedSessionId: string | undefined
   let missingSessionId: string | undefined
+  // Keep the originally routed ID if an automatic fallback is also removed.
+  let removedConversationId: string | undefined
   let disposed = false
   let deleteIntentGeneration = 0
   let deleteIntent: { targetId: string; generation: number; promise: Promise<boolean> } | null = null
@@ -383,6 +385,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       ...(ownerConfirmedSessionId !== undefined && ownerConfirmedSessionId === store?.activeId ? { ownerConfirmedSessionId } : {}),
       ...(locallyCreatedSessionId !== undefined && locallyCreatedSessionId === store?.activeId ? {locallyCreatedSessionId} : {}),
       ...(missingSessionId !== undefined && missingSessionId === store?.activeId ? { missingSessionId } : {}),
+      ...(removedConversationId === undefined ? {} : { removedConversationId }),
       notice,
       store,
       thread,
@@ -403,6 +406,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   function reconcileConversationCache(sessionId: string): void {
     if (!store?.conversations.some((entry) => entry.id === sessionId)) return
+    if (store.activeId === sessionId) removedConversationId ??= sessionId
     const next = removeConversation(store, sessionId, createId("conv"), now())
     store = next
     deps.storage.write(next)
@@ -1533,15 +1537,23 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (!store) {
       return
     }
+    removedConversationId ??= store.activeId
     const fallbackId = createId("conv")
     const next = removeConversation(store, store.activeId, fallbackId, now())
     activateConversation(next, next.activeId !== fallbackId)
+  }
+
+  function acknowledgeConversationRemoval(id: string): void {
+    if (disposed || removedConversationId !== id) return
+    removedConversationId = undefined
+    notify()
   }
 
   function selectConversation(id: string): void {
     if (disposed || !store || id === store.activeId) {
       return
     }
+    removedConversationId = undefined
     // 切换不取消在途 run：服务端 run 照跑，切回时 snapshot 精确续传。
     activateConversation(selectConversationOp(store, id))
   }
@@ -1553,6 +1565,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       return
     }
     if (store?.activeId === id && (hydrating || pendingSubmission !== null || thread.messages.length > 0 || machine.runId !== null)) return
+    removedConversationId = undefined
     if (store?.conversations.some(entry => entry.id === id && entry.localDraft === true)) {
       let retired = false
       try { retired = deps.draftLifecycle?.retire(id) === true } catch { /* Explicit owner reads remain available. */ }
@@ -1578,6 +1591,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (disposed || scope.kind !== "direct") return
     const id = createId("conv")
     if (store?.conversations.some(entry => entry.id === id)) return
+    removedConversationId = undefined
     // Browser history changes only the active view. Keep the previous
     // submission journal and owner run for an exact Forward/reopen.
     activateConversation(addConversation(store, id, now(), store ? "fast" : pendingMode, deps.draftLifecycle !== undefined), false)
@@ -1593,6 +1607,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     // Starting a fresh chat abandons a POST whose receipt has not arrived yet.
     // Preserve the idempotency key so a late receipt can cancel the server run.
     if (deps.submissionRecovery ? !abandonPendingSubmission() : !cancelPendingSubmission()) return
+    removedConversationId = undefined
     abandonActiveRun()
     retireMessageParts()
     hydrateGeneration += 1
@@ -1644,6 +1659,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         const wasActive = store.activeId === id
         const next = removeConversation(store, id, createId("conv"), now())
         if (wasActive) {
+          removedConversationId ??= id
           activateConversation(next)
         } else {
           // The user may have moved to another thread while DELETE was in
@@ -1833,6 +1849,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       return
     }
     // 本 tab 无激活或激活会话被别处删了：跟随外部激活并重水合（无激活则回空线程）。
+    // 只报告当前视图已丢失的索引项；这不是服务端删除回执。
+    if (external !== null && myActive !== null) removedConversationId ??= myActive
     // 必须先收束在途 run（与 activateConversation 一致）：否则本 tab 正流式时被删，
     // machine 卡在旧 streaming 相位、runId 指向已删 run，hydrate 的 REATTACH 被守卫拒、不自愈。
     // 清空 storage 没有新的 session 可供 hydrate；递增代际使旧 snapshot 的 then/catch
@@ -1901,6 +1919,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     stageToolDecision,
     selectConversation,
     openConversation,
+    acknowledgeConversationRemoval,
     retireLocalCreationProvenance,
     returnToLocalHome,
     newConversation,

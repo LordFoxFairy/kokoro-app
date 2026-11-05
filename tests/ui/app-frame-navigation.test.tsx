@@ -1,4 +1,5 @@
 import { act, cleanup, renderHook } from "@testing-library/react"
+import { useSyncExternalStore } from "react"
 import { afterEach, expect, it, vi } from "vitest"
 
 import { useAppFrameNavigation } from "@/components/blocks/app-frame/use-app-frame-navigation"
@@ -147,6 +148,72 @@ it("an explicit direct query id still owns its existing thread", () => {
   window.history.replaceState(null, "", `/app${suffix}`)
   const view = renderHook(() => useAppFrameNavigation(options))
   expect(view.result.current.routeOwnsConversation).toBe(true)
+})
+
+it("keeps the Forward URL when the router renders before App handles popstate", async () => {
+  window.history.replaceState(null, "", "/app")
+  const target = "conv-forward-owner"
+  const draft = "conv-home-draft"
+  const client = createFakeClient()
+  client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: target }))
+  const storage = createMemoryStorage<ConversationStore>({
+    activeId: draft,
+    conversations: [
+      { id: draft, title: "", mode: "fast", updatedAt: 2, localDraft: true },
+      { id: target, title: "Original task", mode: "fast", updatedAt: 1 },
+    ],
+  })
+  const engine = createSessionEngine({ client, storage, draftLifecycle: { isUnsubmitted: () => true, retire: () => true } })
+  try {
+    const view = renderHook(() => useAppFrameNavigation({ ...options, engine, activeId: draft }))
+    // The browser moved to the original entry; an earlier router listener may
+    // commit while our listener still has the old Home snapshot.
+    window.history.replaceState(null, "", `/app?conversation=${target}`)
+    await act(async () => { view.rerender() })
+    expect(window.location.search).toBe(`?conversation=${target}`)
+    await act(async () => { window.dispatchEvent(new PopStateEvent("popstate")); await settle() })
+    expect(client.snapshotCalls).toEqual([target])
+    expect(engine.getSnapshot().store?.activeId).toBe(target)
+    expect(client.controlCalls).toEqual([])
+  } finally { engine.dispose() }
+})
+
+it.each(["owner-forbidden", "external-index-removal"] as const)("leaves the routed task only after it was removed from this view (%s)", async reason => {
+  const target = "conv-routed"
+  window.history.replaceState(null, "", `/app?conversation=${target}`)
+  const client = createFakeClient()
+  client.nextSnapshot = id => reason === "owner-forbidden"
+    ? Promise.reject(new SessionClientError("http", "session_forbidden"))
+    : Promise.resolve(makeSnapshot({ sessionId: id }))
+  const storage = createMemoryStorage<ConversationStore>(null)
+  const engine = createSessionEngine({ client, storage })
+  try {
+    const view = renderHook(() => {
+      const { store, hydrating, removedConversationId } = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
+      return useAppFrameNavigation({ ...options, engine, activeId: store?.activeId ?? null, hydrating,
+        ...(removedConversationId === undefined ? {} : { removedConversationId }),
+      })
+    })
+    await act(async () => { await settle() })
+    if (reason === "external-index-removal") {
+      expect(window.location.search).toBe(`?conversation=${target}`)
+      await act(async () => {
+        storage.write({ activeId: "conv-other", conversations: [{ id: "conv-other", title: "Other task", mode: "fast", updatedAt: 2 }] })
+        await settle()
+      })
+      expect(client.snapshotCalls).toEqual([target, "conv-other"])
+    } else expect(client.snapshotCalls).toEqual([target])
+    expect(window.location.pathname + window.location.search).toBe("/app")
+    expect(engine.getSnapshot().store?.conversations.map(({ id }) => id)).not.toContain(target)
+    if (reason === "external-index-removal") {
+      // The previous cleanup must not mask a later owner deletion.
+      await act(async () => { view.result.current.syncConversationUrl("conv-other", "push") })
+      expect(window.location.search).toBe("?conversation=conv-other")
+      await act(async () => { expect(await engine.deleteConversation("conv-other")).toBe(true); await settle() })
+      expect(window.location.search).toBe("")
+      expect(client.deleteCalls).toEqual(["conv-other"])
+    }
+  } finally { engine.dispose() }
 })
 
 it.each(["unknown", "late-ack", "late-rejection", "accepted"] as const)(

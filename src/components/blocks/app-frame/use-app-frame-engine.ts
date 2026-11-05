@@ -132,6 +132,7 @@ export function useAppFrameEngine({
     staging,
     hydrating,
     ...(snapshot.missingSessionId === undefined ? {} : { missingSessionId: snapshot.missingSessionId }),
+    ...(snapshot.removedConversationId === undefined ? {} : { removedConversationId: snapshot.removedConversationId }),
     connection,
     canSubmitMessage,
     activeId,
