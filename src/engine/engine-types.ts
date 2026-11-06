@@ -15,6 +15,7 @@ import type { SessionScope } from "./session-scope"
 import type { SubmissionRecovery } from "./submission-recovery"
 import type { TaskNotification } from "./task-notification"
 import type { ToolDecision } from "./hitl-staging"
+import type { SelectedResourceRef } from "@/contract/chat"
 import type { MessagePartsReadRecheck } from "./message-parts-reader"
 
 export type NoticeSpec = {
@@ -42,6 +43,8 @@ export type EngineSnapshot = {
   mcpSelectionRestore?: McpSelectionRestore
   // Transient current-conversation draft intent, absent only in injected view-only engines.
   selectedMcpConnectionIds?: readonly string[]
+  // Transient opaque owner references selected for the next message.
+  selectedResourceRefs?: readonly SelectedResourceRef[]
   // In-memory current-view creation provenance, never persisted or inferred from cache.
   locallyCreatedSessionId?: string
   // Positive owner snapshot/create ACK for this view, never inferred from optimistic text.
@@ -87,6 +90,7 @@ export function interruptibleRunId({ machine, thread }: Pick<EngineSnapshot, "ma
 
 export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   selectedMcpConnectionIds: Object.freeze([]),
+  selectedResourceRefs: Object.freeze([]),
   selectedCustomApiProfiles: Object.freeze([]),
   machine: IDLE_MACHINE,
   notice: null,
@@ -148,6 +152,8 @@ export type SessionEngine = {
   setMode: (mode: AgentMode) => void
   // 当前会话的 exact Skill source refs；只在内存中保存，提交时冻结进 typed wire。
   setSelectedSkillSourceRefs: (sourceRefs: readonly string[] | undefined) => void
+  /** Optional for injected view-only engines; canonical browser engines provide this transient selection port. */
+  setSelectedResourceRefs?: (refs: readonly SelectedResourceRef[]) => void
   setSelectedCustomApiProfiles?: (profiles: readonly CustomApiSelection[]) => void
   restoreCustomApiSelection?: (candidate: CustomApiSelectionRestore, eligibleProfiles: readonly CustomApiSelection[]) => void
   setSelectedMcpConnectionIds: (connectionIds: readonly string[]) => void

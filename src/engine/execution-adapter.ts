@@ -1,4 +1,4 @@
-import { selectedCustomApiProfilesSchema } from "@/contract/chat"
+import { selectedCustomApiProfilesSchema, selectedResourceRefsSchema, type SelectedResourceRef } from "@/contract/chat"
 import { freezeCustomApiSelection, type CustomApiSelection } from "./custom-api-selection"
 // Engine 执行/传输适配边界：集中构造消息与 control wire，并隔离流代际和微任务批处理。
 
@@ -24,6 +24,7 @@ export type MessageExecutionOptions = {
   mode: AgentMode
   model: string | null
   selectedSkillSourceRefs: readonly string[] | undefined
+  selectedResourceRefs?: readonly SelectedResourceRef[]
   selectedCustomApiProfiles?: readonly CustomApiSelection[]
   selectedMcpConnectionIds?: readonly string[]
   interruptRunId?: string
@@ -92,6 +93,9 @@ export function buildMessageCreateParams(args: {
     ...(options.interruptRunId === undefined ? {} : { interrupt_run_id: options.interruptRunId }),
     ...(options.model !== null ? { model: options.model } : {}),
     ...(options.selectedSkillSourceRefs === undefined ? {} : { selected_skill_source_refs: [...options.selectedSkillSourceRefs] }),
+    ...(options.selectedResourceRefs === undefined ? {} : {
+      selected_resource_refs: selectedResourceRefsSchema.parse([...options.selectedResourceRefs]),
+    }),
     ...(options.selectedMcpConnectionIds?.length ? { selected_mcp_connection_ids: [...options.selectedMcpConnectionIds] } : {}),
     ...(customApis.length ? { selected_custom_api_profiles: selectedCustomApiProfilesSchema.parse(customApis.map(value => ({ profile_id: value.profileId, expected_state_version: Number(value.expectedStateVersion) }))) } : {}),
     ...(args.scope.kind === "project" ? { project_ref: args.scope.projectRef } : {}),

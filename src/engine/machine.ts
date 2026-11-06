@@ -2,7 +2,7 @@ import { freezeCustomApiSelection, type CustomApiSelection, type CustomApiSelect
 import type { McpSelectionRestore } from "./engine-types"
 import { readMessageParts, type MessagePartsRead } from "./message-parts-reader"
 import { mergeMessageParts, preserveMessageParts } from "@/core/reducer"
-import { selectedMcpConnectionIdsSchema } from "@/contract/chat"
+import { selectedMcpConnectionIdsSchema, selectedResourceRefsSchema, type SelectedResourceRef } from "@/contract/chat"
 // 显式会话状态机 + 引擎：snapshot-first 水合 / 流句柄 / in-flight 守卫 / runId 锚定收束单点持有。
 
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
@@ -166,6 +166,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let notice: NoticeSpec | null = null
   // 当前会话 exact source refs：只在内存中保存，不从 browser store 恢复。
   let selectedSkillSourceRefs: string[] | undefined = scope.kind === "project" ? undefined : []
+  let selectedResourceRefs: readonly SelectedResourceRef[] = Object.freeze([])
   // 选中模型（MODEL-UX，shell 注入）：非 null 即随首条 messageCreate 上 wire 为 model（首条锁语义在 UI 层）。
   let selectedCustomApiProfiles: readonly CustomApiSelection[] = Object.freeze([])
   let customApiSelectionRestore: CustomApiSelectionRestore | undefined
@@ -418,6 +419,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       thread,
       pendingMode,
       selectedMcpConnectionIds,
+      selectedResourceRefs: [...selectedResourceRefs],
       selectedCustomApiProfiles,
       ...(customApiSelectionRestore === undefined ? {} : { customApiSelectionRestore }),
       ...(mcpSelectionRestore === undefined ? {} : { mcpSelectionRestore }),
@@ -1032,6 +1034,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       mode,
       model: selectedModel,
       selectedMcpConnectionIds: [...selectedMcpConnectionIds],
+      selectedResourceRefs: [...selectedResourceRefs],
       selectedCustomApiProfiles: freezeCustomApiSelection(selectedCustomApiProfiles),
       selectedSkillSourceRefs: selectedSkillSourceRefs === undefined ? undefined : [...selectedSkillSourceRefs],
     }
@@ -1169,7 +1172,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     missingSessionId = undefined
     const submission = {
       ...args,
-      options: { ...args.options, selectedCustomApiProfiles: freezeCustomApiSelection(args.options.selectedCustomApiProfiles ?? []), selectedMcpConnectionIds: [...(args.options.selectedMcpConnectionIds ?? [])], selectedSkillSourceRefs: args.options.selectedSkillSourceRefs === undefined ? undefined : [...args.options.selectedSkillSourceRefs] },
+      options: { ...args.options, selectedCustomApiProfiles: freezeCustomApiSelection(args.options.selectedCustomApiProfiles ?? []), selectedMcpConnectionIds: [...(args.options.selectedMcpConnectionIds ?? [])], selectedSkillSourceRefs: args.options.selectedSkillSourceRefs === undefined ? undefined : [...args.options.selectedSkillSourceRefs], ...(args.options.selectedResourceRefs === undefined ? {} : { selectedResourceRefs: [...args.options.selectedResourceRefs] }) },
     }
     pendingSubmission = submission
     pendingSubmissionFailureCode = null
@@ -1643,6 +1646,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
       mcpSelectionRestore = undefined; mcpSelectionVersion += 1
       selectedMcpConnectionIds = Object.freeze([])
+      selectedResourceRefs = Object.freeze([])
       selectedCustomApiProfiles = Object.freeze([]); customApiSelectionRestore = undefined; customApiSelectionVersion++
     }
     thread = createSessionStreamState()
@@ -1760,6 +1764,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
     mcpSelectionRestore = undefined; mcpSelectionVersion += 1
     selectedMcpConnectionIds = Object.freeze([])
+    selectedResourceRefs = Object.freeze([])
       selectedCustomApiProfiles = Object.freeze([]); customApiSelectionRestore = undefined; customApiSelectionVersion++
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
@@ -1920,6 +1925,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     selectedSkillSourceRefs = sourceRefs === undefined ? (scope.kind === "project" ? undefined : []) : [...sourceRefs]
   }
 
+  function setSelectedResourceRefs(refs: readonly SelectedResourceRef[]): void {
+    if (disposed) return
+    const next = selectedResourceRefsSchema.parse(refs)
+    if (next.length === selectedResourceRefs.length && next.every((ref, index) => JSON.stringify(ref) === JSON.stringify(selectedResourceRefs[index]))) return
+    selectedResourceRefs = Object.freeze(next.map((ref) => ({ ...ref })))
+    notify()
+  }
+
   function setModel(model: string | null): void {
     if (disposed) {
       return
@@ -1941,6 +1954,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   function dispose(): void {
     mcpSelectionRestore = undefined; mcpSelectionVersion += 1
     selectedMcpConnectionIds = Object.freeze([])
+    selectedResourceRefs = Object.freeze([])
       selectedCustomApiProfiles = Object.freeze([]); customApiSelectionRestore = undefined; customApiSelectionVersion++
     locallyCreatedSessionId = undefined
     taskNotifications.dispose()
@@ -2006,6 +2020,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
     mcpSelectionRestore = undefined; mcpSelectionVersion += 1
     selectedMcpConnectionIds = Object.freeze([])
+    selectedResourceRefs = Object.freeze([])
       selectedCustomApiProfiles = Object.freeze([]); customApiSelectionRestore = undefined; customApiSelectionVersion++
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
@@ -2059,6 +2074,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     reconcileConversationCache,
     setMode,
     setSelectedSkillSourceRefs,
+    setSelectedResourceRefs,
     setSelectedCustomApiProfiles,
     restoreCustomApiSelection,
     setSelectedMcpConnectionIds,
