@@ -2,20 +2,17 @@
 
 import { z } from 'zod';
 
-export const zAccountProfileInput = z.object({
-    name: z.string().min(1).max(100),
-    expected_name: z.string().max(16384)
-});
-
 /**
  * Request correlation identifier echoed by every v1 envelope.
  */
 export const zRequestId = z.string().min(1).max(256);
 
-export const zAccountProfileResponse = z.object({
+export const zAccountProfileReadResponse = z.object({
     data: z.object({
         subject: z.string().min(1),
-        name: z.string()
+        name: z.string(),
+        email: z.string(),
+        email_verified: z.boolean()
     })
 });
 
@@ -48,35 +45,11 @@ export const zAccountProfileError403 = z.object({
     })
 });
 
-export const zAccountProfileError409 = z.object({
-    error: z.object({
-        code: z.enum(['account_profile_conflict']),
-        message: z.string().min(1),
-        retryable: z.literal(false)
-    })
-});
-
-export const zAccountProfileError413 = z.object({
-    error: z.object({
-        code: z.enum(['account_profile_request_too_large']),
-        message: z.string().min(1),
-        retryable: z.literal(false)
-    })
-});
-
 export const zAccountProfileError429 = z.object({
     error: z.object({
         code: z.enum(['session_rate_limited', 'account_profile_rate_limited']),
         message: z.string().min(1),
         retryable: z.literal(true)
-    })
-});
-
-export const zAccountProfileError500 = z.object({
-    error: z.object({
-        code: z.enum(['internal_error']),
-        message: z.string().min(1),
-        retryable: z.literal(false)
     })
 });
 
@@ -99,6 +72,47 @@ export const zAccountProfileError503 = z.object({
         retryable: z.literal(true)
     })
 });
+
+export const zAccountProfileInput = z.object({
+    name: z.string().min(1).max(100),
+    expected_name: z.string().max(16384)
+});
+
+export const zAccountProfileResponse = z.object({
+    data: z.object({
+        subject: z.string().min(1),
+        name: z.string()
+    })
+});
+
+export const zAccountProfileError409 = z.object({
+    error: z.object({
+        code: z.enum(['account_profile_conflict']),
+        message: z.string().min(1),
+        retryable: z.literal(false)
+    })
+});
+
+export const zAccountProfileError413 = z.object({
+    error: z.object({
+        code: z.enum(['account_profile_request_too_large']),
+        message: z.string().min(1),
+        retryable: z.literal(false)
+    })
+});
+
+export const zAccountProfileError500 = z.object({
+    error: z.object({
+        code: z.enum(['internal_error']),
+        message: z.string().min(1),
+        retryable: z.literal(false)
+    })
+});
+
+/**
+ * Owner-confirmed current subject and profile fields
+ */
+export const zReadAccountProfileResponse = zAccountProfileReadResponse;
 
 /**
  * Owner-confirmed current subject and exact saved name

@@ -26,6 +26,7 @@ export type AppFrameNavigationOptions = {
   threadMessageCount: number
   hydrating: boolean
   missingSessionId?: string
+  removedConversationId?: string
   machinePhase: MachineState["phase"]
 }
 
@@ -42,6 +43,7 @@ export function useAppFrameNavigation({
   threadMessageCount,
   hydrating,
   missingSessionId,
+  removedConversationId,
   machinePhase,
 }: AppFrameNavigationOptions) {
   const scopePath = scope.kind === "project"
@@ -90,6 +92,11 @@ export function useAppFrameNavigation({
   const conversationUrlHydratedRef = useRef(false)
   const [conversationRouteId, setConversationRouteId] = useState<string | null>(null)
 
+  const retirePreviousRemoval = useCallback((id: string | null) => {
+    const removed = engine?.getSnapshot().removedConversationId
+    if (removed !== undefined && removed !== id) engine?.acknowledgeConversationRemoval(removed)
+  }, [engine])
+
   useLayoutEffect(() => {
     let active = true
     queueMicrotask(() => {
@@ -112,9 +119,8 @@ export function useAppFrameNavigation({
         url.hash = ""
       }
     } else {
-      // Match Manus' shareable settings route. Keep the legacy query form
-      // accepted on input, but emit one canonical URL so tab changes do not
-      // alternate between two address-bar formats.
+      // Match Manus' shareable settings route while keeping the query form
+      // reserved for non-hash settings callers.
       url.searchParams.delete("settings")
       const routeTab = tab === "appearance" ? "general" : tab
       url.hash = tab === "skills" && skillsView !== undefined && skillsView !== "all"
@@ -130,26 +136,20 @@ export function useAppFrameNavigation({
       return
     }
     const url = new URL(window.location.href)
-    const hashConversation = /^#\/?conversation(?:=|\/)/.test(url.hash)
     if (id === null) {
       url.searchParams.delete("conversation")
     } else {
       url.searchParams.set("conversation", id)
     }
-    // Emit the query form as the canonical conversation URL after accepting
-    // a hash deep-link; otherwise back/forward would keep two identities.
-    if (hashConversation) {
-      url.hash = ""
-    }
     const next = url.pathname + (url.search ? url.search : "") + url.hash
     const current = window.location.pathname + window.location.search + window.location.hash
     conversationUrlRef.current = id
-    if (next === current) {
-      return
+    if (next !== current) {
+      const write = mode === "push" ? window.history.pushState : window.history.replaceState
+      write.call(window.history, window.history.state, "", next)
     }
-    const write = mode === "push" ? window.history.pushState : window.history.replaceState
-    write.call(window.history, window.history.state, "", next)
-  }, [ownsLocation])
+    retirePreviousRemoval(id)
+  }, [ownsLocation, retirePreviousRemoval])
 
   // A settings URL is a real client-side view state. Back/forward updates the
   // mounted Dialog without navigating away from the workspace shell.
@@ -161,6 +161,7 @@ export function useAppFrameNavigation({
       const previousConversation = conversationUrlRef.current
       conversationUrlRef.current = requestedConversation
       setConversationRouteId(requestedConversation)
+      retirePreviousRemoval(requestedConversation)
       if (!projectWorkspace && requestedConversation !== previousConversation) {
         // Browser history is another conversation switch path. Settings-only
         // history entries keep the same conversation and must not consume a
@@ -174,11 +175,9 @@ export function useAppFrameNavigation({
           engine?.openConversation(requestedConversation)
         }
       } else if (!projectWorkspace && previousConversation !== null && currentId !== null) {
-        // Direct history returns to a fresh workspace. Project overview only
-        // changes the route projection; retain its pending/run and local index. Do not
-        // clear a blank draft session that is already the current view, as can
-        // happen when a Settings URL is closed without a conversation state.
-        engine?.newConversation()
+        // Returning by history is navigation, not the explicit New/Stop
+        // command. Keep the departed task's original owner and recovery state.
+        engine?.returnToLocalHome()
       }
     }
     const onHashChange = () => setSettingsTab(settingsTabFromLocation())
@@ -188,7 +187,7 @@ export function useAppFrameNavigation({
       window.removeEventListener("popstate", onPopState)
       window.removeEventListener("hashchange", onHashChange)
     }
-  }, [engine, ownsLocation, projectWorkspace, setDeploymentIntent])
+  }, [engine, ownsLocation, projectWorkspace, retirePreviousRemoval, setDeploymentIntent])
 
   // AppFrame remains mounted across App Router transitions. Re-read the URL
   // when entering/leaving a project so a stale conversation query cannot make
@@ -252,33 +251,28 @@ export function useAppFrameNavigation({
     && !conversationHydrationFailed
     && (hydrating || !routeOwnsConversation)
 
-  // A stale/forbidden conversation can be evicted by the engine. Once its
-  // fallback session has finished hydrating, the old URL must stop owning the
-  // stage; otherwise the mismatch guard would keep the loading surface on
-  // screen forever. Direct chat returns to its fresh welcome and project chat
-  // returns to the project overview. A real hydration error keeps its URL so
-  // the error surface can retry the same conversation.
+  // A route may change before our popstate listener switches the engine. An
+  // active-ID mismatch alone is not evidence that the task left this view.
   useEffect(() => {
     if (
       !mounted
       || resolvedConversationRouteId === null
-      || hydrating
-      || activeId === null
-      || activeId === resolvedConversationRouteId
-      || machinePhase === "error"
+      || resolvedConversationRouteId !== removedConversationId
     ) {
       return
     }
     let active = true
     queueMicrotask(() => {
-      if (!active) return
+      if (!active || !ownsLocation() || conversationIdFromLocation() !== removedConversationId
+        || conversationUrlRef.current !== removedConversationId
+        || engine?.getSnapshot().removedConversationId !== removedConversationId) return
       syncConversationUrl(null, "replace")
       setConversationRouteId(null)
     })
     return () => {
       active = false
     }
-  }, [activeId, hydrating, machinePhase, mounted, resolvedConversationRouteId, syncConversationUrl])
+  }, [engine, mounted, ownsLocation, removedConversationId, resolvedConversationRouteId, syncConversationUrl])
 
   return {
     settingsTab,

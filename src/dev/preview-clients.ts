@@ -216,7 +216,7 @@ export function createPreviewPricingClient(): PricingClient {
       { id: "preview-pro", key: "pro", name: "Pro", currency: "USD", amount_minor: "2900", credit_micros: "40000000", billing_interval: "month" },
     ],
   }
-  return { plans: () => Promise.resolve(plans), checkout: () => Promise.resolve({ status: "unavailable" as const }) }
+  return { plans: () => Promise.resolve(plans) }
 }
 
 const previewMember: TeamMember = {

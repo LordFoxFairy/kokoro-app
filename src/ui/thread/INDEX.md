@@ -1,3 +1,5 @@
+2026-11-04 T‑09：ConversationThread 显示 Public 28.19 的非重试超窗终态，保留已生成正文，不重发原请求。
+
 2026-10-28：`use-run-display.ts` 在同scope终态补读被卸载取消后解除读取占用，保留既有事实并允许重新可见时读取；不重置终态补读资格、不重试HTTP失败。`tool-action-presentation.ts` 同时拥有行动行与Canvas状态文案，MCP completed仅表述“调用已结束”，业务失败仍优先显示。
 
 2026-10-28 整轮过程：`completed-turn-sections.ts`只按正式 final 引用与完整正文划分；`turn-process.tsx`拥有整轮披露与可访问隐藏，原相邻动作组及正文顺序保持。未取得 final、partial、在途、HITL、取消/失败继续原可读布局；最终答复和状态反馈在披露外。参考入口实测14px/20px、4px gap、16px chevron，未有可靠耗时不造时长。正常激活和同任务浏览器验收仍待。
@@ -43,6 +45,8 @@ AnswerActions：独立回答操作栏只持复制与短反馈；重新生成／�
 
 CHAT-1（2026-10-24，候选）：`UnconfirmedSubmissionFeedback`与依赖未就绪共用中性恢复排版，但明确区分未确认admission和owner执行失败；原文/原请求人工恢复，不把已完成Run误说失败，不自动POST。
 
+Task A A‑03：ConversationThread 单独读取 AppFrame 投影的消息提交失败，复用同一「重试原请求」入口，当前 Run 正执行或等审批时也可按 engine 资格显式重试。提交结果不取代当前 Run、工具决策或已生成内容；反馈出现不移动焦点，点击重试仍沿原 Composer 回焦。402 和 owner Run 终态保持原语义。
+
 ## 2026-10-20 执行未就绪反馈
 
 `ExecutionUnavailableFeedback`仅呈现明确pre-admission agent_not_configured且无unattributed RunFailure的状态；中性status＋服务就绪后显式原请求恢复，不伪称已暂停/已执行/已保存，不自动发请求。原真实run.failed/未知失败、归属、402资金分支和machine恢复逻辑保持；同一阅读列内紧凑布局，不改滚动或Composer。模块独立CSS只用现语义token。
@@ -86,8 +90,8 @@ MCP 详情阅读：`activity-result.tsx` 将已验证预览分为无外部资源
 
 2026-10-28 回焦修正：可打开的 ToolCallRow 暴露 opaque activity identity，由 ContextPanel 在关闭后重解析当前 shell 内同一可见行；不依赖鼠标激活是否获得焦点，不按同名/末行选择。
 
-- `completed-turn-sections.ts`：正式 final 优先；只读 display 旁证需 exact Run／唯一完整 parts／确认 revision／真实正文身份，不进入 durable merge。
-- `assistant-turn.tsx`：历史成功轮外层可见时沿原 scope reader 单次取证；折叠区内部是否展开不决定首次读。焦点、旧失败与时间顺序保持。
+- `completed-turn-sections.ts`：只从 canonical terminal final 引用及同 Run 的已确认 ordered parts 划分过程与正文，不从历史正文或只读详情推断 final。
+- `assistant-turn.tsx`：整轮可见不触发 RunDisplay 请求；具名活动需要事实或用户查看详情时，由 `SegmentProcess` 沿同 scope/Run reader 读取。焦点、失败态与时间顺序保持。
 
 过程摘要计数（2026-10-28）：同一 passage 每项活动计一次，包括混合组的 MCP 发现/说明；计数表示观察到的尝试，不表示成功或唯一资源。摘要不再隐去准备次数，原时间顺序、相邻分组、披露与 activity identity 不变。
 

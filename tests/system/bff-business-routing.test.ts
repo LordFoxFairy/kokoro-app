@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-const { productBffConfig, admittedProductSession, sameOriginOk, requestWithDomain } = vi.hoisted(() => ({
+const { productBffConfig, sameOriginOk, requestWithDomain } = vi.hoisted(() => ({
   productBffConfig: vi.fn(),
-  admittedProductSession: vi.fn(),
   sameOriginOk: vi.fn(() => true),
   requestWithDomain: vi.fn(),
 }))
@@ -10,10 +9,9 @@ const { productBffConfig, admittedProductSession, sameOriginOk, requestWithDomai
 vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
-  admittedProductSession,
-  productBffHeaders: (config: { internalSecret?: string | null }, claims: { access: string }, requestId: string) => {
+  productBffHeaders: (config: { internalSecret?: string | null }, request: Request, requestId: string) => {
     const headers = new Headers({
-      authorization: `Bearer ${claims.access}`,
+      cookie: request.headers.get("cookie") ?? "",
       "x-kokoro-service": "web-bff",
       "x-kokoro-request-id": requestId,
     })
@@ -29,7 +27,7 @@ describe("Web to business BFF route projection", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     productBffConfig.mockReset()
-    admittedProductSession.mockReset()
+
     sameOriginOk.mockReset().mockReturnValue(true)
     requestWithDomain.mockReset()
   })
@@ -40,10 +38,7 @@ describe("Web to business BFF route projection", () => {
       domain: "dev.kokoro.localhost",
       internalSecret: "web-secret",
     })
-    admittedProductSession.mockResolvedValue({
-      access: "product-access",
-      accessExpiresAt: Date.now() + 60_000,
-    })
+
     requestWithDomain.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -54,7 +49,7 @@ describe("Web to business BFF route projection", () => {
       ),
     )
 
-    const response = await GET(new Request("https://app.example/api/scheduled-tasks"), {
+    const response = await GET(new Request("https://app.example/api/scheduled-tasks", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), {
       params: Promise.resolve({ path: [] }),
     })
 
@@ -73,10 +68,7 @@ describe("Web to business BFF route projection", () => {
       domain: "dev.kokoro.localhost",
       internalSecret: "web-secret",
     })
-    admittedProductSession.mockResolvedValue({
-      access: "product-access",
-      accessExpiresAt: Date.now() + 60_000,
-    })
+
     requestWithDomain.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -91,7 +83,7 @@ describe("Web to business BFF route projection", () => {
     )
 
     const response = await GET(
-      new Request("https://app.example/api/scheduled-tasks/scheduled_missing"),
+      new Request("https://app.example/api/scheduled-tasks/scheduled_missing", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}),
       { params: Promise.resolve({ path: ["scheduled_missing"] }) },
     )
 

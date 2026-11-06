@@ -22,7 +22,8 @@ import {
   webErrorResponse,
 } from "@/lib/server/bff-response"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { nativeSessionBffHeaders, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { isProjectTaskFamily } from "@/lib/server/project-tasks"
 
 export const runtime = "nodejs"
 // 每请求实时求值：绝不静态化/缓存代理响应（SSE、鉴权头随信封变）。
@@ -39,6 +40,9 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   if (/^\/api\/session\/sessions\/[^/]+\/(?:archive|restore)$/u.test(new URL(request.url).pathname)) return sessionArchive(request, context.params)
   if (["POST", "DELETE"].includes(request.method) && /^\/api\/session\/sessions\/[^/]+\/share$/u.test(new URL(request.url).pathname)) return sessionShare(request, context.params)
   const requestId = requestIdForRequest(request)
+  const { path } = await context.params
+  const segments = path ?? []
+  if (isProjectTaskFamily(segments)) return webErrorResponse("bff_route_not_found", 404, requestId)
   const config = productBffConfig()
   if (config === null) {
     return webErrorResponse("auth_not_configured", 503, requestId)
@@ -46,22 +50,13 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) {
     return webErrorResponse("forbidden_origin", 403, requestId)
   }
-  let claims
-  try {
-    claims = await admittedProductSession(request, config)
-  } catch {
-    return webErrorResponse("session_unavailable", 503, requestId)
-  }
-  if (claims === null) {
-    return webErrorResponse("unauthenticated", 401, requestId)
-  }
+  const native = nativeSessionBffHeaders(request, config, requestId)
+  if (native.state === "invalid") return webErrorResponse("unauthenticated", 401, requestId)
 
   if (config.bffBaseUrl === null || config.bffBaseUrl === undefined) {
     return webErrorResponse("bff_not_configured", 503, requestId)
   }
 
-  const { path } = await context.params
-  const segments = path ?? []
   const isMessageParts = request.method === "GET" && segments.length === 5 && segments[0] === "sessions" && segments[2] === "messages" && segments[4] === "parts"
   if (isMessageParts) {
     const query = new URL(request.url).searchParams
@@ -85,7 +80,7 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   const encodedPath = segments.map((segment) => encodeURIComponent(segment)).join("/")
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${encodedPath}${search}`
 
-  const headers = productBffHeaders(config, claims, requestId)
+  const headers = productBffHeaders(config, request, requestId)
   for (const name of FORWARD_HEADERS) {
     const value = request.headers.get(name)
     if (value !== null) {

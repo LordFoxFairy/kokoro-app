@@ -123,6 +123,12 @@ export function ContextPanel(props: CanvasPanelProps) {
       // focus hand-off. It must not remain discoverable by screen readers or
       // keyboard navigation while it is visually gone.
       inert={!open ? true : undefined}
+      onKeyDown={event => {
+        if (!open || event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing) return
+        event.preventDefault()
+        event.stopPropagation()
+        handleClose()
+      }}
     >
       <CanvasPanel {...canvasProps} onClose={handleClose} />
     </div>

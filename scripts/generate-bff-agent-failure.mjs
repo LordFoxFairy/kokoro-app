@@ -10,10 +10,10 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-agent-failure.ts")
-const ownerCommit = "853ca9a5d8da3500b0c37543c72198a520e46225"
-const expectedDigest = "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7"
-const expectedVersion = "28.17.0"
-const expectedChatMessageFingerprint = "d69b983fd87600f5c180494b27989d5eb2b32c12284bf5c7530930e3099c0bf6"
+const ownerCommit = "99f946e67bec19d0bead1d29d7f3fd32ce4e95bf"
+const expectedDigest = "a3d71aa845265084f7965c06dc903e2a5bf24c47d23bceb9a19bcd5d991c08b4"
+const expectedVersion = "28.22.0"
+const expectedChatMessageFingerprint = "2f3471297de580e2931d8d768d86f9c0d7fc037de99993237b933d29fe25dc7b"
 
 const digest = (value) => createHash("sha256").update(value).digest("hex")
 
@@ -38,11 +38,11 @@ export function inspectBffAgentFailureContract(spec) {
   const privateReads = structuredClone([schemas.ChatMessageRead, schemas.OrderedAssistantMessageRead, schemas.CancelledAssistantMessageRead])
   const sourceSchemas = [schemas.ChatMessageRead,schemas.OrderedAssistantMessageRead,schemas.CancelledAssistantMessageRead,schemas.RegeneratedAssistantMessageRead]
   const closedFingerprint=digest(stableJson(sourceSchemas))
-  assert.equal(closedFingerprint,"795871baac08082c815fe7ef106e589de2859dbf166f9dcb7973bb8ec0aabca1","BFF regenerated private graph drift")
+  assert.equal(closedFingerprint,"26c72d0c3061e1eaf40632d379cacee525e27a4e5fd558a125c705a485cc4b7f","BFF regenerated private graph drift")
   privateReads[0].oneOf=privateReads[0].oneOf.filter(item=>item.$ref!=="#/components/schemas/RegeneratedAssistantMessageRead")
   delete privateReads[1].properties.regenerated_from_message_id
   delete privateReads[2].properties.regenerated_from_message_id
-  assert.equal(digest(stableJson(privateReads)), "86e632ab432cc13b6b3c3dcd6336949518d08d486484d8371c2c373f0ac8d896", "BFF private cancellation guard drift")
+  assert.equal(digest(stableJson(privateReads)), "431ac620945e7921c57f0a8838073ad8ffd6f76cd91916718563948de3f7ba90", "BFF private cancellation guard drift")
   const cancelledStatus = schemas.CancelledAssistantMessageRead.properties.terminal_status.const
   const roles = chatMessage.properties.role.enum
   const failure = chatMessage.properties.failure
@@ -53,9 +53,9 @@ export function inspectBffAgentFailureContract(spec) {
     ...retryableCodes.map((code) => ({ source: failure.properties.source.const, code, retryable: true })),
   ]
 
-  assert.equal(codes.length, 11, "BFF Agent failure code count drift")
+  assert.equal(codes.length, 12, "BFF Agent failure code count drift")
   assert.equal(retryableCodes.length, 2, "BFF retryable Agent failure code count drift")
-  assert.equal(tuples.length, 13, "BFF Agent failure tuple count drift")
+  assert.equal(tuples.length, 14, "BFF Agent failure tuple count drift")
   return { roles: [...roles], tuples, cancelledStatus }
 }
 

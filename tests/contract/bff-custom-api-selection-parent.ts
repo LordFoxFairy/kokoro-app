@@ -1,8 +1,10 @@
 // Test-only exact formal853ca Public28.17 -> whole28.16; never a runtime fallback.
+import { restorePublic2817AccountProfileReadContract } from "./bff-account-profile-read-parent"
 import { createHash } from "node:crypto"
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
 // The API selection adds only two optional safe-ref fields; all parent bytes remain fixed.
 export function restorePublic2816CustomApiSelectionContract(source: string) {
+  source = restorePublic2817AccountProfileReadContract(source)
   if (!/^  version: 28\.17\.0$/mu.test(source)) return source
   if (hash(source) !== "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7") throw Error("Custom API selection Public28.17 child drift")
   for (const field of [

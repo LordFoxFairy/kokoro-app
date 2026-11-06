@@ -13,7 +13,6 @@ import {
   parseKnowledgeResponseJson,
 } from "@/contract/personal-knowledge";
 import {
-  admittedProductSession,
   productBffConfig,
   productBffHeaders,
 } from "./product-bff";
@@ -161,15 +160,9 @@ export async function proxyPersonalKnowledge(
     if (config === null) return fail(503, "product_tenant_not_configured");
     if (mutation && request.headers.get("origin") !== config.session.webOrigin)
       return fail(403, "session_forbidden");
-    let claims;
-    try {
-      claims = await within(admittedProductSession(request, config));
-    } catch {
-      signal.throwIfAborted();
-      return fail(503, "iam_admission_unavailable", true);
-    }
+
     signal.throwIfAborted();
-    if (claims === null) return fail(401, "session_authentication_required");
+
     let body: ArrayBuffer | undefined, input: unknown;
     if (mutation) {
       try {
@@ -192,7 +185,7 @@ export async function proxyPersonalKnowledge(
       }
     }
     const ownerPath = `/v1/${segments.join("/")}`;
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     if (mutation) headers.set("content-type", "application/json");
     signal.throwIfAborted();
     upstream = await within(

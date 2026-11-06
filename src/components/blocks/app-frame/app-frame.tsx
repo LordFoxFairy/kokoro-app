@@ -215,6 +215,7 @@ function AppFrameRuntime({
     hydrating,
     machinePhase: machine.phase,
     ...(engineState.missingSessionId === undefined ? {} : { missingSessionId: engineState.missingSessionId }),
+    ...(engineState.removedConversationId === undefined ? {} : { removedConversationId: engineState.removedConversationId }),
   })
 
   const mcpCatalogScope = useMemo(() => ({ engine, sessionScope, preview, subject: projectReadBoundary?.subject,
@@ -419,7 +420,7 @@ function AppFrameRuntime({
     return !projectWorkspace || routedConversationId === null ||
       engine?.getSnapshot().store?.activeId === routedConversationId
   }, [draftRoute, draftSelectionMatches, engine, projectWorkspace, routedConversationId])
-  const { draft, updateDraft: updateScopedDraft, clearDraft: clearScopedDraft } = draftController
+  const { draft, updateDraft: updateScopedDraft, clearDraft: clearScopedDraft, restoreDraft } = draftController
   const updateDraft = useCallback((value: string) => {
     if (draftRouteIsCurrent()) updateScopedDraft(value)
   }, [updateScopedDraft, draftRouteIsCurrent])
@@ -758,7 +759,7 @@ function AppFrameRuntime({
 
   const hasMessages = thread.messages.length > 0
   const showConversation = hasMessages && !standaloneSurface && navigationState.routeOwnsConversation
-  const canRetryPendingSubmission = engine?.getSnapshot().canRetryPendingSubmission ?? false
+  const { canRetryPendingSubmission = false, pendingSubmissionFailureCode, canRestoreRejectedDelivery = false } = engine?.getSnapshot() ?? {}
   const initialSnapshotFailed = machine.phase === "error"
     && !canRetryPendingSubmission
     && store !== null
@@ -766,7 +767,7 @@ function AppFrameRuntime({
   const hasFailed = !isStreaming && (
     machine.phase === "error" || thread.unattributedFailure !== null
   )
-  const creditRejected = hasFailed && isCreditInsufficient(machine.error)
+  const creditRejected = isCreditInsufficient(pendingSubmissionFailureCode ?? (hasFailed ? machine.error : null))
   const mode = projectOverview ? projectDraft.mode : store ? activeMode(store) : pendingMode
   const composerHasMessages = !projectOverview && hasMessages
   const modeLocked = composerHasMessages
@@ -795,10 +796,21 @@ function AppFrameRuntime({
     return () => window.cancelAnimationFrame(frame)
   }, [focusComposer, hasMessages])
 
+  const submissionViewIsCurrent = useCallback(() => {
+    if (activeId === null || !isVisibleMoveLeaf(moveScopeKey, activeId)) return false
+    if (preview) return true
+    try { return copyAdmitted && window.localStorage.getItem("kokoro.web.auth-index-subject") === copySubject }
+    catch { return false }
+  }, [activeId, copyAdmitted, copySubject, isVisibleMoveLeaf, moveScopeKey, preview])
   const retryAndFocusComposer = useCallback(() => {
-    engine?.retry()
-    window.requestAnimationFrame(() => focusComposer())
-  }, [engine, focusComposer])
+    if (!submissionViewIsCurrent() || !engine?.getSnapshot().canRetryPendingSubmission) return
+    engine.retry()
+    window.requestAnimationFrame(() => { if (submissionViewIsCurrent()) focusComposer() })
+  }, [engine, focusComposer, submissionViewIsCurrent])
+  const restoreDeliveryDraft = useCallback(() => {
+    if (!submissionViewIsCurrent() || !draftRouteIsCurrent()) return
+    if (engine?.restoreRejectedDelivery?.(restoreDraft)) focusComposer()
+  }, [draftRouteIsCurrent, engine, focusComposer, restoreDraft, submissionViewIsCurrent])
 
   const retryConversationHydration = useCallback(() => {
     const requestedConversationId = navigationState.resolvedConversationRouteId ?? activeId
@@ -836,7 +848,8 @@ function AppFrameRuntime({
     executionPhase: machine.phase,
     isReconnecting: connection.status === "reconnecting",
     hasFailed,
-    submissionFailureCode: machine.error,
+    ...(pendingSubmissionFailureCode === undefined ? {} : { pendingSubmissionFailureCode }),
+    ...(canRestoreRejectedDelivery ? { onRestoreDeliveryDraft: restoreDeliveryDraft } : {}),
     canRetryPendingSubmission,
     canRetryResume: engine?.getSnapshot().canRetryResume ?? false,
     onRetryResume: () => engine?.retryResume(),
@@ -894,6 +907,7 @@ function AppFrameRuntime({
     onRemoveSelectedSkill: actions.clearSelectedSkill,
     onKeyDown: actions.handleKeyDown,
     onSubmit: actions.handleSubmit,
+    ...(actions.activeDelivery === undefined ? {} : { activeDelivery: actions.activeDelivery }),
     isStreaming,
     isAwaitingApproval: (machine.phase === "waiting" || machine.phase === "resuming"),
     canSend,
@@ -985,7 +999,6 @@ function AppFrameRuntime({
       conversationMissing={navigationState.conversationMissing}
       machineError={machine.error}
       connection={connection}
-      onReconnect={() => engine?.reconnect()}
       projectCreation={project.projectCreation}
       projectRename={project.projectRename}
       projectContext={project.projectContext}

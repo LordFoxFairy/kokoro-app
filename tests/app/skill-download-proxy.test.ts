@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { GET } from "@/app/api/skill-downloads/[handle]/route"
 import { requestWithDomain } from "@/lib/server/upstream-http"
-const session = vi.hoisted(() => vi.fn())
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession: session }))
+
+
 vi.mock("@/lib/server/upstream-http", async original => ({ ...(await original<typeof import("@/lib/server/upstream-http")>()), requestWithDomain: vi.fn() }))
 const handle = "a".repeat(43), url = `http://localhost/api/skill-downloads/${handle}`
 const params = { params: Promise.resolve({ handle }) }
@@ -10,7 +10,7 @@ const headers = { "content-type": "application/zip", "content-length": "3", "con
 function binary(body: BodyInit | ReadableStream<Uint8Array> = new Uint8Array([1, 2, 3]), changes: Record<string, string> = {}) { return new Response(body, { headers: { ...headers, ...changes } }) }
 beforeEach(() => {
   for (const [key, value] of Object.entries({ KOKORO_WEB_AUTH_SECRET: "a".repeat(32), KOKORO_WEB_REDIS_URL: "redis://fixture.invalid/9", KOKORO_WEB_ORIGIN: "http://localhost", KOKORO_DOMAIN: "dev.kokoro.localhost", KOKORO_BFF_BASE_URL: "http://bff.test", KOKORO_INTERNAL_SECRET_WEB_BFF: "svc-secret" })) vi.stubEnv(key, value)
-  session.mockReset(); session.mockResolvedValue({ access: "product-access", accessExpiresAt: Date.now() + 60_000 }); vi.mocked(requestWithDomain).mockReset()
+    vi.mocked(requestWithDomain).mockReset()
 })
 afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers() })
 it("streams the original bytes without changing filename or caching a ZIP", async () => {
@@ -61,7 +61,7 @@ it("closes a stream that exceeds its declared length", async () => {
 it("cancels binary IO on caller cancellation without waiting for the deadline", async () => {
   const cancelled = vi.fn(), caller = new AbortController()
   vi.mocked(requestWithDomain).mockResolvedValue(binary(new ReadableStream({ cancel: cancelled })))
-  const response = await GET(new Request(url, { signal: caller.signal }), params)
+  const response = await GET(new Request(url, {headers: {cookie: "kokoro-issuer.session_token=fixture"},  signal: caller.signal }), params)
   const read = response.body!.getReader().read().catch((error: unknown) => error)
   caller.abort(new Error("Caller closed"))
   expect(await read).toBeInstanceOf(Error); expect(cancelled).toHaveBeenCalledOnce()
@@ -115,6 +115,6 @@ it("preserves a qualified current-admission Retry-After only through the indepen
 })
 it("does not turn an automatic HEAD alias into the declared GET byte operation", async () => {
   vi.mocked(requestWithDomain).mockResolvedValue(binary())
-  expect((await GET(new Request(url, { method: "HEAD" }), params)).status).toBe(405)
+  expect((await GET(new Request(url, {headers: {cookie: "kokoro-issuer.session_token=fixture"},  method: "HEAD" }), params)).status).toBe(405)
   expect(requestWithDomain).not.toHaveBeenCalled()
 })

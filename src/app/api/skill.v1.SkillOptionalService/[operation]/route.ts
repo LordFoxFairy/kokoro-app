@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { sameOriginOk } from "@/lib/server/same-origin"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { InvalidBrowserCookieError, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -53,13 +53,6 @@ export async function POST(request: Request, context: { params: Promise<{ operat
 
   const config = productBffConfig()
   if (config === null) return error("skill_dependency_unavailable", 503)
-  let claims
-  try {
-    claims = await admittedProductSession(request, config)
-  } catch {
-    return error("iam_admission_unavailable", 503)
-  }
-  if (claims === null) return error("session_authentication_required", 401)
 
   let body: ArrayBuffer
   try {
@@ -70,22 +63,23 @@ export async function POST(request: Request, context: { params: Promise<{ operat
   }
 
   const requestId = request.headers.get("x-kokoro-request-id") ?? crypto.randomUUID()
-  const headers = productBffHeaders(config, claims, requestId)
-  headers.set("content-type", "application/json")
-  headers.set("accept", "application/json")
-  if (operation === "SetSkillInstallationEnabled") {
-    const idempotencyKey = request.headers.get("idempotency-key")
-    if (idempotencyKey === null || idempotencyKey.trim() === "") return error("idempotency_key_required", 400)
-    headers.set("idempotency-key", idempotencyKey)
-  }
   let upstream: Response
   try {
+    const headers = productBffHeaders(config, request, requestId)
+    headers.set("content-type", "application/json")
+    headers.set("accept", "application/json")
+    if (operation === "SetSkillInstallationEnabled") {
+      const idempotencyKey = request.headers.get("idempotency-key")
+      if (idempotencyKey === null || idempotencyKey.trim() === "") return error("idempotency_key_required", 400)
+      headers.set("idempotency-key", idempotencyKey)
+    }
     upstream = await requestWithDomain(
       `${config.bffBaseUrl.replace(/\/+$/u, "")}/skill.v1.SkillOptionalService/${operation}`,
       config.domain,
       { method: "POST", headers: Object.fromEntries(headers), body, signal: request.signal },
     )
-  } catch {
+  } catch (caught) {
+    if (caught instanceof InvalidBrowserCookieError) return error("invalid_skill_request", 400)
     return error("skill_dependency_unavailable", 503)
   }
 

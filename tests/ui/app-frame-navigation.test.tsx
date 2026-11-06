@@ -1,10 +1,14 @@
 import { act, cleanup, renderHook } from "@testing-library/react"
+import { useSyncExternalStore } from "react"
 import { afterEach, expect, it, vi } from "vitest"
 
 import { useAppFrameNavigation } from "@/components/blocks/app-frame/use-app-frame-navigation"
 import { createSessionEngine } from "@/engine/machine"
+import { SessionClientError } from "@/engine/client-error"
 import type { ConversationStore } from "@/core/conversations"
-import { createFakeClient, createMemoryStorage } from "../engine/fakes"
+import { makeSnapshot } from "../core/fixtures"
+import { createFakeClient, createMemoryStorage, makeReceipt, settle } from "../engine/fakes"
+import { createBrowserSubmissionRecovery, SUBMISSION_RECOVERY_PREFIX } from "@/ui/shell/browser-submission-recovery"
 
 afterEach(() => {
   cleanup()
@@ -139,8 +143,168 @@ it("late hydration of a cached failed thread cannot claim the bare homepage or p
   expect(window.location.pathname + window.location.search).toBe("/app")
   expect(view.result.current.routeOwnsConversation).toBe(false)
 })
-it.each(["?conversation=conv-retained-direct", "#conversation/conv-retained-direct"])("an explicit direct id still owns its existing thread: %s", suffix => {
+it("an explicit direct query id still owns its existing thread", () => {
+  const suffix = "?conversation=conv-retained-direct"
   window.history.replaceState(null, "", `/app${suffix}`)
   const view = renderHook(() => useAppFrameNavigation(options))
   expect(view.result.current.routeOwnsConversation).toBe(true)
 })
+
+it("keeps the Forward URL when the router renders before App handles popstate", async () => {
+  window.history.replaceState(null, "", "/app")
+  const target = "conv-forward-owner"
+  const draft = "conv-home-draft"
+  const client = createFakeClient()
+  client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: target }))
+  const storage = createMemoryStorage<ConversationStore>({
+    activeId: draft,
+    conversations: [
+      { id: draft, title: "", mode: "fast", updatedAt: 2, localDraft: true },
+      { id: target, title: "Original task", mode: "fast", updatedAt: 1 },
+    ],
+  })
+  const engine = createSessionEngine({ client, storage, draftLifecycle: { isUnsubmitted: () => true, retire: () => true } })
+  try {
+    const view = renderHook(() => useAppFrameNavigation({ ...options, engine, activeId: draft }))
+    // The browser moved to the original entry; an earlier router listener may
+    // commit while our listener still has the old Home snapshot.
+    window.history.replaceState(null, "", `/app?conversation=${target}`)
+    await act(async () => { view.rerender() })
+    expect(window.location.search).toBe(`?conversation=${target}`)
+    await act(async () => { window.dispatchEvent(new PopStateEvent("popstate")); await settle() })
+    expect(client.snapshotCalls).toEqual([target])
+    expect(engine.getSnapshot().store?.activeId).toBe(target)
+    expect(client.controlCalls).toEqual([])
+  } finally { engine.dispose() }
+})
+
+it.each(["owner-forbidden", "external-index-removal"] as const)("leaves the routed task only after it was removed from this view (%s)", async reason => {
+  const target = "conv-routed"
+  window.history.replaceState(null, "", `/app?conversation=${target}`)
+  const client = createFakeClient()
+  client.nextSnapshot = id => reason === "owner-forbidden"
+    ? Promise.reject(new SessionClientError("http", "session_forbidden"))
+    : Promise.resolve(makeSnapshot({ sessionId: id }))
+  const storage = createMemoryStorage<ConversationStore>(null)
+  const engine = createSessionEngine({ client, storage })
+  try {
+    const view = renderHook(() => {
+      const { store, hydrating, removedConversationId } = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
+      return useAppFrameNavigation({ ...options, engine, activeId: store?.activeId ?? null, hydrating,
+        ...(removedConversationId === undefined ? {} : { removedConversationId }),
+      })
+    })
+    await act(async () => { await settle() })
+    if (reason === "external-index-removal") {
+      expect(window.location.search).toBe(`?conversation=${target}`)
+      await act(async () => {
+        storage.write({ activeId: "conv-other", conversations: [{ id: "conv-other", title: "Other task", mode: "fast", updatedAt: 2 }] })
+        await settle()
+      })
+      expect(client.snapshotCalls).toEqual([target, "conv-other"])
+    } else expect(client.snapshotCalls).toEqual([target])
+    expect(window.location.pathname + window.location.search).toBe("/app")
+    expect(engine.getSnapshot().store?.conversations.map(({ id }) => id)).not.toContain(target)
+    if (reason === "external-index-removal") {
+      // The previous cleanup must not mask a later owner deletion.
+      await act(async () => { view.result.current.syncConversationUrl("conv-other", "push") })
+      expect(window.location.search).toBe("?conversation=conv-other")
+      await act(async () => { expect(await engine.deleteConversation("conv-other")).toBe(true); await settle() })
+      expect(window.location.search).toBe("")
+      expect(client.deleteCalls).toEqual(["conv-other"])
+    }
+  } finally { engine.dispose() }
+})
+
+it.each(["unknown", "late-ack", "late-rejection", "accepted"] as const)(
+  "direct browser Back preserves owner/recovery state, and Forward reopens the original session (%s)",
+  async outcome => {
+    const client = createFakeClient()
+    const recovery = createBrowserSubmissionRecovery({
+      subject: "a01-history-subject", scope: options.scope, isCurrent: () => true, storage: () => window.sessionStorage,
+    })
+    const engine = createSessionEngine({
+      client, storage: createMemoryStorage<ConversationStore>(null), submissionRecovery: recovery,
+      draftLifecycle: { isUnsubmitted: () => true, retire: () => true },
+    })
+    const accepted = makeReceipt("run_a01_history")
+    let journal: string | undefined
+    let resolveLate: ((receipt: ReturnType<typeof makeReceipt>) => void) | undefined
+    let rejectLate: ((error: SessionClientError) => void) | undefined
+    client.nextCreate = outcome === "unknown" ? () => Promise.reject(Error("connection closed after dispatch"))
+      : outcome === "late-ack" || outcome === "late-rejection"
+        ? () => new Promise((resolve, reject) => { resolveLate = resolve; rejectLate = reject })
+      : () => Promise.resolve(accepted)
+    const move = async (delta: number) => {
+      await act(async () => {
+        const popped = new Promise<void>(resolve => window.addEventListener("popstate", () => resolve(), { once: true }))
+        window.history.go(delta)
+        await popped
+      })
+    }
+    try {
+      window.history.replaceState(null, "", "/app")
+      expect(engine.submit("first owner command")).toBe(true)
+      const sid = engine.getSnapshot().store!.activeId
+      journal = `${SUBMISSION_RECOVERY_PREFIX}a01-history-subject:direct:${encodeURIComponent(sid)}`
+      const first = client.createCalls[0]
+      if (!first) throw new Error("missing initial Message command")
+      const original = structuredClone(first)
+      expect(original.sessionId).toBe(sid)
+      window.history.pushState(null, "", `/app?conversation=${sid}`)
+      renderHook(() => useAppFrameNavigation({ ...options, engine, activeId: sid }))
+      await act(async () => { await settle() })
+      const before = window.sessionStorage.getItem(journal)
+      expect(JSON.parse(before!).state).toBe(outcome === "accepted" ? "acknowledged" : "pending")
+      await move(-1)
+      expect(window.location.pathname + window.location.search).toBe("/app")
+      const home = engine.getSnapshot()
+      expect(home.store?.activeId).not.toBe(sid)
+      expect(home.locallyCreatedSessionId).toBe(home.store?.activeId)
+      expect(client.snapshotCalls).toEqual([])
+      if (outcome === "late-ack") {
+        await act(async () => { resolveLate!(accepted); await settle() })
+        expect(client.controlCalls).toEqual([])
+        expect(JSON.parse(window.sessionStorage.getItem(journal)!).state).toBe("acknowledged")
+      } else if (outcome === "late-rejection") {
+        await act(async () => { rejectLate!(new SessionClientError("http", "Not enough credits", "insufficient_credits", 402)); await settle() })
+        expect(engine.getSnapshot().machine.error).toBeNull()
+      } else if (outcome === "accepted") {
+        expect(client.controlCalls).toEqual([])
+        expect(window.sessionStorage.getItem(journal)).toBe(before)
+      } else {
+        expect(window.sessionStorage.getItem(journal)).toBe(before)
+      }
+      expect(client.createCalls).toEqual([original])
+      expect(engine.getSnapshot().thread.messages).toEqual([])
+      if (outcome === "late-ack" || outcome === "accepted") {
+        client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+          sessionId: sid, activeRun: { run_id: accepted.run_id, status: "running" },
+          messages: [{ message_id: accepted.user_message_id, role: "user", content: "first owner command",
+            status: "completed", created_at: "2026-07-02T00:00:00Z" }],
+        }))
+      }
+      await move(1)
+      await act(async () => { await settle() })
+      expect(window.location.search).toBe(`?conversation=${sid}`)
+      expect(engine.getSnapshot().store?.activeId).toBe(sid)
+      expect(client.createCalls).toEqual([original])
+      expect(client.snapshotCalls).toEqual([sid])
+      if (outcome === "unknown") {
+        expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+        client.nextCreate = () => Promise.resolve(accepted)
+        await act(async () => { engine.retry(); await settle() })
+        expect(client.createCalls).toEqual([original, original])
+      } else if (outcome === "late-rejection") {
+        expect(engine.getSnapshot().machine.error).toBe("insufficient_credits")
+      } else {
+        expect(engine.getSnapshot().machine.runId).toBe(accepted.run_id)
+        expect(engine.getSnapshot().thread.messages.map(message => message.id)).toContain(accepted.user_message_id)
+      }
+      expect(client.controlCalls).toEqual([])
+    } finally {
+      engine.dispose()
+      if (journal) window.sessionStorage.removeItem(journal)
+    }
+  },
+)

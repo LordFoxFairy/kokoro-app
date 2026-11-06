@@ -3,7 +3,6 @@ import type { SessionEngine } from "@/engine/engine-types"
 import { sessionScopeKey, type SessionScope } from "@/engine/session-scope"
 import { createAnswerActionsClient, type AnswerActionsClient } from "@/engine/answer-actions-client"
 import { sessionBaseUrl } from "@/engine/config"
-import { normalizeRunTerminals } from "@/core/state"
 import type { AnswerActionTarget } from "./answer-action-target"
 export type AnswerActionBoundary = {
   actorId: string; sessionId: string; scope: SessionScope; epoch: object; readEpoch?: object
@@ -46,7 +45,7 @@ export function useAnswerActionScope(input: {
 }
 export function canRegenerateAnswer(boundary: AnswerActionBoundary, target: AnswerActionTarget, checkOtherIntents = true): boolean {
   if (!boundary.isCurrent() || !boundary.engine.regenerateAnswer) return false
-  const snapshot = boundary.engine.getSnapshot(), thread = normalizeRunTerminals(snapshot.thread)
+  const snapshot = boundary.engine.getSnapshot(), thread = snapshot.thread
   const tail = thread.messages.at(-1)
   return snapshot.ownerConfirmedSessionId === target.sessionId && !snapshot.hydrating && snapshot.connection.status === "connected" &&
     snapshot.machine.phase === "idle" && thread.executionHead === null && thread.activeRunId === null &&

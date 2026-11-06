@@ -6,7 +6,6 @@ import {
   parseAccountProfileJson,
 } from "@/lib/account-profile-update.schema";
 import { productBffConfig, productBffHeaders } from "./product-bff";
-import { currentProductSession } from "./product-session";
 import { requestWithDomain } from "./upstream-http";
 
 /** One canonical name write, bounded from entry through final opaque-session revalidation. */
@@ -126,15 +125,10 @@ export async function updateAccountProfile(
           : "account_profile_input_invalid",
       );
     }
-    const session = await currentProductSession(request, config.session);
+
     check();
-    if (
-      !session ||
-      session.accessExpiresAt <= Date.now() ||
-      session.expiresAt <= Date.now()
-    )
-      return fail(401, "session_invalid");
-    const outgoing = productBffHeaders(config, session, requestId);
+
+    const outgoing = productBffHeaders(config, request, requestId);
     outgoing.set("content-type", "application/json");
     outgoing.set("accept", "application/json");
     upstream = await requestWithDomain(
@@ -179,7 +173,6 @@ export async function updateAccountProfile(
       if (upstream.status === 200) {
         const ack = accountProfileUpdateAckSchema.parse(raw);
         if (
-          ack.data.subject !== session.subject ||
           ack.data.name !== input.name
         )
           throw new Error("ACK binding");
@@ -194,20 +187,9 @@ export async function updateAccountProfile(
       check();
       return fail(502, "account_profile_response_invalid");
     }
-    const latest = await currentProductSession(request, config.session);
+
     check();
-    if (
-      !latest ||
-      latest.id !== session.id ||
-      latest.generation !== session.generation ||
-      latest.subject !== session.subject ||
-      latest.access !== session.access ||
-      latest.accessExpiresAt !== session.accessExpiresAt ||
-      latest.expiresAt !== session.expiresAt ||
-      latest.accessExpiresAt <= Date.now() ||
-      latest.expiresAt <= Date.now()
-    )
-      return fail(401, "session_invalid");
+
     const retry = upstream.headers.get("retry-after");
     if (
       (upstream.status === 429 && retry === null) ||

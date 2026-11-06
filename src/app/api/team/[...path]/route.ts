@@ -1,11 +1,9 @@
 // Fixed-tenant Team adapter: one deadline, raw closed wire, no caller-supplied identity.
 import { randomUUID } from "node:crypto";
 import {
-  admittedProductSession,
   productBffConfig,
   productBffHeaders,
 } from "@/lib/server/product-bff";
-import { currentProductSession } from "@/lib/server/product-session";
 import { requestWithDomain } from "@/lib/server/upstream-http";
 import { parseTeamJson } from "@/team/json";
 import {
@@ -224,15 +222,10 @@ async function proxy(request: Request, context: Context): Promise<Response> {
       );
     }
     check();
-    const session = await admittedProductSession(request, config);
+
     check();
-    if (
-      !session ||
-      session.accessExpiresAt <= Date.now() ||
-      session.expiresAt <= Date.now()
-    )
-      return fail(401, "unauthenticated");
-    const headers = productBffHeaders(config, session, requestId);
+
+    const headers = productBffHeaders(config, request, requestId);
     if (body !== undefined) headers.set("content-type", "application/json");
     headers.set("accept", "application/json");
     upstream = await requestWithDomain(
@@ -333,20 +326,9 @@ async function proxy(request: Request, context: Context): Promise<Response> {
       check();
       return invalid();
     }
-    const latest = await currentProductSession(request, config.session);
+
     check();
-    if (
-      !latest ||
-      latest.id !== session.id ||
-      latest.generation !== session.generation ||
-      latest.subject !== session.subject ||
-      latest.access !== session.access ||
-      latest.accessExpiresAt !== session.accessExpiresAt ||
-      latest.expiresAt !== session.expiresAt ||
-      latest.accessExpiresAt <= Date.now() ||
-      latest.expiresAt <= Date.now()
-    )
-      return fail(401, "unauthenticated");
+
     const meta = (output as { meta: { request_id: string } }).meta;
     return Response.json(output, {
       status: upstream.status,

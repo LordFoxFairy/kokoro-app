@@ -4,7 +4,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export function GET(request: Request): Response {
-  return redirectAuthInteraction(request, "/auth/select-tenant")
+  return redirectAuthInteraction(request)
 }
 
 export function HEAD(): Response {

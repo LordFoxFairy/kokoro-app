@@ -1,4 +1,4 @@
-import { admittedProductSession, productBffHeaders, type ProductBffConfig } from "./product-bff"
+import { productBffHeaders, type ProductBffConfig } from "./product-bff"
 import { readBoundedRequestBody, requestWithDomain } from "./upstream-http"
 const JSON_TYPE = /^application\/json(?:;\s*charset=utf-8)?$/iu
 const KEY = /^[\x21-\x2b\x2d-\x7e]{8,128}$(?![\s\S])/u
@@ -87,11 +87,11 @@ export async function proxyAdminBilling(
       check()
       if (body.byteLength !== Number(request.headers.get("content-length"))) return failure(400, "invalid_admin_request", requestId)
     }
-    // Session admission consumes URL/headers, never the already-read financial command stream.
-    const claims = await admittedProductSession(new Request(request.url, { headers: request.headers, signal: controller.signal }), config)
+    // Credential transport reads only request headers, never the already-read financial command stream.
+
     check()
-    if (claims === null) return failure(401, "session_authentication_required", requestId)
-    const headers = productBffHeaders(config, claims, requestId)
+
+    const headers = productBffHeaders(config, request, requestId)
     headers.set("accept", "application/json")
     if (mutation) {
       headers.set("content-type", "application/json")

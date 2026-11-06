@@ -1,3 +1,7 @@
+## T-07 当前 Public28.18 provenance（2026-11-01）
+
+唯一 `src/generated/bff-public-openapi.yaml` 保持 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9` 的完整原字节；12 个既有 public generator 统一消费该来源，派生物仍由原 `--write` 入口生成。`tests/contract/bff-account-profile-read-parent.ts` 只在测试链首证明完整28.18→28.17，再进入原 Custom API／后续父链；不提供运行时降级或第二 snapshot。当前验证见 `docs/CURRENT.md`，下方版本段均保留其历史语境。
+
 ## Project resource item consumer (candidate)
 
 `src/features/app/project-resource-row.tsx` / `project-resource-detail.tsx`负责资源行、fresh metadata和显式永久删除确认；`use-project-resource-actions.ts`持document-local原命令及actor/project/route fence，`use-project-resources.ts`持ACK后精确负事实与fresh列表。`project-resource-access.ts`仅走same-origin固定生成decoder；原生attachment仅报告started、无inlineHTML/SVG。固定契约与实际验证见本轮收据，不将候选称正常已生效。

@@ -23,7 +23,7 @@ AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户
 - Enter 发送 / Shift+Enter 换行；IME 合成期 Enter 只确认候选词不发送。
 - 首条消息后模式/模型/agent 锁定（`modeLocked`）：由 shell 传入，组件不自持锁态。
 
-- Send 的可见性只由运行态与非空 draft 决定；disabled 消费上游 engine admission，非空但暂不可提交时保留按钮与草稿，Stop 不受该判定阻断。
+- Send 的可见性只由运行态与非空 draft 决定；disabled 消费上游 engine admission，非空但暂不可提交时保留按钮与草稿，Stop 不受该判定阻断。 有活动 Run 时，按实际提交路径显示「添加到队列」「发送但不中断」或「打断并发送」。针对当前 Run 的操作只在其已开始且目标精确匹配时启用，不把 FIFO 称为插话。
 ## 显式技能选择
 
 `SelectedSkillPill` 仅显示 shell 传入的真实选择名称并提供键盘/触屏移除入口；不管理安装或 source 授权。清除只影响未来消息，不修改 engine 已冻结的未知提交。选择名不写入提示词充当能力身份。

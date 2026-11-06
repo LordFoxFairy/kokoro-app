@@ -121,6 +121,7 @@ export type SessionClient = {
     runId: string,
     body: RunControlBody,
     commandId: string,
+    scope?: SessionScope,
   ) => Promise<RunControlReceipt>
   // Conversation owner only confirms deletion with a strict 200 `deleted` receipt.
   deleteSession: (sessionId: string, scope: SessionScope, signal?: AbortSignal) => Promise<DeleteSessionReceipt>
@@ -414,6 +415,7 @@ async function postJson<T>(
   parse: (raw: unknown) => T,
   commandId?: string,
   signal?: AbortSignal,
+  requiredStatus?: number,
 ): Promise<T> {
   let response: Response
   const idempotencyKey = commandId?.trim() || `session-mutation:${crypto.randomUUID()}`
@@ -429,6 +431,9 @@ async function postJson<T>(
   }
   if (!response.ok) {
     throw await httpError("POST", url, response)
+  }
+  if (requiredStatus !== undefined && response.status !== requiredStatus) {
+    throw new SessionClientError("parse", "Unexpected mutation receipt status")
   }
   return parseJsonResponse(response, parse)
 }
@@ -608,8 +613,22 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
     createShare: (sessionId, signal) => shareMutation(url(sharePath(sessionId)), "POST", signal),
     revokeShare: (sessionId, signal) => shareMutation(url(sharePath(sessionId)), "DELETE", signal),
 
-    sendControl: (sessionId, runId, body, commandId) =>
-      postJson(url(controlPath(sessionId, runId)), body, (raw) => runControlReceiptSchema.parse(raw), commandId),
+    sendControl: (sessionId, runId, body, commandId, scope) => {
+      const path = controlPath(sessionId, runId)
+      if (body.kind !== "run.steer") {
+        return postJson(url(path), body, (raw) => runControlReceiptSchema.parse(raw), commandId)
+      }
+      const query = scope?.kind === "project"
+        ? new URLSearchParams({ project_ref: scope.projectRef })
+        : new URLSearchParams({ scope: "direct" })
+      return postJson(url(`${path}?${query}`), body, (raw) => {
+        const receipt = runControlReceiptSchema.parse(raw)
+        if (receipt.run_id !== runId || receipt.command_id !== commandId || receipt.message_id === undefined) {
+          throw new SessionClientError("parse", "Steer receipt does not match the submitted Run and command")
+        }
+        return receipt
+      }, commandId, undefined, 202)
+    },
 
     deleteSession: async (sessionId, scope, signal) => {
       const query = new URLSearchParams()

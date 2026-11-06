@@ -12,10 +12,12 @@ import { createPersistedStore } from "@/lib/persisted-store"
 // 无活跃会话（新建未落库）时的草稿键。
 const DRAFT_PENDING_KEY = "__pending__"
 const DRAFT_WRITE_DEBOUNCE_MS = 200
+const DRAFTS_STORAGE_KEY = "kokoro.web.drafts"
+const draftSchema = z.record(z.string(), z.string())
 
 const draftStore = createPersistedStore({
-  key: "kokoro.web.drafts",
-  schema: z.record(z.string(), z.string()),
+  key: DRAFTS_STORAGE_KEY,
+  schema: draftSchema,
 })
 
 function readDraft(key: string): string {
@@ -83,6 +85,7 @@ export type DraftController = {
   draft: string
   updateDraft: (value: string) => void
   clearDraft: () => void
+  restoreDraft: (value: string) => boolean
 }
 
 // A hook-local write capability over the existing cache marker, not identity.
@@ -197,5 +200,25 @@ export function useDraft(activeId: string | null, mounted: boolean, projectRef?:
     writeDraft(draftKey, "")
   }, [draftKey, mounted, actorAtRender.marker, actor, flushPendingWrite])
 
-  return { draft, updateDraft, clearDraft }
+  const restoreDraft = useCallback((value: string): boolean => {
+    if (!mounted || !actor.commit(actorAtRender.marker)) return false
+    const pending = pendingWriteRef.current?.key === draftKey ? pendingWriteRef.current : null
+    if ((draft && draft !== value) || (pending?.value && pending.value !== value)) return false
+    // Ordinary drafts may fall back to memory; retiring a request requires disk confirmation.
+    try {
+      const raw = window.localStorage.getItem(DRAFTS_STORAGE_KEY)
+      const all = raw === null ? {} : draftSchema.parse(JSON.parse(raw))
+      if (all[draftKey] && all[draftKey] !== value) return false
+      if (all[draftKey] !== value) {
+        const next = JSON.stringify({ ...all, [draftKey]: value })
+        window.localStorage.setItem(DRAFTS_STORAGE_KEY, next)
+        if (window.localStorage.getItem(DRAFTS_STORAGE_KEY) !== next) return false
+      }
+    } catch { return false }
+    if (pending !== null) { clearTimeout(pending.timer); pendingWriteRef.current = null }
+    setDraftEdit({ key: draftKey, value })
+    return true
+  }, [actor, actorAtRender.marker, draft, draftKey, mounted])
+
+  return { draft, updateDraft, clearDraft, restoreDraft }
 }

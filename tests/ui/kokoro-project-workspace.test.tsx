@@ -280,7 +280,8 @@ it("不可恢复的幂等冲突不提供同键重试，提示重新选择文件"
   expect(within(dialog).getByRole("list", { name: "文件和资源" })).not.toHaveTextContent("conflict.txt")
 })
 
-it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
+it("项目指令历史按 owner 当前标记选中同毫秒版本，并可切换历史正文", () => {
+  const timestamp = new Date("2026-08-29T10:31:00Z").getTime()
   const { container } = render(
     <LocaleProvider>
       <KokoroProjectWorkspace preview
@@ -289,8 +290,8 @@ it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
         onPrompt={vi.fn()}
         projectInstructions="当前规则"
         projectInstructionHistory={[
-          { id: "current", instruction: "当前规则", updatedAt: new Date("2026-08-29T10:31:00Z").getTime(), actorName: "Kokoro", current: true },
-          { id: "previous", instruction: "上一版规则", updatedAt: new Date("2026-08-28T09:15:00Z").getTime(), actorName: "Kokoro" },
+          { id: "previous", instruction: "上一版规则", updatedAt: timestamp, actorName: "Kokoro", current: false },
+          { id: "current", instruction: "当前规则", updatedAt: timestamp, actorName: "Kokoro", current: true },
         ]}
         workspaceCapabilities={capabilities}
       />
@@ -306,11 +307,18 @@ it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
   fireEvent.click(screen.getByRole("button", { name: "历史记录" }))
 
   const historyDialog = screen.getByRole("dialog", { name: "项目指令历史" })
-  expect(historyDialog).toHaveTextContent("当前版本")
+  expect(within(historyDialog).getAllByText("当前版本")).toHaveLength(1)
   expect(historyDialog).toHaveTextContent("当前规则")
+  expect(historyDialog).not.toHaveTextContent("上一版规则")
   const revisions = within(within(historyDialog).getByRole("list")).getAllByRole("button")
   expect(revisions).toHaveLength(2)
-  fireEvent.click(at(revisions, 1, "previous instruction revision"))
+  const previous = at(revisions, 0, "previous instruction revision")
+  const current = at(revisions, 1, "current instruction revision")
+  expect(previous).toHaveAttribute("aria-pressed", "false")
+  expect(current).toHaveAttribute("aria-pressed", "true")
+  expect(current).toHaveTextContent("当前版本")
+  fireEvent.click(previous)
+  expect(previous).toHaveAttribute("aria-pressed", "true")
   expect(historyDialog).toHaveTextContent("上一版规则")
 })
 
@@ -523,6 +531,29 @@ it("网站入口打开项目级选择弹窗而不是向 Composer 注入提示词
   expect(screen.getByRole("dialog", { name: "新增网站至当前项目" })).toBeInTheDocument()
   expect(screen.getByRole("textbox", { name: "搜索网站" })).toBeInTheDocument()
   expect(onPrompt).not.toHaveBeenCalled()
+})
+
+it("项目网站预览不会被正式能力开关开启，切换到正式工作区时也关闭已有预览", () => {
+  const workspace = (preview: boolean) => (
+    <LocaleProvider>
+      <KokoroProjectWorkspace preview={preview} brandName="Kokoro" composer={<div>composer</div>}
+        onPrompt={vi.fn()} workspaceCapabilities={capabilities} />
+    </LocaleProvider>
+  )
+  const { container, rerender } = render(workspace(false))
+
+  expect(container.querySelector('[data-context-kind="websites"]')).not.toBeInTheDocument()
+
+  rerender(workspace(true))
+  fireEvent.click(within(contextCard(container, "websites")).getByRole("button", { name: "新增" }))
+  const dialog = screen.getByRole("dialog", { name: "新增网站至当前项目" })
+  fireEvent.click(within(dialog).getByRole("button", { name: /Kokoro 产品网站/ }))
+  expect(within(dialog).getByRole("button", { name: "保存" })).toBeEnabled()
+
+  rerender(workspace(false))
+  expect(container.querySelector('[data-context-kind="websites"]')).not.toBeInTheDocument()
+  expect(screen.queryByRole("dialog", { name: "新增网站至当前项目" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument()
 })
 
 it("网站选择器可以搜索、选择并保存合成网站", async () => {

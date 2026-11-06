@@ -526,18 +526,8 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
     const method = init?.method ?? (input instanceof Request ? input.method : "GET")
     if (path === "/api/auth/session" && method === "GET") {
       return Response.json({
-        authenticated: true,
-        subject: "project-reader",
-        expires_at: Date.now() + 3_600_000,
+        data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" },
       })
-    }
-    if (path === "/api/auth/csrf" && method === "GET") {
-      return Response.json({ csrfToken: "a".repeat(64) })
-    }
-    if (path === "/api/auth/session" && method === "POST") {
-      expect(init?.headers).toEqual({ "content-type": "application/x-www-form-urlencoded" })
-      expect(init?.body?.toString()).toBe(`csrfToken=${"a".repeat(64)}`)
-      return Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 })
     }
     if (path === "/api/hub/projects" && method === "GET") {
       return Response.json({ data: { projects }, meta: { request_id: "req_project_read_r40" } })
@@ -563,10 +553,8 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
       (init?.method ?? (input instanceof Request ? input.method : "GET")) === method
   })
   expect(authRequests("/api/auth/session", "GET")).toHaveLength(1)
-  expect(authRequests("/api/auth/csrf", "GET")).toHaveLength(1)
-  expect(authRequests("/api/auth/session", "POST")).toHaveLength(1)
-  expect(authRequests("/api/auth/session", "POST")[0]?.[1]?.signal)
-    .toBe(authRequests("/api/auth/session", "GET")[0]?.[1]?.signal)
+  expect(authRequests("/api/auth/csrf", "GET")).toHaveLength(0)
+  expect(authRequests("/api/auth/session", "POST")).toHaveLength(0)
   expect(engineFactory).toHaveBeenCalledWith(expect.objectContaining({ preview: false }))
   fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
 
@@ -592,7 +580,7 @@ function projectReadEnvelope(projects = projectReadFixtures) {
 
 async function mountAuthenticatedProjectRail(
   read: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
-  readSession: () => Promise<Response> = async () => Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 }),
+  readSession: () => Promise<Response> = async () => Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } }),
 ) {
   const pageClients = await import("@/ui/shell/page-clients")
   const { AppGate } = await import("@/ui/auth/app-gate")
@@ -602,17 +590,14 @@ async function mountAuthenticatedProjectRail(
     const url = input instanceof Request ? input.url : String(input)
     const path = new URL(url, window.location.origin).pathname
     const method = init?.method ?? (input instanceof Request ? input.method : "GET")
-    // Recheck counters count readonly GETs, never the credential rotation POST.
+    // Native IAM admission is a readonly same-origin session read.
     if (path === "/api/auth/session" && method === "GET") return readSession()
-    if (path === "/api/auth/csrf" && method === "GET") {
-      return Response.json({ csrfToken: "a".repeat(64) })
-    }
-    if (path === "/api/auth/session" && method === "POST") {
-      expect(init?.headers).toEqual({ "content-type": "application/x-www-form-urlencoded" })
-      expect(init?.body?.toString()).toBe(`csrfToken=${"a".repeat(64)}`)
-      return Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 })
-    }
     if (path === "/api/hub/projects") return read(input, init)
+    if (path === "/api/hub/self/project-pins" && method === "GET") {
+      return Response.json({ data: { items: [], next_cursor: null } }, {
+        headers: { "cache-control": "private, no-store", "x-request-id": "req_project_rail_pins" },
+      })
+    }
     return Response.json({ error: { code: "unavailable" } }, { status: 503 })
   })
   const view = render(<ThemeProvider><LocaleProvider><AppGate brandName="站点品牌" /></LocaleProvider></ThemeProvider>)
@@ -620,6 +605,32 @@ async function mountAuthenticatedProjectRail(
   fireEvent.click(await screen.findByRole("button", { name: "展开侧栏" }), { detail: 0 })
   return { ...view, fetchMock }
 }
+
+it("当前账号重新打开项目侧栏时保留已确认的排序，并只展示 owner 当前项目", async () => {
+  const [alpha, beta] = projectReadFixtures
+  const removed = { ...alpha!, id: "project_read_removed", name: "待删除项目", slug: "removed" }
+  const created = { ...alpha!, id: "project_read_created", name: "新项目", slug: "created" }
+  const order = () => Array.from(document.querySelectorAll("[data-project-list] [data-project-id]"),
+    row => row.getAttribute("data-project-id"))
+  let ownerProjects = [alpha!, beta!, removed]
+  const read = async () => projectReadEnvelope(ownerProjects)
+  const first = await mountAuthenticatedProjectRail(read)
+  const source = await screen.findByRole("button", { name: alpha!.name })
+  expect(order()).toEqual([alpha!.id, beta!.id, removed.id])
+
+  source.focus()
+  fireEvent.keyDown(source, { key: " " })
+  fireEvent.keyDown(source, { key: "ArrowDown" })
+  fireEvent.keyDown(source, { key: " " })
+  expect(order()).toEqual([beta!.id, alpha!.id, removed.id])
+
+  first.unmount()
+  document.cookie = "sidebar_state=; Max-Age=0; path=/"
+  ownerProjects = [alpha!, beta!, created]
+  await mountAuthenticatedProjectRail(read)
+  await screen.findByRole("button", { name: created.name })
+  expect(order()).toEqual([beta!.id, alpha!.id, created.id])
+})
 
 it.each(["401", "bad-shape"])("身份重新准入后列表返回 %s，清旧项目且不伪装为空集合", async (failure) => {
   let calls = 0
@@ -669,7 +680,7 @@ it("同账号焦点核验保留项目、会话和草稿，不重新请求业务�
   await mountAuthenticatedProjectRail(async () => { projectReads++; return projectReadEnvelope() }, async () => {
     checks++
     if (checks === 2) return new Promise<Response>((resolve) => { finishCheck = resolve })
-    return Response.json({ authenticated: true, subject: "project-reader" })
+    return Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })
   })
   const projectLink = await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   const conversation = await screen.findByRole("button", { name: "保留的会话" })
@@ -689,7 +700,7 @@ it("同账号焦点核验保留项目、会话和草稿，不重新请求业务�
   expect(screen.queryByTestId("conversations-loading")).not.toBeInTheDocument()
   expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
   expect(composer).toHaveValue("核验期间保留的草稿")
-  await act(async () => { finishCheck(Response.json({ authenticated: true, subject: "project-reader" })) })
+  await act(async () => { finishCheck(Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })) })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   expect(projectReads).toBe(1)
   expect(sessionReads).toHaveBeenCalledTimes(sessionReadCount)
@@ -713,7 +724,7 @@ it("身份标记退休后清空并取消旧读取，迟到响应不能复活项�
   }, async () => {
     checks++
     if (checks === 3) return new Promise<Response>((resolve) => { resolveSession = resolve })
-    return Response.json({ authenticated: true, subject: "project-reader" })
+    return Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })
   })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   const composer = screen.getByRole("textbox", { name: "对话输入" })
@@ -728,7 +739,7 @@ it("身份标记退休后清空并取消旧读取，迟到响应不能复活项�
   expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
   await act(async () => { resolveOld(projectReadEnvelope()); await Promise.resolve() })
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
-  await act(async () => { resolveSession(Response.json({ authenticated: true, subject: "project-reader" })) })
+  await act(async () => { resolveSession(Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })) })
   await screen.findByRole("link", { name: "新对话 · 研究项目乙" })
   expect(calls).toBe(3)
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
@@ -810,7 +821,7 @@ it("健康正式列表在 session 401 服务异常后撤销，但保留 Chat 且
   let checks = 0
   await mountAuthenticatedProjectRail(async () => { reads++; return projectReadEnvelope() }, async () => {
     checks++
-    return checks === 1 ? Response.json({ authenticated: true, subject: "project-reader" }) : Response.json({ authenticated: false }, { status: 401 })
+    return checks === 1 ? Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } }) : Response.json({ authenticated: false }, { status: 401 })
   })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   act(() => window.dispatchEvent(new Event("focus")))
@@ -1721,7 +1732,7 @@ it.each(["unknown", "active"] as const)("project overview Send visibly disables 
     if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
     if (state === "active") await waitFor(() => expect(projectClient.streams).toHaveLength(1))
     fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "root cannot reset this task" } })
-    expect(screen.getByRole("button", { name: /发送消息|发送插话/ })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /发送消息|添加到队列/ })).toBeDisabled()
     expect(projectClient.createCalls).toHaveLength(1)
     expect(projectEngine.getSnapshot().store?.activeId).toBe(convB)
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }

@@ -31,6 +31,7 @@ import { WorkspaceRailAccount } from "./workspace-rail-account"
 import { WorkspaceRailHeader, WorkspaceRailNavigation } from "./workspace-rail-navigation"
 import { ConversationGroup, ScopedConversationGroup } from "./workspace-rail-session-list"
 import type { WorkspaceRailProps } from "./workspace-rail-types"
+import { useProjectRailOrder } from "./workspace-rail-project-order"
 import { itemStyles, railStyles } from "./workspace-rail-styles"
 
 const RAIL_WIDTH_TRANSITION_MS = 200
@@ -156,9 +157,18 @@ export function WorkspaceRailShell({
       ]
     : []
 
+  const projectOrder = useProjectRailOrder(readBoundary, !preview && projectListStatus === "ready")
+  // Fix only owner-confirmed pins. Pin read errors/pagination do not own
+  // the ordinary list; a later pin fact overrides its local presentation.
+  const pinnedProjectIds = new Set(projectPins?.pinned.map((pin) => pin.project_id))
+  const projectScopeKey = !preview && readBoundary !== undefined && projectOrder === null
+    ? null
+    : projectOrder?.scopeKey ?? "standalone"
+  const commitProjectOrder = projectOrder?.write ?? onReorderProjects
   const conversationScopeKey = projectActive ? `project:${projectHref ?? "active"}` : "direct"
   const {
     orderedProjects,
+    canDragProject,
     dragProps,
     dragState,
     dragOverKey,
@@ -166,7 +176,10 @@ export function WorkspaceRailShell({
     projectItems,
     conversations: [],
     conversationScopeKey,
-    ...(onReorderProjects === undefined ? {} : { onReorderProjects }),
+    projectScopeKey,
+    pinnedProjectIds,
+    ...(projectOrder === null ? {} : { savedProjectOrder: projectOrder.saved }),
+    ...(commitProjectOrder === undefined ? {} : { onReorderProjects: commitProjectOrder }),
     ...(onReorderConversations === undefined ? {} : { onReorderConversations }),
   })
 
@@ -421,6 +434,7 @@ export function WorkspaceRailShell({
             conversationMoveFailed={conversationMoveFailed}
             {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
             {...(conversationReads === undefined ? {} : { conversationReads })}
+            canDragProject={canDragProject}
             dragProps={dragProps}
             dragState={dragState}
             dragOverKey={dragOverKey}

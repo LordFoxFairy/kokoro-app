@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createBrowserSubmissionRecovery, SUBMISSION_RECOVERY_PREFIX } from "@/ui/shell/browser-submission-recovery"
 import { createSessionEngine } from "@/engine/machine"
-import type { PendingSubmission } from "@/engine/submission-recovery"
+import type { PendingSubmission, SteerSubmission } from "@/engine/submission-recovery"
 import { addConversation, type ConversationStore } from "@/core/conversations"
 import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
 import { SessionClientError } from "@/engine/client"
@@ -18,6 +18,27 @@ beforeEach(() => window.sessionStorage.clear())
 afterEach(() => vi.restoreAllMocks())
 
 describe("tab-owned pending request journal", () => {
+  it("uses the existing slot for a scoped steer and drops its text once the exact ACK is known", () => {
+    const steer: SteerSubmission = { kind: "steer", sessionId: intent.sessionId, runId: "original-run",
+      idempotencyKey: "steer-key", clientMessageId: "original-client-id", content: "frozen supplement" }
+    const journal = recovery("alice", "project-one")
+    expect(journal.save(steer)).toBe(true)
+    expect(window.sessionStorage.length).toBe(1)
+    expect(journal.save(intent)).toBe(false)
+    expect(journal.save({ ...steer, runId: "another-run" })).toBe(false)
+    expect(recovery("alice", "project-one").read(steer.sessionId)?.submission).toEqual(steer)
+    const key = window.sessionStorage.key(0)!
+    window.sessionStorage.setItem(`${SUBMISSION_RECOVERY_PREFIX}alice:direct:${steer.sessionId}`, window.sessionStorage.getItem(key)!)
+    expect(() => recovery().read(steer.sessionId)).toThrow(/scope/)
+    const ownerReceipt = { run_id: steer.runId, command_id: steer.idempotencyKey, message_id: "canonical-message",
+      request_digest: "sha256:owner", status: "pending", replayed: false } as const
+    expect(journal.acknowledge(steer, { ...ownerReceipt, run_id: "another-run" })).toBe(false)
+    expect(journal.acknowledge(steer, ownerReceipt)).toBe(true)
+    expect(journal.read(steer.sessionId)).toBeNull()
+    expect(journal.acknowledged(steer)).toEqual(ownerReceipt)
+    expect(window.sessionStorage.getItem(key)).not.toContain(steer.content)
+  })
+
   it("roundtrips the same wire identity and undefined project-default Skill selection", () => {
     expect(recovery().save(intent)).toBe(true)
     expect(recovery().read(intent.sessionId)).toEqual({ submission: intent, failureCode: null })
@@ -87,6 +108,72 @@ describe("tab-owned pending request journal", () => {
 })
 
 describe("real browser journal with engine reconstruction", () => {
+  it("leaves the original Run and unknown steer intact, then restores draft only on an exact owner 409", async () => {
+    const sessionId = "existing-conversation"
+    const runId = "already-started"
+    const storage = createMemoryStorage(addConversation(null, sessionId, 1))
+    const journal = recovery()
+    const client = createFakeClient()
+    client.nextSnapshot = async () => makeSnapshot({ sessionId, activeRun: { run_id: runId, status: "running" } })
+    let loseAcknowledgement!: () => void
+    client.nextControl = () => new Promise((_, reject) => { loseAcknowledgement = () => reject(Error("lost ACK")) })
+    const engine = createSessionEngine({ client, storage, submissionRecovery: journal })
+    await settle()
+    expect(engine.submit("text survives leaving", { steerRunId: runId })).toBe(true)
+    const original = client.controlCalls[0]
+    expect(original).toMatchObject({ sessionId, runId, body: { kind: "run.steer" } })
+    engine.newConversation()
+    loseAcknowledgement()
+    await settle()
+    expect(client.controlCalls).toEqual([original])
+    expect(journal.read(sessionId)?.submission.content).toBe("text survives leaving")
+    engine.dispose()
+
+    const reopened = createFakeClient()
+    reopened.nextSnapshot = async id => makeSnapshot({ sessionId: id, activeRun: { run_id: "newer-head", status: "running" } })
+    reopened.nextControl = async () => { throw new SessionClientError("http", "stale target", "run_control_conflict", 409) }
+    const restored = createSessionEngine({ client: reopened, storage, submissionRecovery: recovery() })
+    try {
+      restored.openConversation(sessionId)
+      await settle()
+      expect(reopened.controlCalls).toEqual([])
+      expect(restored.getSnapshot().canRetryPendingSubmission).toBe(true)
+      restored.retry()
+      await settle()
+      expect(reopened.controlCalls).toEqual([original])
+      expect(restored.getSnapshot()).toMatchObject({ canRetryPendingSubmission: false, canRestoreRejectedDelivery: true })
+      const drafts: string[] = []
+      expect(restored.restoreRejectedDelivery?.(text => { drafts.push(text); return true })).toBe(true)
+      expect(drafts).toEqual(["text survives leaving"])
+      expect(restored.getSnapshot().machine.runId).toBe("newer-head")
+      expect(reopened.createCalls).toEqual([])
+    } finally { restored.dispose() }
+  })
+
+  it("a late steer ACK retires only its old slot and never cancels or changes the new view", async () => {
+    const sessionId = "old-conversation"
+    const runId = "old-active-run"
+    const client = createFakeClient()
+    client.nextSnapshot = async () => makeSnapshot({ sessionId, activeRun: { run_id: runId, status: "running" } })
+    let acknowledge!: (receipt: Awaited<ReturnType<typeof client.nextControl>>) => void
+    client.nextControl = () => new Promise(resolve => { acknowledge = resolve })
+    const journal = recovery()
+    const engine = createSessionEngine({ client, submissionRecovery: journal, storage: createMemoryStorage(addConversation(null, sessionId, 1)) })
+    try {
+      await settle()
+      expect(engine.submit("late supplement", { steerRunId: runId })).toBe(true)
+      const original = client.controlCalls[0]!
+      engine.newConversation()
+      acknowledge({ run_id: runId, command_id: original.commandId, message_id: "canonical-late",
+        status: "pending", request_digest: "sha256:owner", replayed: false })
+      await settle()
+      expect(journal.read(sessionId)).toBeNull()
+      expect(client.controlCalls).toEqual([original])
+      expect(engine.getSnapshot().store?.activeId).not.toBe(sessionId)
+      expect(engine.getSnapshot().thread.messages).toEqual([])
+    } finally { engine.dispose() }
+  })
+
   it("retains an unknown POST on reload, GETs first and manually retries only the original request", async () => {
     const storage = createMemoryStorage<ConversationStore>()
     const client = createFakeClient()
@@ -331,31 +418,40 @@ it("a deferred exact failed assistant ACK without run_id never revives its settl
   engine.dispose()
 })
 
-it.each([false, true])("cancellation survives one failed duplicate attempt while another exact request awaits ACK (New first=%s)", async newFirst => {
+it.each([false, true])("New cancels one late exact ACK after navigation (explicit retry=%s)", async retryAfterFailure => {
   const storage = createMemoryStorage<ConversationStore>()
   const client = createFakeClient()
-  let rejectFirst: ((error: Error) => void) | undefined
-  let acceptSecond: ((value: typeof receipt) => void) | undefined
-  let attempts = 0
-  client.nextCreate = () => ++attempts === 1
-    ? new Promise((_resolve, reject) => { rejectFirst = reject })
-    : new Promise(resolve => { acceptSecond = resolve })
+  let finish!: (value: typeof receipt) => void
+  let fail!: (error: Error) => void
+  client.nextCreate = () => new Promise((resolve, reject) => { finish = resolve; fail = reject })
   const engine = createSessionEngine({ client, storage, submissionRecovery: recovery() })
-  engine.newConversation(); engine.submit("original text")
-  const id = engine.getSnapshot().store?.activeId
-  if (!id) throw new Error("missing id")
-  engine.openConversation("conv_other"); await settle()
-  engine.openConversation(id); await settle()
-  engine.retry()
-  expect(client.createCalls).toHaveLength(2)
-  if (newFirst) engine.newConversation()
-  rejectFirst?.(new Error("unknown outcome")); await settle()
-  if (!newFirst) engine.newConversation()
-  acceptSecond?.(receipt); await settle()
-  expect(client.controlCalls).toHaveLength(1)
-  expect(client.controlCalls[0]?.sessionId).toBe(id)
-  expect(client.controlCalls[0]?.runId).toBe(receipt.run_id)
-  engine.dispose()
+  try {
+    engine.newConversation()
+    expect(engine.submit("original text")).toBe(true)
+    const id = engine.getSnapshot().store?.activeId
+    if (!id) throw new Error("missing id")
+    engine.openConversation("conv_other")
+    await settle()
+    engine.openConversation(id)
+    await settle()
+    engine.retry()
+    expect(client.createCalls).toHaveLength(1) // Re-entry does not race its existing POST.
+    if (retryAfterFailure) {
+      fail(new Error("unknown outcome"))
+      await settle()
+      expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+      engine.retry()
+      expect(client.createCalls).toHaveLength(2)
+      expect(client.createCalls[1]).toEqual(client.createCalls[0])
+    }
+    engine.newConversation()
+    finish(receipt)
+    await settle()
+    expect(client.controlCalls).toHaveLength(1)
+    expect(client.controlCalls[0]?.sessionId).toBe(id)
+    expect(client.controlCalls[0]?.runId).toBe(receipt.run_id)
+    expect(engine.getSnapshot().thread.messages).toEqual([])
+  } finally { engine.dispose() }
 })
 
 it("an exact journal receipt learned from another engine is reconciled by GET rather than POST", async () => {
@@ -375,7 +471,7 @@ it("an exact journal receipt learned from another engine is reconciled by GET ra
 
 it("reloads the original safe API version and key without sending or adopting a newer draft selection", async () => {
   const journal = recovery()
-  const original: PendingSubmission = { ...intent, options: { ...intent.options, selectedCustomApiProfiles: [{ profileId: "api:selected", expectedStateVersion: "7" }] } }
+  const original: PendingSubmission = { ...intent, options: { ...intent.options, interruptRunId: "run_original", selectedCustomApiProfiles: [{ profileId: "api:selected", expectedStateVersion: "7" }] } }
   expect(journal.save(original)).toBe(true)
   const raw = window.sessionStorage.getItem(window.sessionStorage.key(0)!)!
   expect(JSON.parse(raw).request.selected_custom_api_profiles).toEqual([{ profile_id: "api:selected", expected_state_version: 7 }])
@@ -391,6 +487,6 @@ it("reloads the original safe API version and key without sending or adopting a 
   expect(client.createCalls).toEqual([])
   restored.setSelectedCustomApiProfiles!([{ profileId: "api:later", expectedStateVersion: "8" }])
   restored.retry(); await settle()
-  expect(client.createCalls[0]?.body).toMatchObject({ idempotency_key: original.idempotencyKey, selected_custom_api_profiles: [{ profile_id: "api:selected", expected_state_version: 7 }], selected_mcp_connection_ids: ["connection-one"] })
+  expect(client.createCalls[0]?.body).toMatchObject({ idempotency_key: original.idempotencyKey, interrupt_run_id: "run_original", selected_custom_api_profiles: [{ profile_id: "api:selected", expected_state_version: 7 }], selected_mcp_connection_ids: ["connection-one"] })
   restored.dispose()
 })

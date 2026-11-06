@@ -15,6 +15,7 @@ import type { SessionScope } from "./session-scope"
 import type { SubmissionRecovery } from "./submission-recovery"
 import type { TaskNotification } from "./task-notification"
 import type { ToolDecision } from "./hitl-staging"
+import type { SelectedResourceRef } from "@/contract/chat"
 import type { MessagePartsReadRecheck } from "./message-parts-reader"
 
 export type NoticeSpec = {
@@ -42,12 +43,16 @@ export type EngineSnapshot = {
   mcpSelectionRestore?: McpSelectionRestore
   // Transient current-conversation draft intent, absent only in injected view-only engines.
   selectedMcpConnectionIds?: readonly string[]
+  // Transient opaque owner references selected for the next message.
+  selectedResourceRefs?: readonly SelectedResourceRef[]
   // In-memory current-view creation provenance, never persisted or inferred from cache.
   locallyCreatedSessionId?: string
   // Positive owner snapshot/create ACK for this view, never inferred from optimistic text.
   ownerConfirmedSessionId?: string
   // Last authoritative absent snapshot for this active view; never persisted.
   missingSessionId?: string
+  // Previous active conversation removed from this view's scoped index; never persisted.
+  removedConversationId?: string
   machine: MachineState
   // 瞬态通知（如插话投递失败）：下一次提交时清空；与相位错误（machine.error）分离。
   notice: NoticeSpec | null
@@ -67,14 +72,25 @@ export type EngineSnapshot = {
   // 当前失败是否仍有未获 create receipt 的同会话冻结意图可按原 key/body 恢复。
   canRetryResume: boolean
   canRetryPendingSubmission: boolean
-  // Same-document scope leases retain the exact create intent until its receipt settles.
+  // This admission failure is independent of the current Run and its controls.
+  pendingSubmissionFailureCode?: string
+  canRestoreRejectedDelivery?: boolean
+  // Same-document scope leases retain the exact delivery intent until its receipt settles.
   hasPendingSubmission?: boolean
 }
 
 const EMPTY_THREAD: SessionStreamState = createSessionStreamState()
 
+/** A queued receipt is not proof that the owner started the Run. */
+export function interruptibleRunId({ machine, thread }: Pick<EngineSnapshot, "machine" | "thread">): string | null {
+  const head = thread.executionHead
+  if (head === null || head.run_id !== machine.runId || head.state === "queued") return null
+  return machine.phase === "streaming" || machine.phase === "waiting" || machine.phase === "resuming" ? head.run_id : null
+}
+
 export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   selectedMcpConnectionIds: Object.freeze([]),
+  selectedResourceRefs: Object.freeze([]),
   selectedCustomApiProfiles: Object.freeze([]),
   machine: IDLE_MACHINE,
   notice: null,
@@ -93,6 +109,11 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
 /** A mounted route may read ordered bodies only for this exact conversation and scope. */
 export type MessagePartsReadTarget = Readonly<{ scope: SessionScope; conversationId: string }>
 
+export type SubmitDelivery = Readonly<
+  { interruptRunId: string; steerRunId?: never } |
+  { steerRunId: string; interruptRunId?: never }
+>
+
 export type SessionEngine = {
   getSnapshot: () => EngineSnapshot
   subscribe: (listener: () => void) => () => void
@@ -101,8 +122,10 @@ export type SessionEngine = {
   subscribeTaskNotifications?: (listener: (signal: TaskNotification) => void) => () => void
   // true only when this call synchronously accepted the intent into the local
   // submission lifecycle. Callers must retain drafts and route intent on false.
-  submit: (content: string) => boolean
-  // 仅恢复未获 create receipt 的冻结提交；owner terminal 不经本入口重发。
+  submit: (content: string, delivery?: SubmitDelivery) => boolean
+  /** The original request was rejected before any owner write; keep its text before clearing the journal. */
+  restoreRejectedDelivery?: (saveDraft: (content: string) => boolean) => boolean
+  // 仅恢复未获回执的冻结提交；owner terminal 不经本入口重发。
   retryResume: () => void
   retry: () => void
   // 连接 hard failure 的只读恢复：重新 snapshot-first，不重发 user/message。
@@ -117,7 +140,11 @@ export type SessionEngine = {
   selectConversation: (id: string) => void
   // 打开服务端清单里的会话（本地索引未见则先纳入缓存再水合）。
   openConversation: (id: string) => void
+  /** Retire the exact view removal after the browser has moved on. */
+  acknowledgeConversationRemoval: (id: string) => void
   retireLocalCreationProvenance: () => void
+  /** Navigate to a local direct draft without cancelling or abandoning the previous task. */
+  returnToLocalHome: () => void
   newConversation: () => void
   deleteConversation: (id: string) => Promise<boolean>
   /** Remove one confirmed-nonmember Conversation from this scope's browser index only. */
@@ -125,6 +152,8 @@ export type SessionEngine = {
   setMode: (mode: AgentMode) => void
   // 当前会话的 exact Skill source refs；只在内存中保存，提交时冻结进 typed wire。
   setSelectedSkillSourceRefs: (sourceRefs: readonly string[] | undefined) => void
+  /** Optional for injected view-only engines; canonical browser engines provide this transient selection port. */
+  setSelectedResourceRefs?: (refs: readonly SelectedResourceRef[]) => void
   setSelectedCustomApiProfiles?: (profiles: readonly CustomApiSelection[]) => void
   restoreCustomApiSelection?: (candidate: CustomApiSelectionRestore, eligibleProfiles: readonly CustomApiSelection[]) => void
   setSelectedMcpConnectionIds: (connectionIds: readonly string[]) => void

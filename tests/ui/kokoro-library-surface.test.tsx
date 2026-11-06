@@ -504,6 +504,28 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
+it("个人文件搜索和类型筛选使用可恢复的 URL 状态", async () => {
+  const fileTwo = { ...fileOne, asset_id: "asset-personal-2", filename: "图片.png", mime_type: "image/png" }
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(filePage([fileOne, fileTwo])), { status: 200 })))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+
+  await screen.findByText("私人备忘.pdf")
+  const query = screen.getByRole("textbox", { name: "搜索文件" })
+  fireEvent.change(query, { target: { value: "图片" } })
+  expect(screen.queryByText("私人备忘.pdf")).not.toBeInTheDocument()
+  expect(screen.getByText("图片.png")).toBeInTheDocument()
+  expect(window.location.search).toContain("file_q=%E5%9B%BE%E7%89%87")
+
+  const filter = screen.getByRole("combobox", { name: "筛选作品类型" })
+  fireEvent.change(filter, { target: { value: "images" } })
+  expect(window.location.search).toContain("file_type=images")
+
+  cleanup()
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByText("图片.png")
+  expect(screen.queryByText("私人备忘.pdf")).not.toBeInTheDocument()
+})
+
 type LibraryProps = React.ComponentProps<typeof KokoroLibrarySurface>
 
 type LibraryRenderProps = Omit<Partial<LibraryProps>, "fixtureArtifacts"> & {

@@ -3,11 +3,11 @@ import type { ConversationStore } from "@/core/conversations"
 import { addConversation } from "@/core/conversations"
 import { createSessionEngine } from "@/engine/machine"
 import { SessionClientError } from "@/engine/client"
-import type { PendingSubmission, SubmissionRecovery } from "@/engine/submission-recovery"
+import type { CreateSubmission, SubmissionRecovery } from "@/engine/submission-recovery"
 import { createFakeClient, createMemoryStorage, makeReceipt, settle } from "./fakes"
 it("freezes independent safe API references in the original pending attempt while later draft choices change", async () => {
-  const saved: PendingSubmission[] = []
-  const recovery: SubmissionRecovery = { read: () => null, save: value => { saved.push(value); return true }, failure: () => undefined, acknowledged: () => null, acknowledge: () => true, abandon: () => true }
+  const saved: CreateSubmission[] = []
+  const recovery: SubmissionRecovery = { read: () => null, save: value => { if (value.kind === "steer") return false; saved.push(value); return true }, failure: () => undefined, acknowledged: () => null, acknowledge: () => true, abandon: () => true }
   const client = createFakeClient(), engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null), submissionRecovery: recovery })
   const choices = [{ profileId: "profile:a", expectedStateVersion: "7" }]
   engine.setSelectedCustomApiProfiles!(choices)

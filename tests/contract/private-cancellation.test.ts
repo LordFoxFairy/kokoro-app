@@ -9,7 +9,8 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 it("uses the formal private cancelled literal while restoring the complete unchanged28.8 parent", () => {
   expect(generated).toHaveProperty("BFF_PRIVATE_CANCELLED_STATUS", "cancelled")
   expect(hash(restorePublic288CancelledMessageContract(source))).toBe("6376e2d2a5fa9efd8e6ce4d9d4aa3686ad73dda8babffd9ac5b7097073538498")
-  for (const changed of [source + "\n", source.replace("version: 28.17.0", "version: 28.18.0"), source.replace("getProjectSkillInstallationPackage", "otherMethod"), source.replace("terminal_status: { type: string, const: cancelled }", "terminal_status: { type: string }")]) {
+  for (const changed of [source + "\n", source.replace("  version: 28.22.0\n", "  version: 28.23.0\n"), source.replace("getProjectSkillInstallationPackage", "otherMethod"), source.replace("terminal_status: { type: string, const: cancelled }", "terminal_status: { type: string }")]) {
+    expect(changed).not.toBe(source)
     expect(() => restorePublic288CancelledMessageContract(changed)).toThrow(/drift/)
   }
 })

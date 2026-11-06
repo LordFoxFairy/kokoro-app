@@ -38,6 +38,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     id: message.message_id,
     role: message.role,
     content: message.content ?? "",
+    ...(message.role === "user" && (message.status === "pending" || message.status === "failed") ? { deliveryStatus: message.status } : {}),
     ...(message.role === "assistant" && !("rendering" in message) && message.status === "completed" ? { textState: "completed" as const } : {}),
     ...("rendering" in message ? { orderedContainer: true } : {}),
     runId: message.run_id ?? message.message_id,

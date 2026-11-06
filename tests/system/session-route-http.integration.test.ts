@@ -1,13 +1,9 @@
 import { createServer, type IncomingHttpHeaders, type RequestListener, type Server } from "node:http"
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-vi.mock("@/lib/server/product-session", () => ({
-  currentProductSession: vi.fn(async () => ({
-    access: "product-access",
-    accessExpiresAt: Date.now() + 60_000,
-  })),
-}))
+
+
 
 import { GET, POST } from "@/app/api/session/[...path]/route"
 import { GET as hubGet, PUT as hubPut } from "@/app/api/hub/[...path]/route"
@@ -30,7 +26,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
   let bff: RunningServer
   let receivedDomain = ""
   let receivedHost = ""
-  let receivedAuthorization = ""
+  let receivedCookie = ""
   let receivedHeaders: IncomingHttpHeaders = {}
   let receivedBody = ""
   let receivedPath = ""
@@ -42,7 +38,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
       receivedHeaders = request.headers
       receivedHost = request.headers.host?.toString() ?? ""
       receivedDomain = request.headers.forwarded?.toString() ?? ""
-      receivedAuthorization = request.headers.authorization?.toString() ?? ""
+      receivedCookie = request.headers.cookie?.toString() ?? ""
       const chunks: Buffer[] = []
       request.on("data", (chunk: Buffer) => chunks.push(chunk))
       request.on("end", () => {
@@ -81,11 +77,11 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
   })
 
   it("preserves the chat business filter through the real same-origin HTTP adapter", async () => {
-    const response = await GET(new Request("https://first.example/api/session/models?feature_key=chat"), { params: Promise.resolve({ path: ["models"] }) })
+    const response = await GET(new Request("https://first.example/api/session/models?feature_key=chat", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), { params: Promise.resolve({ path: ["models"] }) })
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ models: [], next_cursor: null })
     expect(receivedPath).toBe("/v1/models?feature_key=chat")
-    expect(receivedAuthorization).toBe("Bearer product-access")
+    expect(receivedCookie).toBe("kokoro-issuer.session_token=fixture")
     expect(receivedHeaders["x-kokoro-tenant-id"]).toBeUndefined()
   })
 
@@ -93,7 +89,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
     const response = await POST(
       new Request("https://first.example/api/session/run", {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           host: "first.example",
           origin: "https://first.example",
           "content-type": "application/json",
@@ -108,13 +104,13 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
     expect(await response.text()).toContain("chat-ok")
     expect(receivedDomain).toBe("host=dev.kokoro.localhost")
     expect(receivedHost).not.toBe("first.example")
-    expect(receivedAuthorization).toBe("Bearer product-access")
+    expect(receivedCookie).toBe("kokoro-issuer.session_token=fixture")
   })
 
   it("sends canonical MessageCreateRequest bytes with header-only idempotency and trusted identity", async () => {
     const response = await POST(new Request("https://first.example/api/session/sessions/ses_1/messages", {
       method: "POST",
-      headers: {
+      headers: {cookie: "kokoro-issuer.session_token=fixture",
         host: "first.example", origin: "https://first.example", "content-type": "application/json",
         "idempotency-key": "stable-message-1", authorization: "Bearer forged",
         "x-kokoro-tenant-id": "forged-tenant", "x-kokoro-principal-id": "forged-user",
@@ -126,14 +122,14 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
     expect(response.status).toBe(200)
     expect(receivedBody).toBe('{"content":"hello","model":"model_1"}')
     expect(receivedHeaders["idempotency-key"]).toBe("stable-message-1")
-    expect(receivedAuthorization).toBe("Bearer product-access")
+    expect(receivedCookie).toBe("kokoro-issuer.session_token=fixture")
     expect(receivedHeaders["x-kokoro-service"]).toBe("web-bff")
     expect(receivedHeaders["x-kokoro-tenant-id"]).toBeUndefined()
     expect(receivedHeaders["x-kokoro-principal-id"]).toBeUndefined()
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     for (const selection of [[],["skill:revision_a"]]) {
       const body={content:"hello",project_ref:"project_a",selected_skill_source_refs:selection}
-      const selected=await POST(new Request("https://first.example/api/session/sessions/ses_1/messages",{method:"POST",headers:{origin:"https://first.example","content-type":"application/json","idempotency-key":"explicit-selection"},body:JSON.stringify(body)}),{params:Promise.resolve({path:["sessions","ses_1","messages"]})})
+      const selected=await POST(new Request("https://first.example/api/session/sessions/ses_1/messages",{method:"POST",headers:{cookie: "kokoro-issuer.session_token=fixture", origin:"https://first.example","content-type":"application/json","idempotency-key":"explicit-selection"},body:JSON.stringify(body)}),{params:Promise.resolve({path:["sessions","ses_1","messages"]})})
       expect(selected.status).toBe(200)
       await selected.text()
       expect(JSON.parse(receivedBody)).toEqual(body)
@@ -147,7 +143,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
     const read = await hubGet(new Request(url), context);
     expect(read.status).toBe(200);
     expect(await read.json()).toEqual({ data: { project_id: projectId, installation_ids: ["i1"] } });
-    const response = await hubPut(new Request(url, { method: "PUT", headers: {
+    const response = await hubPut(new Request(url, { method: "PUT", headers: {cookie: "kokoro-issuer.session_token=fixture",
       origin: "https://first.example", "content-type": "application/json", "idempotency-key": "original-project-defaults",
       authorization: "Bearer forged", "x-kokoro-subject": "forged-user", "x-kokoro-tenant-id": "forged-tenant",
     }, body: '{"installation_ids":["i2","i1"]}' }), context);
@@ -156,7 +152,7 @@ describe("Product BFF adapters against a local HTTP contract fixture", () => {
     expect(receivedPath).toBe(`/v1/projects/${projectId}/skill-selection`);
     expect(receivedBody).toBe('{"installation_ids":["i2","i1"]}');
     expect(receivedHeaders["idempotency-key"]).toBe("original-project-defaults");
-    expect(receivedAuthorization).toBe("Bearer product-access");
+    expect(receivedCookie).toBe("kokoro-issuer.session_token=fixture");
     expect(receivedDomain).toBe("host=dev.kokoro.localhost");
     expect(receivedHeaders["x-kokoro-service"]).toBe("web-bff");
     expect(receivedHeaders["x-kokoro-subject"]).toBeUndefined();

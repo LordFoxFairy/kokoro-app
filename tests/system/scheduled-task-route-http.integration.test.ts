@@ -1,13 +1,9 @@
 import { createServer, type RequestListener, type Server } from "node:http"
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-vi.mock("@/lib/server/product-session", () => ({
-  currentProductSession: vi.fn(async () => ({
-    access: "product-access",
-    accessExpiresAt: Date.now() + 60_000,
-  })),
-}))
+
+
 
 import { GET } from "@/app/api/scheduled-tasks/[[...path]]/route"
 
@@ -68,7 +64,7 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
   it("forwards the typed collection path and sealed identity without using browser host", async () => {
     const response = await GET(
       new Request("https://first.example/api/scheduled-tasks", {
-        headers: { host: "first.example" },
+        headers: {cookie: "kokoro-issuer.session_token=fixture",  host: "first.example" },
       }),
       { params: Promise.resolve({ path: [] }) },
     )
@@ -84,7 +80,7 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
     publicError = true
     try {
       const response = await GET(
-        new Request("https://first.example/api/scheduled-tasks", { headers: { host: "first.example" } }),
+        new Request("https://first.example/api/scheduled-tasks", { headers: {cookie: "kokoro-issuer.session_token=fixture",  host: "first.example" } }),
         { params: Promise.resolve({ path: [] }) },
       )
       expect(response.status).toBe(403)

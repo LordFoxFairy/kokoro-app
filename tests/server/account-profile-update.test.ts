@@ -1,24 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const { currentProductSession, requestWithDomain } = vi.hoisted(() => ({
-  currentProductSession: vi.fn(),
+const { requestWithDomain } = vi.hoisted(() => ({
   requestWithDomain: vi.fn(),
 }));
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
-vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }));
-vi.mock("@/lib/server/oidc-bff-agent", () => ({
-  boundedOidcBffAgent: vi.fn(),
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/product-bff")>()),
 }));
+vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }));
 import { PATCH } from "@/app/api/account/profile/route";
 const name = "New Alice";
 const input = { name, expected_name: "\ud800\u0000 Old " };
-let session: {
-  id: string;
-  generation: number;
-  subject: string;
-  access: string;
-  accessExpiresAt: number;
-  expiresAt: number;
-};
+
 const request = (
   body: string = JSON.stringify(input),
   headers: Record<string, string> = {},
@@ -29,6 +20,7 @@ const request = (
     method: "PATCH",
     headers: {
       host: "web.test",
+      cookie: "kokoro-issuer.session_token=session",
       origin: "http://web.test",
       "content-type": "application/json",
       ...headers,
@@ -47,15 +39,8 @@ beforeEach(() => {
     KOKORO_DOMAIN: "product.test",
   }))
     vi.stubEnv(key, value);
-  session = {
-    id: "session",
-    generation: 1,
-    subject: "alice",
-    access: "server-only",
-    accessExpiresAt: Date.now() + 60000,
-    expiresAt: Date.now() + 120000,
-  };
-  currentProductSession.mockResolvedValue(session);
+
+
   requestWithDomain.mockImplementation(async (_url, _domain, options) =>
     Response.json(
       { data: { subject: "alice", name } },
@@ -80,9 +65,9 @@ it("writes canonical BFF with private identity and exact original UTF16; returns
   const [url, , options] = requestWithDomain.mock.calls[0]!;
   expect(url).toBe("http://bff.test/v1/account/profile");
   expect(JSON.parse(new TextDecoder().decode(options.body))).toEqual(input);
-  expect(options.headers.get("authorization")).toBe("Bearer server-only");
-  expect(options.headers.has("cookie")).toBe(false);
-  expect(currentProductSession).toHaveBeenCalledTimes(2);
+  expect(options.headers.get("authorization")).toBeNull();
+  expect(options.headers.get("cookie")).toBe("kokoro-issuer.session_token=session");
+  expect(requestWithDomain).toHaveBeenCalledOnce();
 });
 it.each([
   { origin: "http://foreign.test" },
@@ -91,7 +76,7 @@ it.each([
   { host: "foreign.test" },
 ])("rejects foreign authority before I/O %j", async (headers) => {
   expect((await PATCH(request(undefined, headers))).status).toBe(403);
-  expect(currentProductSession).not.toHaveBeenCalled();
+
   expect(requestWithDomain).not.toHaveBeenCalled();
 });
 it.each([
@@ -104,23 +89,9 @@ it.each([
   expect((await PATCH(request(body, {}, suffix))).status).toBe(400);
   expect(requestWithDomain).not.toHaveBeenCalled();
 });
+
 it.each([
-  "id",
-  "generation",
-  "subject",
-  "access",
-  "accessExpiresAt",
-  "expiresAt",
-])("rejects late %s change after real ACK", async (key) => {
-  currentProductSession.mockResolvedValueOnce(session).mockResolvedValueOnce({
-    ...session,
-    [key]:
-      typeof session[key as keyof typeof session] === "number" ? 42 : "changed",
-  });
-  expect((await PATCH(request())).status).toBe(401);
-});
-it.each([
-  { data: { subject: "bob", name } },
+  { data: { subject: "", name } },
   { data: { subject: "alice", name: "other" } },
   { data: { subject: "alice", name, token: "private" } },
   { data: { subject: "alice", name }, meta: { request_id: "id" } },
@@ -135,7 +106,7 @@ it.each([
   );
   expect((await PATCH(request())).status).toBe(502);
 });
-it.each(["body", "session", "fetch", "response"])(
+it.each(["body", "fetch", "response"])(
   "bounds hanging %s and cleans late work",
   async (kind) => {
     vi.useFakeTimers();
@@ -148,8 +119,7 @@ it.each(["body", "session", "fetch", "response"])(
         body: new ReadableStream({ cancel }),
         duplex: "half",
       } as RequestInit);
-    if (kind === "session")
-      currentProductSession.mockReturnValue(new Promise(() => {}));
+
     if (kind === "fetch")
       requestWithDomain.mockReturnValue(new Promise(() => {}));
     if (kind === "response")
@@ -210,23 +180,7 @@ it.each([
   },
 );
 
-it("timeout retires a late store result before any BFF write", async () => {
-  vi.useFakeTimers();
-  let resolve!: (value: typeof session) => void;
-  currentProductSession.mockImplementationOnce(
-    () =>
-      new Promise((r) => {
-        resolve = r;
-      }),
-  );
-  const pending = PATCH(request());
-  await vi.advanceTimersByTimeAsync(10001);
-  expect((await pending).status).toBe(503);
-  resolve(session);
-  await Promise.resolve();
-  await Promise.resolve();
-  expect(requestWithDomain).not.toHaveBeenCalled();
-});
+
 it("caller abort retires a late fetch body and cannot return ACK", async () => {
   let resolve!: (response: Response) => void;
   requestWithDomain.mockImplementationOnce(
@@ -243,7 +197,7 @@ it("caller abort retires a late fetch body and cannot return ACK", async () => {
   const cancel = vi.fn();
   resolve(new Response(new ReadableStream({ cancel })));
   await vi.waitFor(() => expect(cancel).toHaveBeenCalled());
-  expect(currentProductSession).toHaveBeenCalledTimes(1);
+  expect(requestWithDomain).toHaveBeenCalledOnce();
 });
 it("rejects raw duplicate ACK keys and bad UTF8", async () => {
   for (const body of [

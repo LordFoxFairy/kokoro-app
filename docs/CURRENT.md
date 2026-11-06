@@ -1,3 +1,55 @@
+## A‑03：发送但不中断（App 候选）
+
+固定 BFF #18 `99f946e` Public 28.22 公开原件。现真实设置选择同 Run 补充，默认发送继续显示队列，不把排队称为插话；预览不生效。浏览器同源 control 对精确 scope、202、原 Run/key 和 canonical Message 做严格验证；现会话快照承接已接纳消息。明确未接纳可恢复原稿，终态未确认不引导重发。定向 transport、设置和输入按钮通过；浏览器丢回执、同一 Run 真实 Worker／最终组合由 Root 另验。
+
+## A‑03：打断并发送（App 候选）
+
+Public 28.21 固定已推 BFF `2cf1c14` 原件。对话设置默认排队；所选打断只对当前已启动 Run 生效，未启动时继续排队。现有发送记录冻结目标 Run 和原键，恢复不换目标、不新增控制 POST；BFF 明确拒绝后可把原文恢复到空闲输入框，不覆盖新草稿。仍不声称支持不中断地向原 Run 注入。定向引擎、草稿和设置通过；原生真 Worker 组合由 Root 另验。
+
+## A‑03：运行中排队与原回执恢复（候选）
+
+现有 FIFO 和首发共用一个按会话绑定的未决提交记录；保存失败不 POST，刷新不重发，显式重试沿原请求。等待期间不覆盖下一份草稿，不动当前 Run 的进度、审批或 SSE。断流重连可吸收已知回执；页面切换后旧按钮不发送。无 BFF / IAM / Schema 或 OpenAPI 变更。已有引擎、审批与失败定向通过；真实原生验收由 Root 固定候选后记录。此项不等于已支持运行中注入或打断并发送。
+
+## A‑07：Project Todo（源码候选，待原生浏览器验收）
+
+本候选从已推 BFF `846821ae1b46f66663669d20fd5340bb7fa58b87` 的 Public 28.20 原始 Git blob 正规生成 Project Task 类型／校验（无第二 fetch SDK），保持旧父链精确逆证。Project Overview 接手动待办；同源只保 Hub 唯一入口，强版本条件和原键恢复。BFF 真 PG/Nest、App 定向与生成检查已过；原生浏览器、最终组合与 A/B 实际登记尚待，不提前闭环。
+
+## T‑09 当前消费者候选（2026-11-04）
+
+Public 28.19 唯一快照逐字固定 BFF `d166a51`，只新增 `context_window_exceeded / false`。现有 AG‑UI、快照与失败卡承接；保留正文且不出现重发动作。12 个既有生成入口、定向与 `pnpm check` 通过。正式跨仓浏览器和发布配对仍待。
+
+## I24 原生退出上游 JSON 规范化（2026-11-01，本地候选，待真实复验）
+
+Root 在精确 App `1d54`／Root `325d` 组合实测：冷登录 303、session/project 200，但实际 App sign-out 415，旧 cookie replay 仍 200；原 minimal 四检查及 cleanup 通过未覆盖此缺口。首轮零字节上游修补只证明 transport 接受请求，不证明 IAM 接受媒体类型；其工程门与 RED 记录在下方保留历史。本轮依据锁定 IAM HTTP parser 及既有 owner 退出测试，浏览器入站仍严格零体，adapter 独自构造固定 `Content-Type: application/json` 与 UTF-8 `{}`，上游 `maxRequestBytes` 精确为 2。既不透传浏览器 body/Content-Type，也不放宽 transport、IAM 或原 Origin/cookie/取消规则，无新协议/helper。
+
+原两 loopback 用例现按 owner 媒体类型与精确两字节正文接受请求，错误分别返回 415/400：旧实现实测 2 失败／17 原例通过，均为 415／上游请求 1。修正后 Node22.23.4 定向 5 文件 204 通过／0 跳过，包含新增非空浏览器 `{}`、异 Origin、重复 issuer cookie、预取消四例零上游负控及原 Product auth/Settings 回归；定向 ESLint、`pnpm typecheck` 通过。loopback 不是实际 IAM 撤销证明，真实 App logout/旧 cookie replay、异 tenant 恢复及独立撤权仍交 Root。未运行完整 check、业务服务、PG/Redis、浏览器或 Git 操作。
+
+Root JSON规范化验收：独审CLEAR，Node22.23.4完整pnpm check exit0，contract452/architecture50/full354files6407pass/0skip、lint/types/build；1494输入hash保持。真实退出与旧cookie重放待精确组合复验，不以此静态门覆盖上轮415。
+
+## I24 首轮空体传输修补（2026-11-01，历史候选；已由后续真实 415 证据纠正）
+
+基线 App `727cd674`；Root 已在精确 Root `4fdb2ede` 组合实测空 Chromium context 的冷登录表单 303、session/project 200，无 cookie 注入，此证据不代替退出或撤权。退出旧 route 以 POST 调既有 relay 时未传 body，真实 transport 按现约束拒绝；原 route mock 未覆盖这条接缝。新增现 transport 套件 loopback 两例分别覆盖实际 client 无 body 和确认 form 空 urlencoded：修复前均 503／零上游请求，原 17 例通过；生产仅补 `body: new Uint8Array(0)`，保零字节 wire、原 Origin/Host/cookie/body/取消规则，不放宽 transport、不增加协议或 helper。
+
+Node22.23.4 定向 5 文件 200 通过／0 跳过，含现 IAM route、native session route、Product auth client 与 Settings modal 回归；定向 ESLint 和 `pnpm typecheck` 通过。loopback 验证 POST 实际到达、body 为零、issuer cookie 过滤与删除 cookie 透传，不冒称真实 IAM session 已撤销。未执行完整 check、业务服务、PG/Redis、浏览器或 Git 操作；Root 完整门、真实 App logout、异 tenant 恢复及独立 session/membership 撤权仍待。
+
+Root验收：独审CLEAR，Node22.23.4完整pnpm check exit0；contract452、architecture50、full354files/6403pass/0skip，lint/types/build通过，1494输入前后hash一致。真实App退出和旧cookie重放在精确组合提交后另验，不以loopback替代IAM撤销。
+
+## T-05 冷登录固定 tenant 接线（2026-11-01，本地候选，待 Root 真实验收）
+
+基线 App `9ba653433c75dd3919bcc3de3cafc778fda4b975`。Root 空 Chromium context 经真实登录表单收到 303 后 `/api/auth/session` 与项目读取仍 401；签入新 IAM session 缺 activeOrganizationId，既有提前 set-active fixture 掩盖缺口。本片仅现 sign-in route 顺序补固定 `KOKORO_TENANT_ID` set-active 和既有在线 admission，三阶段共 5 秒预算；准入成功才进入产品，失败不写新 issuer cookie、不破坏旧会话、不重发密码，退休本次 flow/CSRF。新未交付 session 由 IAM TTL 回收。配置词法沿 native admission 固定 tenant credential，保持 opaque ID，不限定 UUID。详见本仓技术设计 T-05 小节。
+
+定向 RED 17 失败/3 原安全行为通过；补合并 header 超限负控另见 1 失败。Node22.23.4 定向 4 文件 55 通过（0 跳过），`pnpm typecheck` 与定向 ESLint 通过。首次 typecheck 捕获新增测试的 exact optional signal 与参数化数组形状问题，已修正并重跑；原失败记录保留。最终停写结果由本轮交付记录绑定文件哈希；无服务/PG/Redis/浏览器/Git 操作，没有执行完整 check。Root 负责完整门和真实四旅程；此候选不代表 T-05 或 C-1.3 全部完成。
+
+Root接收：独立规格/质量审查CLEAR；Node22.23.4/pnpm11.25.0完整`pnpm check` exit0，contract452、architecture50、full354文件6401pass/0skip、lint/types/build通过；1494tracked输入前后hash一致。未运行默认preview Playwright作为认证证据，真实冷登录GREEN和四旅程仍待精确组合验证。
+
+## T-07 Public28.18 provenance修复（2026-11-01，本地工程门通过，待Root集成）
+
+基线App `f5d122bb41beb3e141015b758411dbcc0afc583b`。此前账户资料切片已把唯一完整snapshot更新到BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9`／Public28.18.0，却遗漏其余11条public生成链与current pin assertions；本轮只同步这些来源，12个原generator均执行 `--write`，实际7份generated仅provenance变化。snapshot SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082` 与owner Git blob逐字一致且本轮未改。独立private artifacts、download policy3及policy_owner_commit保持；无运行时、依赖、Schema或服务变化。
+
+新test-only inverse先核完整28.18 child SHA，仅逆账户资料GET、AccountProfileReadResponse和版本，再核完整28.17 parent SHA `ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7`；旧父链只有链首委派，历史hash／逆差逻辑不改。回归证明200→199操作原顺序、原PATCH保持，并拒绝新增GET/schema、旧PATCH、无关操作、版本及额外字节漂移。四处当前版本负控改为真实28.18→28.19，不把no-op替换算作负控；无第二snapshot或运行时降级。
+
+Node22.23.4实际验证：先focused3文件4失败／12通过，定位pin/父链失配；新7回归先全部失败，再focused4文件23通过。最终 `pnpm contract` 48文件452通过、`pnpm test:architecture` 4文件50通过、`pnpm typecheck`、`pnpm lint`、`pnpm test` 354文件6373通过／0跳过、`pnpm build` 与 `git diff --check` 均exit0。default保留原jsdom navigation提示，不影响退出结果。未注入或启动PG/Redis，未运行独立Playwright／正常页面与真实owner组合；这些由Root另行验收。Root已在同一56路径冻结基线上以Node22.23.4/pnpm11.25.0重跑完整pnpm check，contract452、architecture50、full6373及lint/typecheck/build均exit0，前后SHA无漂移；本候选沿独立Task A分支/PR交付，未合并main，Root组合与真实旅程仍待，不将本轮静态契约治理门当作正常产品验收；下方版本及运行记录保留历史语境。
+
 ## 2026-10-29 连接器菜单固定列表优先（正常页面已验）
 
 实际 Manus 首页1280×720、中文浅色菜单向上展开，DOM/computed style为flex-col：列表→添加→管理，底栏81px、36px行、200–400px面板。旧“向上管理→添加→列表”记录有误，本轮以新取证纠正，不沿旧测试维持错误。共享ComposerConnections删除placement监听和反转，底栏始终在列表后，上边分隔线；不改选择、身份、分页、请求或目的地。

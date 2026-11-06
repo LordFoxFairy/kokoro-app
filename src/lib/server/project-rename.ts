@@ -5,7 +5,7 @@ import { projectRenameIdSchema, projectRenameKeySchema, projectRenameRequestSche
   parseProjectRenameJson, projectRenameRetryAfterValid,
   type ProjectRenameFault } from "@/contract/project-rename"
 import { sameOriginOk } from "./same-origin"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff"
+import { productBffConfig, productBffHeaders } from "./product-bff"
 import { requestWithDomain, UpstreamTimeoutError } from "./upstream-http"
 
 /** Exact browser-private command adapter; generic Hub envelopes are not used. */
@@ -52,10 +52,9 @@ export async function proxyProjectRename(request: Request, segments: readonly st
       check()
       const config = productBffConfig()
       if (config === null) return fail(503, "product_tenant_not_configured", true)
-      let claims
-      try { claims = await admittedProductSession(request, config) } catch { return fail(503, "iam_admission_unavailable", true) }
+
       check()
-      if (claims === null) return fail(401, "session_authentication_required")
+
       let bytes = new Uint8Array(0)
       if (request.body !== null) {
         reader = request.body.getReader()
@@ -81,7 +80,7 @@ export async function proxyProjectRename(request: Request, segments: readonly st
       const parsed = projectRenameRequestSchema.safeParse(raw)
       if (!parsed.success) return fail(400, "invalid_project_rename")
       check()
-      const headers = productBffHeaders(config, claims, requestId)
+      const headers = productBffHeaders(config, request, requestId)
       headers.set("idempotency-key", key)
       headers.set("content-type", "application/json")
       const body = new TextEncoder().encode(JSON.stringify(parsed.data)).buffer

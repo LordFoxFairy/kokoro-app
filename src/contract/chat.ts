@@ -41,6 +41,29 @@ const selectedSkillSourceRefsSchema = z
     }
   })
 
+const resourceReferenceIdSchema = z.string().regex(
+  /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u,
+)
+
+/** Browser-selected owner references. These are opaque locators, never content or access handles. */
+export const selectedResourceRefsSchema = z
+  .array(z.object({
+    kind: z.enum(["asset", "artifact"]),
+    resource_id: resourceReferenceIdSchema,
+    version_id: resourceReferenceIdSchema.optional(),
+  }).strict())
+  .max(16)
+  .superRefine((refs, context) => {
+    const identities = refs.map((ref) => `${ref.kind}\u001f${ref.resource_id}\u001f${ref.version_id ?? ""}`)
+    if (new Set(identities).size !== identities.length) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Resource refs must be unique" })
+    }
+    if (new TextEncoder().encode(JSON.stringify(refs)).byteLength > 4096) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Resource refs exceed 4096 JSON bytes" })
+    }
+  })
+export type SelectedResourceRef = z.infer<typeof selectedResourceRefsSchema>[number]
+
 export const messageRecordSchema = z
   .object({
     message_id: z.string().min(1),
@@ -207,7 +230,9 @@ export const messageCreateParamsSchema = z
     model: z.string().min(1).optional(),
     agent: z.string().min(1).optional(),
     thinking: z.boolean().optional(),
+    interrupt_run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u).optional(),
     selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(),
+    selected_resource_refs: selectedResourceRefsSchema.optional(),
     selected_mcp_connection_ids: selectedMcpConnectionIdsSchema.optional(),
     selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional(),
     // Opaque project ownership for a project's first task. Tenant/site
@@ -236,6 +261,7 @@ export type RunControlBody = z.infer<typeof runControlBodySchema>
 export const runControlReceiptSchema = z.object({
   run_id: z.string().min(1),
   command_id: z.string().min(1),
+  message_id: z.string().min(1).optional(),
   request_digest: z.string().min(1),
   status: z.enum(["pending", "succeeded", "failed"]),
   error_code: z.string().min(1).nullable().optional(),
@@ -254,8 +280,6 @@ export type RenameSessionReceipt = z.infer<typeof renameSessionReceiptSchema>
 export const shareReceiptSchema = z.object({ share_id: z.string().min(1) }).strict()
 export type ShareReceipt = z.infer<typeof shareReceiptSchema>
 
-export const controlReceiptViewSchema = z.object({ command_id: z.string().min(1), status: z.enum(["pending", "succeeded", "failed"]), replayed: z.boolean().optional() }).strict()
-export type ControlReceiptView = z.infer<typeof controlReceiptViewSchema>
 
 export const deleteSessionReceiptSchema = z.object({ status: z.string().min(1) }).strict()
 export type DeleteSessionReceipt = z.infer<typeof deleteSessionReceiptSchema>

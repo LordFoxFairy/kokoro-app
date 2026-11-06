@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sameOriginOk } from "./same-origin";
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { productBffConfig, productBffHeaders } from "./product-bff";
 import { readBoundedRequestBody, requestWithDomain, UpstreamTimeoutError, UpstreamRequestTooLargeError } from "./upstream-http";
 import { projectSkillIdSchema } from "@/hub/project-skills.schema";
 import { installationIdSchema, installationKeySchema, installationInstallRequestSchema, installationUpdateRequestSchema,
@@ -69,15 +69,7 @@ export async function proxyInstallation(
     joined.throwIfAborted();
     const config = productBffConfig();
     if (!config?.bffBaseUrl) return fail(503, "product_tenant_not_configured");
-    let claims;
-    try {
-      claims = await within(admittedProductSession(request, config));
-      joined.throwIfAborted();
-    } catch {
-      joined.throwIfAborted();
-      return fail(503, "iam_admission_unavailable", true);
-    }
-    if (claims === null) return fail(401, "session_authentication_required");
+
     const query = new URL(request.url).searchParams;
     if (target.length > 2 && !installationIdSchema.safeParse(target[2]).success)
       return fail(400, "invalid_skill_installation_request");
@@ -148,7 +140,7 @@ export async function proxyInstallation(
       }
     } else if (body.byteLength !== 0)
       return fail(400, "invalid_skill_installation_request");
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     if (mutation && key !== null) headers.set("idempotency-key", key);
     if (["install", "setEnabled", "update"].includes(operation))
       headers.set("content-type", "application/json");

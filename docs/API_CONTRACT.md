@@ -1,3 +1,56 @@
+## A‑07：同源 Project Todo（D0，BFF 发布后生成）
+
+唯一路径 `/api/hub/projects/{projectId}/tasks[/{taskId}]` 映射 BFF 同一 Project Task 资源；在 Hub 通用路径解析前分流，拒绝 `/self` 别名和额外尾段；同样在通用 `/api/session` 拒绝此资源族，不留第二个读写入口。沿用现同源写保护、原生 Cookie/准入服务信封、请求时限及 body 限额。只承接四个精确 operation 的方法、canonical 写路径、写 key、强 `If-Match`、成功与错误；不透传任意 header/路径或增认证凭据。BFF 唯一 OpenAPI 已提交后固定 SHA/摘要并以锁定生成器产生消费者，不手写第二份 DTO。BFF 201 Location 必须与 ACK 的资源身份一致；同源层只返回按同一身份构造的 Hub Location，不透传上游地址。Location 是身份，读取仍走集合。标题按 Unicode 标量计数，不能直接用 UTF‑16 长度限制代替。容量 409 与幂等 409 分别呈现；409 与 412 是明确拒绝，不与未知提交混同；204 没有 JSON body。
+
+## T‑09：Public 28.19 非重试超窗终态
+
+BFF Public 28.19 在既有普通和 ordered Message failure 表示增加 `context_window_exceeded`，只允许 `retryable: false`。AG‑UI、快照及原路由保持，App 不发送或消费 `personal_context`。
+
+> D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
+
+## I-56 原生 Cookie 模式配对（2026-11-03，源码候选，待 Root 复验）
+
+基线 App `bfb749c3dae0519abee7803d82f552ea3e39adcf` 已有标准认证消费者工程验收；其 relay config 仅按 NODE_ENV 选择 Cookie 模式。[Root 唯一计划 I-56／§3.6](../../../docs/superpowers/plans/2026-11-01-task-a-c1-c4-technical-plan.md) 设计门通过后，本候选已修正该判定并验证定向组件，不表示完整相关工程门或新组合真实浏览器已通过。IAM 的官方 issuer URL 默认仍拥有 Cookie 名称／属性，App 不签发替代 issuer Cookie。
+
+App 既有 `iamRelayConfig` 的源码候选判定为：可信 canonical `KOKORO_WEB_ORIGIN` 使用 HTTPS **或** `NODE_ENV=production` 时选择 Secure；不读取浏览器自报 Origin／forwarded header 来切换模式。
+
+| 部署模式 | 目标 issuer Cookie 模式 | 与当前实现的差异 |
+| --- | --- | --- |
+| 非 production＋HTTP | plain：`kokoro-issuer.` | 保持 |
+| 非 production＋HTTPS | Secure＋`__Secure-kokoro-issuer.` | 本候选已修正基线按 NODE_ENV 选择 plain 的假设 |
+| production＋HTTPS | Secure＋`__Secure-kokoro-issuer.` | 保持 |
+| production＋HTTP | 仍选择原 Secure 模式 | 仅保留原安全 floor，不降级或承诺该配置是已支持的原生组合 |
+
+published relay 3.0 的精确两模式与叶名 `session_token`、`session_data`、`dont_remember` 不变；relay 请求／响应只接受所选模式，不无条件同时接收两种前缀。现有重复 Cookie、未知名称、属性、大小、同源／CSRF 与取消规则保持。普通 `product-bff` adapter 已有两种合法模式的六个完整名，不扩 allowlist；`GET /api/auth/session` 只逐条转发 BFF 已安全过滤的多条 `Set-Cookie`，RSC `refresh=false` 仍不回写，不合并 Cookie、不放宽非 Secure 删除指令。Admin 无新增 issuer Cookie 解析规则。
+
+本片不改变登录／退出／邀请业务交互、状态 JSON、错误码、路径、Schema 或依赖，不新增 flag、跨字段校验或 mixed-scheme 支持承诺；vendor／版本／摘要／生成物未改，relay3.0 及状态1.0 正常只读生成检查通过。旧 HTTPS 开发 plain Cookie 在切换时只清该旧 Cookie 并重新登录，不清草稿／业务数据、不添加旧名 fallback；本候选阶段不执行用户操作。HTTP/plain、HTTPS 非生产/Secure 与 production floor 的定向组件回归已通过；完整相关门、真实 Cookie 删除／rolling 与精确新组合旅程仍待 Root 验收。现有机器来源和生成流程保持，若 owner artifact 实际变化仍先正式发行再固定消费。职责与删除项见 [TECHNICAL_DESIGN](TECHNICAL_DESIGN.md)。
+
+## T-01 标准 Session 状态消费（2026-11-02，本地消费者候选）
+
+本轮沿 Root 唯一计划 §3.6 和已通过 D0 实施，不新增认证 owner、Schema、依赖或认证存储。具体固定来源见 `contract/bff-auth-session-source.json`；生成器只消费本仓 vendor 的原字节，不导入 sibling 源码。普通业务一次同源/BFF派发，当前权限仍由 BFF/IAM 与业务 owner 判断。
+
+| 边界 | 候选规则 |
+| --- | --- |
+| BFF `GET /browser/v1/auth/session` | IAM Better Auth 鲜验的安全投影；成功使用 data envelope，已认证 data 仅为 authenticated=true、subject、tenant_id、expires_at，expires_at 为实际 Session 到期的 RFC 3339 UTC；匿名／失效／撤销为 200 且 data 仅 authenticated=false，资格拒绝 403，依赖不可用 503。request id 只在响应 header，不复制旧 me 的 meta；错误码、约束和生成入口以 owner 机器合同为准，App 不维护第二份 editable schema。 |
+| App `GET /api/auth/session` | 仅薄适配上述固定 generated contract，保持真实状态与错误分类；不输出 raw Session、Cookie/token、登录 Session id/ref、access、伪 generation 或固定 60 秒期限。所有状态 no-store，传输携 request id；坏响应／超时不是匿名、管理员 false 或认证成功。 |
+| 公开 `GET /v1/me` | 保持原 user_id、tenant_id、platform_admin 三字段及既有 public provenance；不加 Session expiry／凭据字段。 |
+| 普通业务同源 adapter | 方法/path/body/Origin 校验后一次 BFF 调用；allowlisted Cookie 只交 BFF 认证边缘，不传普通业务 owner，不先后调用 `/me`。必要私有交付鲜验在 BFF，App 不比较 Session snapshot。 |
+| Admin 同源入口 | `/manage` 共享同一 Product 登录及 GET 状态；现管理员投影仍由 BFF/IAM 当前政策给出，明确 false 与 503 不互换，不由浏览器 body/header 自报身份。 |
+
+同一 BFF 状态 GET 的 generated query `refresh` 为 boolean、默认 true；wire 仅接受单值字面 true/false，无 body，重复／非法值／额外参数为400，不用 `Boolean("false")` 强转。正常浏览器 Route Handler 使用默认 true，可承接 IAM 原生 rolling；合法多个 `Set-Cookie` 经 BFF/App 完整逐项透传，不把逗号拼接值当一条 Cookie，不丢失删除指令，仍核 allowlist、属性及预算。RSC 首观察明确 `refresh=false`，BFF 转成官方 `disableCookieCache=true`、`disableRefresh=true`；两种模式均鲜读、不缓存允许结果，并 hydrate 同一安全 DTO。RSC 不写／清浏览器 Cookie，失效 Cookie 留后续正常状态 GET 清理。refresh 是 BFF 传输选项，不是新认证协议或身份 header，不扩普通业务 adapter 参数；纯业务认证检查不 rolling。限流429和合法 Retry-After 按 owner 合同承接，不自动重试。
+
+同源 Session 路由仅 GET；后继移除 `[...nextauth]` catch-all 壳、旧 `/api/auth/csrf`、session POST/refresh 和 `/api/auth/signout` 历史 alias，退出继续原生 `/iam/sign-out`。此删除不影响原生登录／退出 CSRF、固定 tenant、白名单 return target、第三方 MCP OAuth、API Key/OpenApp 或设备管理的目标 session_id。
+
+浏览器现有原样 `GET /iam/get-session` relay 同片关闭，不能在安全 DTO 之外返回完整 Session／token；IAM → BFF 认证 client 继续官方 get-session，浏览器认证观察仅用正式安全 `GET /api/auth/session`。由 BFF owner 正规重发 browser relay policy，App 固定新 commit/digest 并生成消费，不手删 vendor／upstream 原生路径；verify-email／sign-up／set-active／invitation 等真实交互保留。真实 HTTP secret-canary 应核旧浏览器路径拒绝且不返 raw body、安全路径仅返回正式安全字段，不能只测新 DTO 解码。
+
+UI 可以合并只读状态 GET、使用真实 expires_at 安排重读，并以本地 epoch/abort/跨标签无秘密失效事件退休旧视图；这些值不成为认证证明。只读恢复不自动重放业务写入或 unknown 原命令。唯一已固定来源为 BFF code-first 生成的 `contract/openapi/browser/v1/auth-session.json`；待 owner 固定 version/digest 并发布、App 正规生成 decoder，再核错误分类及 rolling/RSC 行为，执行契约、adapter 和真实浏览器冷登录／Admin／退出／撤权／迟到响应验证；本节不报告实现通过。
+
+## T-07 历史 Public28.18 pin（2026-11-01）
+
+当时唯一 `src/generated/bff-public-openapi.yaml` 精确对应 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9:contract/openapi/v1/openapi.yaml`，版本28.18.0，SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082`。12 条既有 public 生成链和 current consumer assertions 统一此来源，snapshot原字节未改；private artifacts与独立policy3保持原pin。
+
+相对 BFF `853ca9a5d8da3500b0c37543c72198a520e46225`／28.17.0，唯一新增操作为 `GET /v1/account/profile`（readAccountProfile），唯一新增schema为 AccountProfileReadResponse；共200操作，原199项顺序及既有PATCH不变。test-only inverse完整恢复SHA256 `ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7` 后再进入原父证明，不覆盖历史hash。版本负控实际改变28.18→28.19；本轮不新增Web同源路由、权限或运行行为，以下版本段按当时状态读取。
+
 ## Custom API发送与私有恢复（正式Public28.17消费者候选）
 
 固定BFF853ca9a5d8da3500b0c37543c72198a520e46225，唯一全snapshot SHAea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7。MessageCreateRequest与private composer_selection均可选selected_custom_api_profiles:[{profile_id,expected_state_version}]，≤32／profileID唯一／closed；版本为整数1..2147483647，不接字符串、分数、零、溢出、说明或凭据。原generator派生schema同时用于发送、本地原K恢复、snapshot decoder；空选择省略保持原无选择JSON/digest。
@@ -239,9 +292,17 @@ standalone `src/hub/project-mcp-recommendations-client.ts`只GET/PUT当前Projec
 
 本地Try不新增API或改wire：私有server的exact `connection_id`经现engine选择进入新草稿，用户明确Send时才沿既有Public24 `selected_mcp_connection_ids`冻结到原消息请求；connector/server/provider ID及显示名不替代运行Connection。Try本身零消息/Prepare/授权请求，未知原请求不被新草稿覆盖。缺可用性、未ready或缺Connection不伪造试用；Prepare/重新授权保留各自正式操作与恢复语义。
 
+## A‑03：发送但不中断（Public 28.22）
+
+浏览器只向现同源 Control POST 提交 `run.steer`：URL 绑定原 Conversation、Run 与 direct/project scope，`Idempotency-Key` 及 `message_id`（客户端意图标识）和正文精确冻结。BFF 202 的 `message_id` 是独立 canonical user Message ID；原 Run、原 key、状态和 owner ID 验证后才对账。现 Snapshot 是后续消息状态的读回入口，无 GET control 子路由。已接纳但后来未确认不表示模型没有看到，客户端不自动重投或改为排队。未接纳的明确过期目标才允许用户恢复原草稿。
+
+## A‑03：打断并发送（Public 28.21）
+
+同一 Message POST 增可选 `interrupt_run_id`。只有当前已开始的 Run 才携带精确 ID；未开始仍沿队列，不新增控制 POST。原请求记录冻结目标、键与输入；显式重试不改目标。BFF 409 `run_delivery_conflict` 确认该次未接纳时，可把原文恢复进输入框，不自动换目标、换键或发送。202 只代表后继已接纳。
+
 ## CHAT-1：首发刷新恢复不新增网络协议（2026-10-24）
 
-仅增加App同标签浏览器未决意图adapter，首发/原retry继续原MessageCreateParams与唯一builder；GET snapshot-first、exact MessageCreateReceipt及AG-UI保持。刷新无自动POST、无新key/body、无本地伪会话，503/404/同正文不作为命令未发生或已成功的证据。原控制、身份、project_ref及MCP/Skill有序选择不变；设计/本地记录见TECHNICAL_DESIGN/DATA_MODEL，实际验收见CURRENT。
+仅增加App同标签浏览器未决意图adapter，首发/原retry继续原MessageCreateParams与唯一builder；GET snapshot-first、exact MessageCreateReceipt及AG-UI保持。刷新无自动POST、无新key/body、无本地伪会话，503/404/同正文不作为命令未发生或已成功的证据。原控制、身份、project_ref 及 MCP/Skill 有序选择不变。A‑03 运行中 FIFO 沿同一 Message POST 和回执，不加新的网络模式；重试不改变当前 Run 或重开流。设计/本地记录见 TECHNICAL_DESIGN/DATA_MODEL，实际验收见 CURRENT。
 
 ## 2026-10-24 普通会话 MCP 精确选择（App 实施中，正常未激活）
 
@@ -2422,7 +2483,7 @@ Web在上传body实际超过原1MiB且尚未发送BFF的413分支独占`x-kokoro
 
 ## Public28.15 最终答复只读旁证（配对候选）
 
-原私有 RunDisplay optional `final_answer` 为 closed `{segment_id, revision}`；已由 BFF `38b942742574bccb12d58546301ee0c7cf4014c3` 正式 Public28.15 生成。不是 durable final 事件、权限或历史补写入口。客户端仅在 exact Run 完整 parts 与确认 revision 满足时使用，正式 final 始终优先。无新 HTTP 路由、Share 字段或执行行为。
+原私有 RunDisplay optional `final_answer` 为 closed `{segment_id, revision}`；已由 BFF `38b942742574bccb12d58546301ee0c7cf4014c3` 正式 Public28.15 生成。不是 durable final 事件、权限或历史补写入口。App 当前只以 canonical terminal final 和确认 parts 划分正文，不再将详情字段接作第二条 final 路径或因历史轮进入视口而自动取证。无新 HTTP 路由、Share 字段或执行行为。
 
 ## 2026-10-28 私有 snapshot：已发送 MCP 选择
 

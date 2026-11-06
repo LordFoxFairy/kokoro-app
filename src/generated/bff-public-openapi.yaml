@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Kokoro Business API
-  version: 28.17.0
+  version: 28.22.0
   description: Kokoro BFF 面向 Web 的业务契约；阶段 1 仅通过 PostgreSQL + Redis 及显式 HTTP upstream/adapter 契约协作，不新增 MySQL/Mongo 依赖。
   license:
     name: Proprietary Kokoro contract
@@ -1357,6 +1357,132 @@ paths:
             minLength: 1
             maxLength: 255
   /v1/account/profile:
+    get:
+      tags:
+        - Account Profile
+      operationId: readAccountProfile
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: stable
+      x-kokoro-idempotency: none
+      x-kokoro-permission: iam:account-profile.read
+      summary: Read current Product user profile
+      description: Current admitted Product user projection. The request has no query, body, or replay key and the response is never cacheable.
+      security:
+        - serviceHeader: []
+          internalSecret: []
+          userBearer: []
+      responses:
+        '200':
+          description: Owner-confirmed current subject and profile fields
+          headers:
+            x-request-id:
+              schema:
+                $ref: '#/components/schemas/RequestId'
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountProfileReadResponse'
+        '400':
+          description: Sanitized account profile failure
+          headers:
+            x-request-id:
+              schema:
+                $ref: '#/components/schemas/RequestId'
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountProfileError400'
+        '401':
+          description: Sanitized account profile failure
+          headers:
+            x-request-id:
+              schema:
+                $ref: '#/components/schemas/RequestId'
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountProfileError401'
+        '403':
+          description: Sanitized account profile failure
+          headers:
+            x-request-id:
+              schema:
+                $ref: '#/components/schemas/RequestId'
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountProfileError403'
+        '429':
+          description: Sanitized account profile failure
+          headers:
+            x-request-id:
+              schema:
+                $ref: '#/components/schemas/RequestId'
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+            Retry-After:
+              schema:
+                type: string
+                pattern: ^[1-9][0-9]{0,4}$
+                description: Validated delta seconds from1 through86400.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountProfileError429'
+        '502':
+          description: Sanitized account profile failure
+          headers:
+            x-request-id:
+              schema:
+                $ref: '#/components/schemas/RequestId'
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountProfileError502'
+        '503':
+          description: Sanitized account profile failure
+          headers:
+            x-request-id:
+              schema:
+                $ref: '#/components/schemas/RequestId'
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountProfileError503'
     patch:
       tags:
         - Account Profile
@@ -5086,6 +5212,104 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Projects]
+      operationId: createProjectTask
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: project.write
+      summary: Create an owned project task
+      description: A new task starts in todo. New creation is limited to 200 tasks per project (409 project_task_limit_reached). The same operation, project, caller and key replay the original receipt. No query or conditional headers.
+      parameters:
+        - $ref: '#/components/parameters/ProjectTaskWriteProjectId'
+        - $ref: '#/components/parameters/ProjectTaskIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectTaskRequest' }
+      responses:
+        '201':
+          description: Created or exact replay of the original creation
+          headers:
+            Location:
+              required: true
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectTaskWriteResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/projects/{projectId}/tasks/{taskId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectTaskWriteProjectId'
+      - $ref: '#/components/parameters/ProjectTaskId'
+    patch:
+      tags: [Projects]
+      operationId: updateProjectTask
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: project.write
+      summary: Update an owned project task at the observed revision
+      description: A no-op preserves the revision. A stale revision returns 412 without a write; exact replay returns the original receipt. No query.
+      parameters:
+        - $ref: '#/components/parameters/ProjectTaskIdempotencyKey'
+        - $ref: '#/components/parameters/ProjectTaskIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProjectTaskRequest' }
+      responses:
+        '200':
+          description: Updated or exact replay of the original update
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectTaskWriteResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/ProjectTaskPreconditionFailed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '428': { $ref: '#/components/responses/ProjectTaskPreconditionRequired' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    delete:
+      tags: [Projects]
+      operationId: deleteProjectTask
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: project.write
+      summary: Delete an owned project task at the observed revision
+      description: No body or query. An exact replay under the current owning project returns the original 204; a different key for a missing task returns 404.
+      parameters:
+        - $ref: '#/components/parameters/ProjectTaskIdempotencyKey'
+        - $ref: '#/components/parameters/ProjectTaskIfMatch'
+      responses:
+        '204': { description: Deleted or exact replay of the original deletion }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/ProjectTaskPreconditionFailed' }
+        '428': { $ref: '#/components/responses/ProjectTaskPreconditionRequired' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/projects/{projectId}/instruction-revisions:
     parameters:
@@ -15539,6 +15763,28 @@ components:
         minLength: 1
         maxLength: 128
         pattern: '^[\x21-\x2B\x2D-\x7E]{1,128}$'
+    ProjectTaskWriteProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^project_[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$' }
+    ProjectTaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+    ProjectTaskIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Exactly one printable value without spaces or comma.
+      schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[\x21-\x2B\x2D-\x7E]+$' }
+    ProjectTaskIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Exactly one strong quoted revision read from this task; neither wildcard nor weak tags are accepted.
+      schema: { type: string, pattern: '^"ptask_[A-Za-z0-9_-]{43}"$' }
     ProjectId:
       name: projectId
       in: path
@@ -17072,6 +17318,30 @@ components:
               minLength: 1
             name:
               type: string
+    AccountProfileReadResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - subject
+            - name
+            - email
+            - email_verified
+          properties:
+            subject:
+              type: string
+              minLength: 1
+            name:
+              type: string
+            email:
+              type: string
+            email_verified:
+              type: boolean
     AccountProfileError400:
       type: object
       additionalProperties: false
@@ -21595,6 +21865,7 @@ components:
                 - dependency_unavailable
                 - model_access_denied
                 - model_settlement_pending
+                - context_window_exceeded
             retryable: { type: boolean }
           if:
             properties:
@@ -22244,6 +22515,7 @@ components:
                 - dependency_unavailable
                 - model_access_denied
                 - model_settlement_pending
+                - context_window_exceeded
             retryable: { type: boolean }
           if:
             properties:
@@ -22559,6 +22831,16 @@ components:
         model: { type: string, minLength: 1 }
         agent: { type: string, minLength: 1 }
         thinking: { type: boolean }
+        interrupt_run_id:
+          type: string
+          minLength: 1
+          maxLength: 191
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])'
+          description: >-
+            For an existing session, name its exact active Run to cancel while accepting this
+            FIFO successor. The same key and input return the original receipt. A stale target
+            or a Run already claimed by another interrupt returns 409 run_delivery_conflict
+            without accepting a new message. Acceptance does not prove cancellation or bypass FIFO.
         selected_skill_source_refs:
           type: array
           maxItems: 16
@@ -22711,6 +22993,10 @@ components:
           minLength: 1
           description: BFF projection of the trusted runId path parameter; the Agent owner receipt does not repeat it.
         command_id: { type: string, minLength: 1 }
+        message_id:
+          type: string
+          minLength: 1
+          description: Only present for run.steer; the BFF-owned user Message ID, not the client intent ID. Pending does not prove injection.
         request_digest: { type: string, minLength: 1 }
         status: { type: string, enum: [pending, succeeded, failed] }
         error_code: { type: string, minLength: 1 }
@@ -23266,7 +23552,7 @@ components:
         meta: { $ref: '#/components/schemas/RequestMeta' }
     Task:
       type: object
-      required: [id, project_id, title, status, updated_at]
+      required: [id, project_id, title, status, updated_at, revision]
       properties:
         id: { type: string }
         project_id: { type: string }
@@ -23275,6 +23561,38 @@ components:
           type: string
           enum: [todo, in_progress, done]
         updated_at: { type: string, format: date-time }
+        revision: { $ref: '#/components/schemas/ProjectTaskRevision' }
+    ProjectTaskRevision:
+      type: string
+      pattern: '^ptask_[A-Za-z0-9_-]{43}$'
+      description: Opaque version of the task representation; quote it in an If-Match header.
+    CreateProjectTaskRequest:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 160, description: Trimmed nonempty title without control characters. }
+    UpdateProjectTaskRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 160, description: Trimmed nonempty title without control characters. }
+        status: { type: string, enum: [todo, in_progress, done] }
+    ProjectTaskWriteReceipt:
+      type: object
+      required: [id, project_id, revision]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        revision: { $ref: '#/components/schemas/ProjectTaskRevision' }
+    ProjectTaskWriteResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/ProjectTaskWriteReceipt' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
     TaskListResponse:
       type: object
       required: [data, meta]
@@ -27478,6 +27796,16 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/AdminIdentityRolesResponse' }
+    ProjectTaskPreconditionFailed:
+      description: The requested task revision is no longer current (project_task_precondition_failed).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ProjectTaskPreconditionRequired:
+      description: One strong If-Match header is required (project_task_precondition_required).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     TooManyRequests:
       description: Current session admission or owning service is rate limited
       headers:
