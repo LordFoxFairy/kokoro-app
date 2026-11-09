@@ -1,3 +1,7 @@
+## 当前消息的资源客户端（A‑08）
+
+Composer 复用现 Library CLEAN 文件/FINAL artifact 和 Project resources 列表/上传，不建立第二 API 或文件缓存。`uploadProjectResource` 增加可选 AbortSignal，既有 Project 页面调用保持原义，Composer 退休上传时可终止网络并忽略迟到成功；未知结果仍保原 File/key 供显式重试。
+
 ## Project Overview 待办
 
 `project-todo-section.tsx` 只呈现当前准入 Project 的 owner 列表与手动 CRUD，不消费 Run Todo 或排程。写入前按当前 subject / Project 在标签页 sessionStorage 冻结原命令；未知只能显式重试，412 读回后须显式采用当前版本。切 Project 或准入代际会退役异步结果；正式 wire 与 ACK 校验归 BFF 生成消费者；`project-todo-client.ts` 只在本地 view model 与生成 wire 之间映射，经唯一 Hub adapter，不增加 SDK／HTTP 运行时副本。

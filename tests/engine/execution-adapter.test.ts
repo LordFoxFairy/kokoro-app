@@ -52,11 +52,11 @@ describe("session execution adapter", () => {
         mode: "fast",
         model: null,
         selectedSkillSourceRefs: [],
-        selectedResourceRefs: [{ kind: "asset", resource_id: "asset_1", version_id: "version_1" }],
+        selectedResourceRefs: [{ kind: "asset", resource_id: "asset_1" }],
       },
     })
     expect(client.createCalls[0]?.body).toMatchObject({
-      selected_resource_refs: [{ kind: "asset", resource_id: "asset_1", version_id: "version_1" }],
+      selected_resource_refs: [{ kind: "asset", resource_id: "asset_1" }],
     })
     expect(client.createCalls[0]?.body).not.toHaveProperty("url")
     expect(client.createCalls[0]?.body).not.toHaveProperty("content_sha256")
@@ -65,6 +65,7 @@ describe("session execution adapter", () => {
 
   it("rejects resource ref payloads that carry content or duplicate identities", () => {
     const base = { idempotency_key: "resource_invalid", content: "引用" }
+    expect(messageCreateParamsSchema.safeParse({ ...base, selected_resource_refs: [{ kind: "asset", resource_id: "asset_1", version_id: "v1" }] }).success).toBe(false)
     expect(messageCreateParamsSchema.safeParse({ ...base, selected_resource_refs: [{ kind: "asset", resource_id: "asset_1", url: "https://example.test" }] }).success).toBe(false)
     expect(messageCreateParamsSchema.safeParse({ ...base, selected_resource_refs: [
       { kind: "asset", resource_id: "asset_1" }, { kind: "asset", resource_id: "asset_1" },

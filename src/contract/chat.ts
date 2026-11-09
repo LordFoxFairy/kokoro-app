@@ -1,4 +1,4 @@
-import { selectedCustomApiProfilesWireSchema } from "@/generated/bff-tool-display"
+import { selectedCustomApiProfilesWireSchema, selectedResourceRefsWireSchema } from "@/generated/bff-tool-display"
 // Canonical v1 runtime contract. Keep these schemas synchronized with the checked-in API documentation and contract tests.
 
 import { z } from "zod"
@@ -41,27 +41,8 @@ const selectedSkillSourceRefsSchema = z
     }
   })
 
-const resourceReferenceIdSchema = z.string().regex(
-  /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u,
-)
-
-/** Browser-selected owner references. These are opaque locators, never content or access handles. */
-export const selectedResourceRefsSchema = z
-  .array(z.object({
-    kind: z.enum(["asset", "artifact"]),
-    resource_id: resourceReferenceIdSchema,
-    version_id: resourceReferenceIdSchema.optional(),
-  }).strict())
-  .max(16)
-  .superRefine((refs, context) => {
-    const identities = refs.map((ref) => `${ref.kind}\u001f${ref.resource_id}\u001f${ref.version_id ?? ""}`)
-    if (new Set(identities).size !== identities.length) {
-      context.addIssue({ code: z.ZodIssueCode.custom, message: "Resource refs must be unique" })
-    }
-    if (new TextEncoder().encode(JSON.stringify(refs)).byteLength > 4096) {
-      context.addIssue({ code: z.ZodIssueCode.custom, message: "Resource refs exceed 4096 JSON bytes" })
-    }
-  })
+/** Opaque message intent decoded from the fixed BFF canonical schema. */
+export const selectedResourceRefsSchema = selectedResourceRefsWireSchema
 export type SelectedResourceRef = z.infer<typeof selectedResourceRefsSchema>[number]
 
 export const messageRecordSchema = z

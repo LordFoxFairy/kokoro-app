@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import type { ComposerProps, ComposerSlashCommand } from "@/ui/composer/composer"
 import { Composer } from "@/ui/composer/composer"
+import { ComposerResourcePicker, type ComposerResources, type ComposerResourceSource } from "@/ui/composer/composer-resource-picker"
 import { ComposerConnections } from "@/ui/composer/composer-connections"
 import { ComposerSkillsMenu, type ComposerSkills } from "@/ui/composer/composer-skills-menu"
 import type { ComposerConnectionsController } from "@/ui/shell/use-composer-connections"
@@ -28,6 +29,7 @@ type ShellComposerProps = Omit<
 
 export type AppFrameComposerProps = ShellComposerProps & {
   skills?: ComposerSkills
+  resources?: ComposerResources
   connections?: ComposerConnectionsController
   connectionsEnabled?: boolean
   localDraftPersistenceFailed?: boolean
@@ -77,6 +79,7 @@ function preferredCreationModel(projectWorkspace: boolean, hasMessages: boolean,
 /** Renders the one shell-owned Composer slot and its site-projected actions. */
 export function AppFrameComposer({
   skills,
+  resources,
   connections,
   connectionsEnabled = false,
   localDraftPersistenceFailed = false,
@@ -94,6 +97,7 @@ export function AppFrameComposer({
 }: AppFrameComposerProps) {
   const composerResourcesTriggerRef = useRef<HTMLButtonElement | null>(null)
   const resourceScope = useMemo(() => ({ client: skills?.client, boundary: skills?.boundary, key: skills?.scopeKey, selectable: skills?.selectable, enabled: workspaceCapabilities.skills, preview }), [skills?.client, skills?.boundary, skills?.scopeKey, skills?.selectable, workspaceCapabilities.skills, preview])
+  const [resourceDialog, setResourceDialog] = useState<{ scope: object; source: ComposerResourceSource } | null>(null)
   const [resourceMenu, setResourceMenu] = useState<{ scope: typeof resourceScope; slash: ComposerSlashCommand | null } | null>(null)
   const liveScope = useRef<typeof resourceScope | null>(null)
   const returnCaret = useRef<{ scope: typeof resourceScope; caret: number } | null>(null)
@@ -109,6 +113,7 @@ export function AppFrameComposer({
     if (open) { returnCaret.current = null; focusAttempt.current = null }
     setResourceMenu(open ? { scope: resourceScope, slash: null } : null)
   }, [resourceScope])
+  const attachmentsEnabled = !preview && workspaceCapabilities.resources && resources?.boundary.admitted === true && resources.boundary.subject !== null && resources.selectable
   const resourcesEnabled = !preview && workspaceCapabilities.skills && skills?.boundary.admitted === true && skills.boundary.subject !== null && skills.selectable !== false
   // `Composer` owns the full copy contract. The shell only needs the small
   // translation function for values that shape the shell-projected slot.
@@ -126,6 +131,7 @@ export function AppFrameComposer({
     <div data-slot="composer" className="shrink-0">
       {submissionRecoveryFailed ? <p role="alert" className={styles.submissionError}>{translate("chat.submissionRecoveryFailed")}</p> : null}
       {localDraftPersistenceFailed ? <p role="alert" className={styles.submissionError}>{translate("chat.localDraftPersistenceFailed")}</p> : null}
+      {resources ? <ComposerResourcePicker returnTarget={composerResourcesTriggerRef} controller={resources} source={resourceDialog?.scope === resourceScope ? resourceDialog.source : null} onClose={() => setResourceDialog(null)} /> : null}
       <Composer
         {...composerProps}
         {...(placeholder === undefined ? {} : { placeholder })}
@@ -154,7 +160,8 @@ export function AppFrameComposer({
         leadingActions={
           <>
             {workspaceCapabilities.resources || workspaceCapabilities.skills ? (
-              <ComposerSkillsMenu skills={skills} enabled={resourcesEnabled} open={resourceMenu?.scope === resourceScope}
+              <ComposerSkillsMenu skills={skills} enabled={resourcesEnabled || attachmentsEnabled} skillsEnabled={resourcesEnabled}
+                {...(attachmentsEnabled ? { onResourceSource: (source: ComposerResourceSource) => setResourceDialog({ scope: resourceScope, source }) } : {})} open={resourceMenu?.scope === resourceScope}
                 openFromSlash={resourceMenu?.slash != null} onOpenChange={changeResourceMenu} triggerRef={composerResourcesTriggerRef}
                 onSelect={skill => {
                   const command = resourceMenu?.slash

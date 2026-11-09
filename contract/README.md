@@ -1,3 +1,7 @@
+## A‑08：唯一当前 Public28.24 消费者
+
+`src/generated/bff-public-openapi.yaml` 为 BFF `534ace39b3a9fa2c2c1762d8c1cdf25412593cd1` / Public28.24.0 完整 Git blob，SHA‑256 `921c4b7273580a5c64cf6a220808472e828239d4abfbc7b5b93138ecc055a429`。原13条公共生成入口与 current pins 同步；现 tool-display generator 另从 MessageCreateRequest.selected_resource_refs 正式字段生成 strict opaque refs decoder，复用原 Chat submit/recovery，无新增 SDK runtime。test-only 按 owner 正式 inverse 精确还原28.23和28.22后承接既有父链；历史断言保持，不在运行中降级。下方A‑12独立窄发行物与其它private/policy来源保持。
+
 ## A‑12：固定 Public 28.23 执行记录窄消费者
 
 `bff-scheduled-executions-source.json` 固定 BFF `a889f695d8cc936d2fd3ce3bdb1ff5e8db70446f` / Public 28.23.0，完整原件位于 `vendor/kokoro-bff/<commit>/openapi.yaml`，SHA-256 `0abd300ffc5d50d3aefa19832a32feb53ea358933bcc4df655202517554a7504`。`pnpm contract:generate:bff-scheduled-executions` 从该原件只提取 `listScheduledTaskExecutions` 和传递引用，生成响应 Zod、类型及 provenance；`pnpm contract:check:bff-scheduled-executions` 重生成并逐字节检查，已接入 `pnpm contract`。生成器对 owner 的 `additionalProperties:false` 生成 strict 对象，不手改生成物。无 SDK runtime 或第二网络层。`src/contract/scheduled.ts` 消费生成项与解壳后的 `data`，只补浏览器结果关联和非空 cursor 约束；cursor 不解析。

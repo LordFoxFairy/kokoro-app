@@ -44,4 +44,8 @@ AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户
 
 Composer 仅报告新输入的 slash 范围；成功选择仅移除该范围，保留原文、原会话和光标，不自动 Send。IME、paste、URL/path 与选区替换不打开命令；菜单键盘/Esc 不落入原 Enter-submit。真正 source 选择与首次 Send 承接仍由 `useAppFrameSkillTrial` 单一生命周期持有，旧 actor/scope/route 的结果和迟到 focus 不复活。`SelectedSkillPill` 原样复用，当前仍为 textarea＋controls pill，不冒称行内不可编辑 token 已一比一。
 
-2026-10-29实测修正：Manus首页与项目的连接器列表在前、添加和管理固定底部，不随上下placement逆序；删除原placement监听与反转，键盘首次进入真实首个选择项、Esc回焦。已发送选择由私有snapshot提供候选，Engine保护新提交／手选，controller完整重新核验目录后CAS恢复。加号仍缺真实文件／资料库／最近任务上下文链，不将本节现Skills实现视作完整资源菜单。
+2026-10-29实测修正：Manus首页与项目的连接器列表在前、添加和管理固定底部，不随上下placement逆序；删除原placement监听与反转，键盘首次进入真实首个选择项、Esc回焦。已发送选择由私有snapshot提供候选，Engine保护新提交／手选，controller完整重新核验目录后CAS恢复。
+
+## 当前草稿的资源选择（A‑08，实施候选）
+
+`composer-resource-picker.tsx` / `.module.css` 承接现加号的显式本地上传、Library CLEAN files/FINAL artifacts 与当前 scope 最近任务；引用只报告 kind/resource_id，≤16、可移除，上传/选择/关闭不发送。未知上传保原 File/key，身份/路由/页面退休 abort 并忽略迟到结果。Project 文件沿现 Project owner，Project artifacts 按已知当前 Conversation 过滤；只有答案的任务仍明确不可引用。现 Skills 子菜单与 MCP 行为保持；真实浏览器/正式组合验收归 Root。

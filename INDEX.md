@@ -1,3 +1,7 @@
+### A‑08 当前消息资源接线（2026‑11‑09，未提交候选）
+
+`ui/composer/composer-resource-picker.tsx` 复用现文件上传/列表与 artifact 客户端，`AppFrameComposer` 在同一加号显示三类资源；AppFrame 本地 Project draft 的 resourceRefs 仅在 fresh Conversation 分配后由现 `use-app-frame-skill-trial.ts` 移交原 engine。无第二 engine、store、路由或答案复制，only-answer task 引用仍明确开放。设计与契约见本仓三面文档，正式 pin 与真实浏览器验收由 Root 串行交付。
+
 ### A‑12 定时执行记录接线（2026‑11‑08，未提交候选）
 
 `features/scheduled-tasks` 继续唯一拥有自动化界面，新增 `use-scheduled-executions.ts` / `scheduled-execution-list.tsx` 承接 BFF 正式分页读投影和普通 Conversation 结果链接；`scheduled-task-project-filter.tsx` 复用现 Project 目录。显式 `filter_project_id` 仅筛选，保原 `project_id` 创建上下文。`contract/scheduled.ts` 与同源 scheduled adapter 保严格执行读边界；现周期/时区逻辑保持。正式来源 pin、主控真实浏览器和提交由 Root 串行完成。

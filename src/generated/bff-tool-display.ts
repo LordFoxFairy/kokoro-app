@@ -2,9 +2,9 @@
 import {z} from "zod"
 
 export const BFF_TOOL_DISPLAY_PROVENANCE = {
-  "ownerCommit": "99f946e67bec19d0bead1d29d7f3fd32ce4e95bf",
-  "sourceSha256": "a3d71aa845265084f7965c06dc903e2a5bf24c47d23bceb9a19bcd5d991c08b4",
-  "openapiVersion": "28.22.0"
+  "ownerCommit": "534ace39b3a9fa2c2c1762d8c1cdf25412593cd1",
+  "sourceSha256": "921c4b7273580a5c64cf6a220808472e828239d4abfbc7b5b93138ecc055a429",
+  "openapiVersion": "28.24.0"
 } as const
 
 export const BFF_TOOL_DISPLAY_CODES = [
@@ -47,6 +47,7 @@ export const BFF_TOOL_DISPLAY_DETAIL_PROFILE = {
   }
 } as const
 
+export const selectedResourceRefsWireSchema = z.array(z.object({"kind":z.union([z.literal("asset"),z.literal("artifact")]),"resource_id":z.string().min(1).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\\s\\S])","u")).refine(v=>Array.from(v).length<=191)}).strict()).max(16).refine(values => new Set(values.map(value => JSON.stringify(value))).size === values.length).refine(values => new TextEncoder().encode(JSON.stringify(values)).byteLength <= 4096)
 export const customApiStateVersionWireSchema = z.number().int().min(1).max(2147483647)
 export const selectedCustomApiProfilesWireSchema = z.array(z.object({"profile_id":z.string().min(1).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\\s\\S])","u")).refine(v=>Array.from(v).length<=191),"expected_state_version":z.number().int().min(1).max(2147483647)}).strict()).max(32).refine(values => new Set(values.map(value => value.profile_id)).size === values.length)
 export const actionTitleWireSchema = z.string().min(1).refine(v=>Array.from(v).length<=256).refine(v=>new TextEncoder().encode(v).length<=256)

@@ -33,6 +33,12 @@ published relay 3.0 的精确两模式与叶名 `session_token`、`session_data`
 
 本片不改变登录／退出／邀请业务交互、状态 JSON、错误码、路径、Schema 或依赖，不新增 flag、跨字段校验或 mixed-scheme 支持承诺；vendor／版本／摘要／生成物未改，relay3.0 及状态1.0 正常只读生成检查通过。旧 HTTPS 开发 plain Cookie 在切换时只清该旧 Cookie 并重新登录，不清草稿／业务数据、不添加旧名 fallback；本候选阶段不执行用户操作。HTTP/plain、HTTPS 非生产/Secure 与 production floor 的定向组件回归已通过；完整相关门、真实 Cookie 删除／rolling 与精确新组合旅程仍待 Root 验收。现有机器来源和生成流程保持，若 owner artifact 实际变化仍先正式发行再固定消费。职责与删除项见 [TECHNICAL_DESIGN](TECHNICAL_DESIGN.md)。
 
+## A‑08：消息附件意图（2026‑11‑09，正式 Public28.24 消费候选）
+
+现 MessageCreate 的 `selected_resource_refs` 只接受严格 `{kind: "asset" | "artifact", resource_id}`，最多16项、kind/id 唯一、compact UTF‑8 JSON≤4096字节；`version_id`、内容、URL、hash、scope 与身份字段一律拒绝。沿现 tool-display generator 从 owner canonical 字段生成唯一 decoder，删除手写重复。候选复用现同源 Library 文件/artifact 和 Project resources；本地文件继续现有有界 multipart 上传，只在 owner 返回 CLEAN 成功后选择。新 UI 不新增 API，也不将目录读或资源 ID 当执行权限；提交结果仍按 BFF 当前资源校验真实呈现。
+
+唯一当前 public snapshot 原样来自 BFF `534ace39b3a9fa2c2c1762d8c1cdf25412593cd1` / Public28.24.0，SHA‑256 `921c4b7273580a5c64cf6a220808472e828239d4abfbc7b5b93138ecc055a429`；原13条 public 生成入口正规重出，A‑12 独立窄发行物与 private/policy pins 保持。test-only 复用正式 owner inverse 精确回28.23→28.22，再承接原父证明，不是运行 fallback。真实浏览器和精确组合验收归 Root。
+
 ## T-01 标准 Session 状态消费（2026-11-02，本地消费者候选）
 
 本轮沿 Root 唯一计划 §3.6 和已通过 D0 实施，不新增认证 owner、Schema、依赖或认证存储。具体固定来源见 `contract/bff-auth-session-source.json`；生成器只消费本仓 vendor 的原字节，不导入 sibling 源码。普通业务一次同源/BFF派发，当前权限仍由 BFF/IAM 与业务 owner 判断。

@@ -9,9 +9,9 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-tool-display.ts")
-const ownerCommit = "99f946e67bec19d0bead1d29d7f3fd32ce4e95bf"
-const sourceSha256 = "a3d71aa845265084f7965c06dc903e2a5bf24c47d23bceb9a19bcd5d991c08b4"
-const openapiVersion = "28.22.0"
+const ownerCommit = "534ace39b3a9fa2c2c1762d8c1cdf25412593cd1"
+const sourceSha256 = "921c4b7273580a5c64cf6a220808472e828239d4abfbc7b5b93138ecc055a429"
+const openapiVersion = "28.24.0"
 
 export function inspectBffToolDisplayContract(document) {
   assert.equal(document.info.version, openapiVersion, "BFF tool display version drift")
@@ -146,8 +146,8 @@ function schemaCode(schema,schemas) {
  throw Error("unsupported answer schema")
 }
 function renderAnswerSchemas(s,statuses){
- const specs={customApiStateVersionWireSchema:s.MessageCreateRequest.properties.selected_custom_api_profiles.items.properties.expected_state_version,selectedCustomApiProfilesWireSchema:s.MessageCreateRequest.properties.selected_custom_api_profiles,actionTitleWireSchema:s.RunToolActivity.properties.action_title,answerFeedbackWireSchema:s.MessageFeedbackResponse.properties.data,answerRegenerationReceiptWireSchema:s.MessageRegenerationResponse.properties.data,runDisplaySkillWireSchema:s.RunDisplaySkill,runDisplayWireSchema:s.RunDisplay,runToolFactWireSchema:s.RunDisplay.properties.tool_facts.items,runActivityDetailWireSchema:s.RunDisplay.properties.activity_details.items,safeVirtualPathWireSchema:s.RunDisplaySkill.properties.virtual_path,answerActionErrorWireSchema:s.ErrorEnvelope}
- return Object.entries(specs).map(([name,schema])=>`export const ${name} = ${schemaCode(schema,s)}${name === "selectedCustomApiProfilesWireSchema" ? ".refine(values => new Set(values.map(value => value.profile_id)).size === values.length)" : ""}`).join("\n")+`\nexport const BFF_ANSWER_ACTION_STATUSES = ${JSON.stringify(statuses)} as const\n`
+ const specs={selectedResourceRefsWireSchema:s.MessageCreateRequest.properties.selected_resource_refs,customApiStateVersionWireSchema:s.MessageCreateRequest.properties.selected_custom_api_profiles.items.properties.expected_state_version,selectedCustomApiProfilesWireSchema:s.MessageCreateRequest.properties.selected_custom_api_profiles,actionTitleWireSchema:s.RunToolActivity.properties.action_title,answerFeedbackWireSchema:s.MessageFeedbackResponse.properties.data,answerRegenerationReceiptWireSchema:s.MessageRegenerationResponse.properties.data,runDisplaySkillWireSchema:s.RunDisplaySkill,runDisplayWireSchema:s.RunDisplay,runToolFactWireSchema:s.RunDisplay.properties.tool_facts.items,runActivityDetailWireSchema:s.RunDisplay.properties.activity_details.items,safeVirtualPathWireSchema:s.RunDisplaySkill.properties.virtual_path,answerActionErrorWireSchema:s.ErrorEnvelope}
+ return Object.entries(specs).map(([name,schema])=>`export const ${name} = ${schemaCode(schema,s)}${name === "selectedCustomApiProfilesWireSchema" ? ".refine(values => new Set(values.map(value => value.profile_id)).size === values.length)" : name === "selectedResourceRefsWireSchema" ? `.refine(values => new Set(values.map(value => JSON.stringify(value))).size === values.length).refine(values => new TextEncoder().encode(JSON.stringify(values)).byteLength <= ${schema["x-kokoro-json-byte-limit"]})` : ""}`).join("\n")+`\nexport const BFF_ANSWER_ACTION_STATUSES = ${JSON.stringify(statuses)} as const\n`
 }
 async function main() {
   const mode = process.argv[2]

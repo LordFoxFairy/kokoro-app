@@ -1,3 +1,4 @@
+import { restorePublic2822ScheduledExecutionsContract } from "./bff-scheduled-executions-parent"
 // Test-only exact Public28.21 -> Public28.20 inverse. Never a runtime fallback.
 import { createHash } from "node:crypto"
 
@@ -25,6 +26,7 @@ const steerReceiptDelta = [
 
 // Exact Public28.22 -> Public28.21; earlier owner proofs retain their old bytes.
 export function restorePublic2821SteerReceiptContract(source: string): string {
+  source = restorePublic2822ScheduledExecutionsContract(source)
   const version = "  version: 28.22.0\n"
   if (!source.includes(version)) {
     if (source.includes(steerReceiptDelta)) throw Error("Steer receipt Public28.22 version drift")

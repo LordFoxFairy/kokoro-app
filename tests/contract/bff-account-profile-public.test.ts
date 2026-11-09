@@ -11,9 +11,9 @@ import {
 it("pins the IAM-owned read/write profile contract and generated SDK operations", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml");
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(
-    "a3d71aa845265084f7965c06dc903e2a5bf24c47d23bceb9a19bcd5d991c08b4",
+    "921c4b7273580a5c64cf6a220808472e828239d4abfbc7b5b93138ecc055a429",
   );
-  expect(YAML.parse(bytes.toString()).info.version).toBe("28.22.0");
+  expect(YAML.parse(bytes.toString()).info.version).toBe("28.24.0");
   expect(Object.keys(sdk)).toEqual(["readAccountProfile", "updateAccountProfile"]);
 });
 it("keeps UTF16/closed and escaped original rules exact", () => {

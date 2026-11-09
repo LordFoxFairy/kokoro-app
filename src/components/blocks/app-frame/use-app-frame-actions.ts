@@ -1,3 +1,4 @@
+import type { SelectedResourceRef } from "@/contract/chat"
 import type { CustomApiSelection } from "@/engine/custom-api-selection"
 import {
   type FormEvent,
@@ -32,7 +33,7 @@ export type AppFrameActionsOptions = {
   projectWorkspace: boolean
   projectRef?: string
   routedConversationId?: string | null
-  projectComposerDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; selectedCustomApiProfiles?: readonly CustomApiSelection[]; isCurrent: () => boolean }
+  projectComposerDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; selectedCustomApiProfiles?: readonly CustomApiSelection[]; selectedResourceRefs?: readonly SelectedResourceRef[]; isCurrent: () => boolean }
   onProjectDraftAccepted?: () => void
   standaloneSurface: boolean
   chatHref: string

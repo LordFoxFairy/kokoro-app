@@ -1,3 +1,9 @@
+## A‑08：当前消息资源选择（2026‑11‑09，实施候选）
+
+沿 Root 已批准方案复用同一 Composer 的 `+` 菜单：本地文件、资料库、最近任务；Skills/MCP 原流程不变。`composer-resource-picker.tsx` 只负责现 owner 客户端的候选读取、显式上传与受控选择，AppFrame/engine 唯一持当前草稿引用。个人文件与 Project 文件分别走现 Library/Project 上传与 CLEAN 列表；最近任务先显示当前 scope 的真实 Conversation，再列其已交付 FINAL artifacts。Project artifacts 仅展示已在当前 Project Conversation 列表证明归属的项目，不把候选当执行授权。只有正文的任务暂不支持引用，界面明确说明，不复制答案为新文件。
+
+上传不发送 Chat；未知结果保原 File/key 显式重试，取消/移除不发送。actor、tenant、admission generation、scope、route 与 pagehide 退休读取/上传，迟到结果不加入选择。Project Overview 的本地选择在 fresh Conversation 分配后一次移交原 engine，原 unknown submission/recovery 冻结引用不随之后草稿改动。steer wire 无附件能力，故该模式禁用选择。使用现 Dialog/Button/Input 和语义样式，无新 owner、依赖、路由或兼容分支。真实浏览器与正式精确组合由 Root 验收，不以 focused 测试代表产品闭环。
+
 ## A‑12：正式定时执行记录与结果入口（2026‑11‑08，实施候选）
 
 复用现 `features/scheduled-tasks`、BFF public read 和普通 Conversation reader。新增 Updates 页签按需读取正式执行记录，加载/空态/错误与任务定义读取相互独立；分页和显式刷新只读，不重发执行命令。结果链接只使用 owner 返回的可访问 Conversation/assistant Message 关联，queued/submitted 不显示为已接纳或已完成；不复制终稿或引入第二套事件流。

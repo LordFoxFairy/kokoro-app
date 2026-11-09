@@ -1,5 +1,9 @@
 > D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
 
+## A‑08：资源选择复用原草稿与提交（2026‑11‑09）
+
+仅在原 engine/Project Overview draft 保存 ≤16 个 kind/resource_id 引用；filename 只作当前 picker RAM 标签。原 PendingSubmission 与现 browser journal 冻结同一原请求引用，unknown 显式原 key/body 恢复，不新增存储或另写附件事实。未提交上传的 File/key 仅在当前组件作用域内存存活，身份/路由退休后不复活；Storage/Artifact 事实仍属原 owner，不复制文件正文、答案、hash 或下载凭据。
+
 ## T-01 标准认证状态与本地退休（2026-11-02，本地消费者候选）
 
 本轮沿 Root 唯一计划 §3.6 和已通过 D0 实施，不新增认证 owner、Schema、依赖或认证存储。具体固定来源见 `contract/bff-auth-session-source.json`；生成器只消费本仓 vendor 的原字节，不导入 sibling 源码。普通业务一次同源/BFF派发，当前权限仍由 BFF/IAM 与业务 owner 判断。

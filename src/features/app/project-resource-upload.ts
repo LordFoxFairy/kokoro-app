@@ -17,8 +17,10 @@ export async function uploadProjectResource(
   projectRef: string,
   file: File,
   idempotencyKey: string,
+  signal?: AbortSignal,
 ): Promise<ProjectResourceUploadResult> {
   if (!projectRef || !idempotencyKey) throw new ProjectResourceUploadError("invalid_upload_identity", false)
+  signal?.throwIfAborted()
   const body = new FormData()
   body.append("files", file)
   let response: Response
@@ -27,6 +29,7 @@ export async function uploadProjectResource(
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey },
       body,
+      ...(signal ? { signal } : {}),
     })
   } catch {
     throw new ProjectResourceUploadError("upload_network_error", true)

@@ -1,3 +1,9 @@
+## 2026-11-09 A-08 Composer 资源选择（未提交候选）
+
+基线 `001d901c`；唯一 Public28.24 原件固定 BFF `534ace39`，13 条既有生成链正规配对，资源 decoder 来自 owner schema，删除手写重复定义。现有＋菜单支持本地上传、Library 与最近任务 FINAL；仅提交 opaque refs。Project 新 Conversation 分配后移交原选择；取消/移除不发送，unknown 保留原 File/key 或原 Message 意图。最近任务复用已加载 owner 列表，无产物答案引用与发送前选择硬刷新保持仍 OPEN。
+
+停写输入上完整 lint、非增量 types、contract/architecture、默认测试与 build 均通过；主控另复验新资源 UI/原 engine 两文件 17 PASS，独审当前最小片 CLEAR。真实 native IAM/Chromium/BFF/Storage/Scanner/Agent Worker 旅程待 Root 精确配对后验收；不把静态门或测试数量当 A-08 产品闭环。各仓沿原 PR，未合并、未部署。
+
 ## A‑03：发送但不中断（App 候选）
 
 固定 BFF #18 `99f946e` Public 28.22 公开原件。现真实设置选择同 Run 补充，默认发送继续显示队列，不把排队称为插话；预览不生效。浏览器同源 control 对精确 scope、202、原 Run/key 和 canonical Message 做严格验证；现会话快照承接已接纳消息。明确未接纳可恢复原稿，终态未确认不引导重发。定向 transport、设置和输入按钮通过；浏览器丢回执、同一 Run 真实 Worker／最终组合由 Root 另验。
