@@ -1,3 +1,9 @@
+## A‑12：正式定时执行记录与结果入口（2026‑11‑08，实施候选）
+
+复用现 `features/scheduled-tasks`、BFF public read 和普通 Conversation reader。新增 Updates 页签按需读取正式执行记录，加载/空态/错误与任务定义读取相互独立；分页和显式刷新只读，不重发执行命令。结果链接只使用 owner 返回的可访问 Conversation/assistant Message 关联，queued/submitted 不显示为已接纳或已完成；不复制终稿或引入第二套事件流。
+
+`project_id` 继续只控制创建上下文，新的 `filter_project_id` 仅是浏览器筛选位置：任务/执行读取映射 BFF query `project_id`，从现 Project 目录读取候选；筛选变化退休旧读取和 cursor，不改变草稿归属。现周期、IANA 时区和 DST 算法保持。App 只访问同源 adapter，不导入 sibling 源码；执行记录使用正式 BFF `a889f695d8cc936d2fd3ce3bdb1ff5e8db70446f` / Public 28.23.0 的完整原件与摘要固定到独立 vendor；具名生成器只投影执行记录 GET 引用闭包，复用生成响应/项，不重钉其他能力或新增 SDK runtime。本片未观察到 Manus 非空 Updates 参考，不称新版整页像素一致。
+
 ## A‑07：Project Overview 待办区（D0，待实现与验收）
 
 仅在 Project Overview 当前 Project 已真实读回且当前 subject 通过现准入时，挂独立待办区；不挂 Chat engine、Run Todo、排程或目录，不在 preview 伪造成功。显示 owner 顺序、初次加载／空态／失败、创建／改名／改状态与确认删除。每次写成功只读回一次当前列表，不把 GET 冒充写回执；慢读/冲突保已确认行和编辑草稿。派发前在当前标签 sessionStorage 按已验 subject 与 canonical Project 冻结 Task、method、key、body、revision，ACK／明确拒绝后移除；未知可跨本标签刷新，只允许显式原样重试，不复制到其他主体或项目。存储写入失败不发命令；412 只读刷新并让用户重新确认，不自动用新版本覆盖。退出 Project 或准入更换退役请求、拒绝迟到结果。

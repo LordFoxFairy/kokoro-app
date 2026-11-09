@@ -10,7 +10,11 @@ import { ScheduledTaskDialogs } from "./scheduled-task-dialogs";
 import {
   useScheduledLocation,
   writeScheduledView,
+  writeScheduledProjectFilter,
 } from "./scheduled-task-location";
+import { ScheduledTaskProjectFilter } from "./scheduled-task-project-filter";
+import { ScheduledExecutionList } from "./scheduled-execution-list";
+import { useScheduledExecutions } from "./use-scheduled-executions";
 import { resolveScheduledTaskRuntime } from "./scheduled-task-mode";
 import { scheduledTaskCapabilities } from "./scheduled-task-operations";
 import type { ScheduledTaskSurfaceHostProps } from "./scheduled-task-surface.types";
@@ -37,15 +41,13 @@ function ScopedScheduledTaskSurface(props: ScheduledTaskSurfaceHostProps) {
   const resolved = resolveScheduledTaskRuntime(props);
   const boundary = resolved.mode === "live" ? props.projectReadBoundary : undefined;
   const runtime = resolved.mode === "live" && boundary && !boundary.admitted ? { ...resolved, client: null } : resolved;
+  const { view, editorOpen, creationContext, filterContext } = useScheduledLocation();
+  const projectId = filterContext.kind === "project" ? filterContext.projectId : undefined;
   const { displayedTasks, loading, loadError, loadTasks } =
-    useScheduledTaskSource(runtime, boundary);
-  const { view, editorOpen, creationContext } = useScheduledLocation();
-  const {
-    calendarMonth,
-    calendarTasks,
-    resetCalendarMonth,
-    shiftCalendarMonth,
-  } = useScheduledTaskCalendar(displayedTasks, runtime.displayTimezone);
+    useScheduledTaskSource(resolved, boundary, projectId, filterContext.kind !== "invalid");
+  const executions = useScheduledExecutions(runtime, view === "updates", boundary, projectId, filterContext.kind !== "invalid");
+  const { calendarMonth, calendarTasks, resetCalendarMonth, shiftCalendarMonth } =
+    useScheduledTaskCalendar(displayedTasks, runtime.displayTimezone);
   const editor = useScheduledTaskEditor({
     runtime,
     tasks: displayedTasks,
@@ -61,9 +63,7 @@ function ScopedScheduledTaskSurface(props: ScheduledTaskSurfaceHostProps) {
     retryTask,
     setTaskEnabled,
   } = useScheduledTaskMutations(runtime, loadTasks);
-  const [deleteTarget, setDeleteTarget] = useState<ScheduledTaskRecord | null>(
-    null,
-  );
+  const [deleteTarget, setDeleteTarget] = useState<ScheduledTaskRecord | null>(null);
   const capabilities = scheduledTaskCapabilities(runtime);
 
   const confirmDelete = useCallback(async () => {
@@ -72,7 +72,7 @@ function ScopedScheduledTaskSurface(props: ScheduledTaskSurfaceHostProps) {
   }, [deleteTarget, removeTask]);
 
   const switchView = useCallback((next: string) => {
-    if (next === "calendar" || next === "list") writeScheduledView(next);
+    if (next === "calendar" || next === "list" || next === "updates") writeScheduledView(next);
   }, []);
 
   return (
@@ -81,6 +81,12 @@ function ScopedScheduledTaskSurface(props: ScheduledTaskSurfaceHostProps) {
         <h1>{t("scheduled.title")}</h1>
       </header>
       <ScheduledTaskContent
+        updates={<ScheduledExecutionList source={executions} />}
+        projectFilter={runtime.mode === "live" ? <ScheduledTaskProjectFilter
+          {...(projectId === undefined ? {} : { projectId })}
+          invalid={filterContext.kind === "invalid"} {...(boundary === undefined ? {} : { boundary })}
+          onChange={writeScheduledProjectFilter} /> : null}
+        invalidFilter={filterContext.kind === "invalid"}
         brandName={runtime.brandName}
         fixtureMode={runtime.mode === "preview"}
         controlledTasks={runtime.mode === "controlled"}

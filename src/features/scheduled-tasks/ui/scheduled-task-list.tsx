@@ -1,6 +1,7 @@
 "use client"
 
 import { Check, Plus } from "lucide-react"
+import type { ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -14,6 +15,9 @@ import { mutationMessageKey, statusMessageKey, type ScheduledMutation } from "./
 import styles from "./scheduled-task-surface.module.css"
 
 type ScheduledTaskListProps = {
+  children?: ReactNode
+  projectFilter?: ReactNode
+  canReadExecutions: boolean
   brandName: string
   tasks: readonly ScheduledTaskRecord[]
   view: ScheduledView
@@ -32,6 +36,9 @@ type ScheduledTaskListProps = {
 }
 
 export function ScheduledTaskList({
+  children,
+  projectFilter,
+  canReadExecutions,
   brandName,
   tasks,
   view,
@@ -50,7 +57,7 @@ export function ScheduledTaskList({
 }: ScheduledTaskListProps) {
   const t = useT()
   return (
-    <section className={styles.taskContent} aria-labelledby="scheduled-list-title" data-testid="scheduled-task-list">
+    <section className={styles.taskContent} aria-labelledby="scheduled-list-title" data-testid={tasks.length > 0 ? "scheduled-task-list" : undefined}>
       <div className={styles.taskHeading}>
         <div>
           <p className={styles.eyebrow}>{t("rail.navScheduled")}</p>
@@ -75,9 +82,13 @@ export function ScheduledTaskList({
           <TabsTrigger value="list" className={styles.viewTab}>
             {t("scheduled.tabTasks")}
           </TabsTrigger>
+          {canReadExecutions ? <TabsTrigger value="updates" className={styles.viewTab}>
+            {t("scheduled.tabUpdates")}
+          </TabsTrigger> : null}
         </TabsList>
       </Tabs>
-      {view === "calendar" ? null : (
+      {projectFilter}
+      {view !== "list" ? null : (
         <div className={styles.taskList} role="list" aria-label={t("rail.navScheduled")}>
           {tasks.map((task) => (
             <ScheduledTaskListItem
@@ -97,6 +108,7 @@ export function ScheduledTaskList({
           ))}
         </div>
       )}
+      {children}
     </section>
   )
 }

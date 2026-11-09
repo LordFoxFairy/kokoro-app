@@ -187,6 +187,7 @@ describe("Web governance boundary", () => {
         "contract:check:bff-mcp-prepare-receipt": z.string().min(1),
         "contract:check:bff-project-pins": z.string().min(1),
         "contract:check:bff-project-tasks": z.string().min(1),
+        "contract:check:bff-scheduled-executions": z.string().min(1),
         "contract:check:bff-project-mcp-recommendations": z.string().min(1),
       }),
     })
@@ -197,6 +198,7 @@ describe("Web governance boundary", () => {
     expect(scripts["contract:check:bff-project-resource"]).toBe("node scripts/generate-bff-project-resource.mjs --check")
     expect(scripts["contract:check:bff-project-pins"]).toBe("node scripts/generate-bff-project-pins.mjs --check")
     expect(scripts["contract:check:bff-project-tasks"]).toBe("node scripts/generate-bff-project-tasks.mjs --check")
+    expect(scripts["contract:check:bff-scheduled-executions"]).toBe("node scripts/generate-bff-scheduled-executions.mjs --check")
     expect(scripts["contract:check:bff-project-mcp-recommendations"]).toBe("node scripts/generate-bff-project-mcp-recommendations.mjs --check")
     expect(scripts["contract:check:bff-tool-display"]).toBe("node scripts/generate-bff-tool-display.mjs --check")
     expect(scripts["contract:generate:bff-mcp-prepare-outcomes"]).toBe("node scripts/generate-bff-mcp-prepare-outcomes.mjs --write")
@@ -237,6 +239,7 @@ describe("Web governance boundary", () => {
       "pnpm contract:check:bff-project-skill-content",
       "pnpm contract:check:bff-project-pins",
       "pnpm contract:check:bff-project-tasks",
+      "pnpm contract:check:bff-scheduled-executions",
       "pnpm contract:check:bff-project-mcp-recommendations",
       "vitest run contract tests/contract",
     ].sort())

@@ -1,3 +1,9 @@
+## A‑12：固定 Public 28.23 执行记录窄消费者
+
+`bff-scheduled-executions-source.json` 固定 BFF `a889f695d8cc936d2fd3ce3bdb1ff5e8db70446f` / Public 28.23.0，完整原件位于 `vendor/kokoro-bff/<commit>/openapi.yaml`，SHA-256 `0abd300ffc5d50d3aefa19832a32feb53ea358933bcc4df655202517554a7504`。`pnpm contract:generate:bff-scheduled-executions` 从该原件只提取 `listScheduledTaskExecutions` 和传递引用，生成响应 Zod、类型及 provenance；`pnpm contract:check:bff-scheduled-executions` 重生成并逐字节检查，已接入 `pnpm contract`。生成器对 owner 的 `additionalProperties:false` 生成 strict 对象，不手改生成物。无 SDK runtime 或第二网络层。`src/contract/scheduled.ts` 消费生成项与解壳后的 `data`，只补浏览器结果关联和非空 cursor 约束；cursor 不解析。
+
+其余能力的完整 Public 28.22 快照和原固定生成来源保持，下方各能力记录按发行保留。本窄消费者不代表真实浏览器与到点链路已验收。
+
 ## A‑03：Public 28.22 原 Run 补充回执
 
 唯一当前快照固定 BFF `99f946e67bec19d0bead1d29d7f3fd32ce4e95bf`／28.22.0／SHA-256 `a3d71aa845265084f7965c06dc903e2a5bf24c47d23bceb9a19bcd5d991c08b4` 的 Git blob；原十三个 Public 生成入口消费同一来源。现 `ControlReceipt` 仅 `run.steer` 可携带 BFF 所属 `message_id`；pending 不证明注入。打断、独立认证和 MCP policy 契约不变。

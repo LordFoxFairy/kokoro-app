@@ -1,3 +1,7 @@
+### A‑12 定时执行记录接线（2026‑11‑08，未提交候选）
+
+`features/scheduled-tasks` 继续唯一拥有自动化界面，新增 `use-scheduled-executions.ts` / `scheduled-execution-list.tsx` 承接 BFF 正式分页读投影和普通 Conversation 结果链接；`scheduled-task-project-filter.tsx` 复用现 Project 目录。显式 `filter_project_id` 仅筛选，保原 `project_id` 创建上下文。`contract/scheduled.ts` 与同源 scheduled adapter 保严格执行读边界；现周期/时区逻辑保持。正式来源 pin、主控真实浏览器和提交由 Root 串行完成。
+
 ## T-07 当前 Public28.18 provenance（2026-11-01）
 
 唯一 `src/generated/bff-public-openapi.yaml` 保持 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9` 的完整原字节；12 个既有 public generator 统一消费该来源，派生物仍由原 `--write` 入口生成。`tests/contract/bff-account-profile-read-parent.ts` 只在测试链首证明完整28.18→28.17，再进入原 Custom API／后续父链；不提供运行时降级或第二 snapshot。当前验证见 `docs/CURRENT.md`，下方版本段均保留其历史语境。

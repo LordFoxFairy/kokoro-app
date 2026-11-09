@@ -1,3 +1,11 @@
+## A‑12：Scheduled executions 同源读面（2026‑11‑08，固定正式 BFF 28.23）
+
+`GET /api/scheduled-tasks/executions` 只代理 BFF `GET /v1/scheduled-tasks/executions`，拒绝此保留集合的写入和额外尾段；延用当前原生 Session 信封、取消和 private/no-store，移除 BFF `data` 外壳后严格解码。query `task_id/project_id` 可选，`limit` 默认20、最大50，`cursor` 不透明；客户端不构造或解析 cursor。集合响应为 `{executions,next_cursor}`，项含 `execution_id/task_id/task_title/occurrence_at/state/conversation_id/project_id/run_id/assistant_message_id/completed_at`，nullable 字段和六种状态以 BFF owner 契约为准；不返回 Agent 内部载荷或凭据。
+
+来源固定 BFF `a889f695d8cc936d2fd3ce3bdb1ff5e8db70446f` 的 Public 28.23.0 完整 Git blob，SHA-256 `0abd300ffc5d50d3aefa19832a32feb53ea358933bcc4df655202517554a7504`；具名生成器只消费 `listScheduledTaskExecutions` 引用闭包并生成类型与 Zod 响应。其余能力仍用原固定来源，不增 SDK runtime；生成器承接 `additionalProperties:false`，浏览器只补结果关联和非空 cursor 约束。
+
+现任务集合 GET 增可选 `project_id`，创建 POST 不加 query。浏览器 `filter_project_id` 不等于原 `project_id` 创建上下文。执行结果只跳转正式个人/项目 Conversation；不可见或尚未激活时没有结果链接。定向 wire/UI/HTTP adapter 验证与真实到点浏览器收据分别记录；当前不是完整 A‑12 验收。
+
 ## A‑07：同源 Project Todo（D0，BFF 发布后生成）
 
 唯一路径 `/api/hub/projects/{projectId}/tasks[/{taskId}]` 映射 BFF 同一 Project Task 资源；在 Hub 通用路径解析前分流，拒绝 `/self` 别名和额外尾段；同样在通用 `/api/session` 拒绝此资源族，不留第二个读写入口。沿用现同源写保护、原生 Cookie/准入服务信封、请求时限及 body 限额。只承接四个精确 operation 的方法、canonical 写路径、写 key、强 `If-Match`、成功与错误；不透传任意 header/路径或增认证凭据。BFF 唯一 OpenAPI 已提交后固定 SHA/摘要并以锁定生成器产生消费者，不手写第二份 DTO。BFF 201 Location 必须与 ACK 的资源身份一致；同源层只返回按同一身份构造的 Hub Location，不透传上游地址。Location 是身份，读取仍走集合。标题按 Unicode 标量计数，不能直接用 UTF‑16 长度限制代替。容量 409 与幂等 409 分别呈现；409 与 412 是明确拒绝，不与未知提交混同；204 没有 JSON body。

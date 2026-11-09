@@ -18,6 +18,8 @@ import type { ScheduledTaskRuntime } from "./scheduled-task-mode"
 export function useScheduledTaskSource(
   runtime: ScheduledTaskRuntime,
   boundary?: ProjectReadBoundary,
+  projectId?: string,
+  validFilter = true,
 ) {
   const admitted = boundary?.admitted ?? true
   const generation = boundary?.generation
@@ -26,24 +28,26 @@ export function useScheduledTaskSource(
     runtime.mode === "controlled" ? runtime.tasks : undefined
   const client = runtime.mode === "live" ? runtime.client : undefined
   const previewTasks = usePreviewTasks(fixtureMode)
-  const [remoteTasks, setRemoteTasks] = useState<ScheduledTaskRecord[]>([])
+  const viewScope = useMemo(() => ({ client, projectId, validFilter }), [client, projectId, validFilter])
+  const scope = useMemo(() => ({ client, generation, admitted, projectId, validFilter }), [client, generation, admitted, projectId, validFilter])
+  const [remote, setRemote] = useState<{ scope: typeof viewScope; tasks: ScheduledTaskRecord[] } | null>(null)
   const [loading, setLoading] = useState(
     !fixtureMode && controlledTasks === undefined,
   )
   const [loadError, setLoadError] = useState(false)
   const requestSequence = useRef(0)
-  const current = useRef({ admitted, generation })
+  const current = useRef(scope)
   useLayoutEffect(() => {
-    current.current = { admitted, generation }
-  }, [admitted, generation])
+    current.current = scope
+    return () => { requestSequence.current += 1 }
+  }, [scope])
 
   const loadTasks = useCallback(async () => {
-    if (!admitted || fixtureMode || controlledTasks !== undefined) return
+    if (!admitted || !validFilter || fixtureMode || controlledTasks !== undefined) return
     const sequence = ++requestSequence.current
     const isCurrent = () =>
       sequence === requestSequence.current &&
-      current.current.admitted &&
-      current.current.generation === generation
+      current.current === scope
     await Promise.resolve()
     if (!isCurrent()) return
     setLoading(true)
@@ -51,17 +55,17 @@ export function useScheduledTaskSource(
     try {
       if (client === undefined || client === null)
         throw new Error("Scheduled task client is not configured")
-      const next = await client.listScheduledTasks()
-      if (isCurrent()) setRemoteTasks([...next])
+      const next = await client.listScheduledTasks(projectId === undefined ? undefined : { projectId })
+      if (isCurrent()) setRemote({ scope: viewScope, tasks: [...next] })
     } catch {
       if (isCurrent()) setLoadError(true)
     } finally {
       if (isCurrent()) setLoading(false)
     }
-  }, [admitted, client, controlledTasks, fixtureMode, generation])
+  }, [admitted, client, controlledTasks, fixtureMode, projectId, scope, validFilter, viewScope])
 
   useEffect(() => {
-    if (!admitted || fixtureMode || controlledTasks !== undefined) {
+    if (!admitted || !validFilter || fixtureMode || controlledTasks !== undefined) {
       requestSequence.current += 1
       return
     }
@@ -69,12 +73,12 @@ export function useScheduledTaskSource(
     return () => {
       requestSequence.current += 1
     }
-  }, [admitted, controlledTasks, fixtureMode, loadTasks])
+  }, [admitted, controlledTasks, fixtureMode, loadTasks, validFilter])
 
   const displayedTasks = useMemo(
-    () => controlledTasks ?? (fixtureMode ? previewTasks : remoteTasks),
-    [controlledTasks, fixtureMode, previewTasks, remoteTasks],
+    () => controlledTasks ?? (fixtureMode ? previewTasks : remote?.scope === viewScope ? remote.tasks : []),
+    [controlledTasks, fixtureMode, previewTasks, remote, viewScope],
   )
 
-  return { displayedTasks, loading, loadError, loadTasks }
+  return { displayedTasks, loading: loading && validFilter, loadError: loadError || !validFilter, loadTasks }
 }

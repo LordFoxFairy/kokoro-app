@@ -58,6 +58,9 @@ async function proxyScheduledTaskRequest(
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) return errorResponse("forbidden_origin", 403)
 
   const path = (await context.params).path ?? []
+  if (path[0] === "executions" && (path.length !== 1 || request.method !== "GET")) {
+    return errorResponse("invalid_scheduled_task_path", 404)
+  }
   if (path.length > 2 || (path.length === 2 && path[1] !== "retry") || path.some((segment) => segment.length === 0)) {
     return errorResponse("invalid_scheduled_task_path", 404)
   }

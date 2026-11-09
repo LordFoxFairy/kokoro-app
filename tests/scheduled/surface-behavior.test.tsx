@@ -23,6 +23,7 @@ function completeClient(overrides: Partial<ScheduledTaskClient> = {}): Scheduled
   const unavailable = async (): Promise<never> => { throw new Error("operation not configured") }
   return {
     listScheduledTasks: unavailable,
+    listScheduledExecutions: unavailable,
     createScheduledTask: unavailable,
     updateScheduledTask: unavailable,
     retryScheduledTask: unavailable,

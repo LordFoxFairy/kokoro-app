@@ -10,19 +10,21 @@ import calendarStyles from "./scheduled-task-calendar.module.css"
 import styles from "./scheduled-task-surface.module.css"
 
 type ScheduledTaskEmptyStateProps = {
+  embedded?: boolean
   brandName: string
   canCreate: boolean
   openEditor: (prompt?: string, target?: HTMLElement | null) => void
 }
 
 export function ScheduledTaskEmptyState({
+  embedded = false,
   brandName,
   canCreate,
   openEditor,
 }: ScheduledTaskEmptyStateProps) {
   const t = useT()
   return (
-    <section className={styles.content} aria-labelledby="scheduled-empty-title">
+    <section className={embedded ? styles.embeddedEmpty : styles.content} aria-labelledby="scheduled-empty-title">
       <div
         className={calendarStyles.calendar}
         role="img"
@@ -37,7 +39,7 @@ export function ScheduledTaskEmptyState({
           <Plus />
         </span>
       </div>
-      <h2 id="scheduled-empty-title">
+      <h2 id="scheduled-empty-title" className={embedded ? "sr-only" : undefined}>
         {t("scheduled.heroTitle", { brand: brandName })}
       </h2>
       <div className={styles.suggestions}>
@@ -58,7 +60,7 @@ export function ScheduledTaskEmptyState({
           )
         })}
       </div>
-      <Button
+      {embedded ? null : <Button
         type="button"
         className={styles.create}
         disabled={!canCreate}
@@ -66,7 +68,7 @@ export function ScheduledTaskEmptyState({
       >
         <Plus data-icon="inline-start" aria-hidden="true" />
         {t("scheduled.create")}
-      </Button>
+      </Button>}
     </section>
   )
 }

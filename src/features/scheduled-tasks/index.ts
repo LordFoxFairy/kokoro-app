@@ -23,4 +23,8 @@ export type {
   ScheduledTaskPatch,
   ScheduledTaskRecord,
   ScheduledTaskStatus,
+  ScheduledTaskReadOptions,
+  ScheduledExecution,
+  ScheduledExecutionPage,
+  ScheduledExecutionReadOptions,
 } from "./model/scheduled-task"
