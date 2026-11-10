@@ -510,12 +510,47 @@ describe("Project reads stay independent from conversation list/title state", ()
     await act(async () => { resolveA(envelope(alpha)); await Promise.resolve() })
   })
 
+  it("opens a cold Project while its rail is pending, and keeps it open when the rail fails", async () => {
+    const { useProjectList } = await import("@/features/app/use-project-list")
+    let finishRail!: (response: Response) => void
+    const rail = new Promise<Response>(resolve => { finishRail = resolve })
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input) === "/api/hub/projects" ? rail : envelope(alpha))
+    const boundary = { admitted: true, subject: "reader", generation: 1 }
+    const view = renderHook(() => useProjectList(false, boundary, alpha.id))
+    await waitFor(() => expect(view.result.current.current).toEqual({ status: "ready", data: alpha }))
+    expect(view.result.current.list.status).toBe("loading")
+    await act(async () => { finishRail(Response.json({}, { status: 503 })); await rail })
+    await waitFor(() => expect(view.result.current.list).toEqual({ status: "error", retryable: true }))
+    expect(view.result.current.current).toEqual({ status: "ready", data: alpha })
+    expect(fetchMock.mock.calls.map(([input]) => String(input)).sort()).toEqual(["/api/hub/projects", "/api/hub/projects/project-A"])
+    view.unmount()
+  })
+
+  it("does not let a late rail response restore a Project after exact denial", async () => {
+    const { useProjectList } = await import("@/features/app/use-project-list")
+    let finishRail!: (response: Response) => void
+    const rail = new Promise<Response>(resolve => { finishRail = resolve })
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input) === "/api/hub/projects" ? rail : Response.json({}, { status: 403 }))
+    const boundary = { admitted: true, subject: "reader", generation: 1 }
+    const view = renderHook(() => useProjectList(false, boundary, alpha.id))
+    const denied = { status: "error", retryable: false }
+    await waitFor(() => expect(view.result.current.current).toEqual(denied))
+    await act(async () => { finishRail(Response.json({ data: { projects: [alpha] }, meta: { request_id: "req_late_list" } })); await rail })
+    expect(view.result.current.current).toEqual(denied)
+    expect(view.result.current.list).toEqual(denied)
+    view.unmount()
+  })
+
   it("uses full collection facts for current detail without a second GET on project selection", async () => {
     const { useProjectList } = await import("@/features/app/use-project-list")
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ data: { projects: [alpha, beta] }, meta: { request_id: "req_list" } }))
     const boundary = { admitted: true, subject: "reader", generation: 1 }
-    const view = renderHook(({ id }) => useProjectList(false, boundary, id), { initialProps: { id: alpha.id } })
-    await waitFor(() => expect(view.result.current.current).toEqual({ status: "ready", data: alpha }))
+    const view = renderHook(({ id }: { id?: string }) => useProjectList(false, boundary, id), { initialProps: {} })
+    await waitFor(() => expect(view.result.current.list.status).toBe("ready"))
+    view.rerender({ id: alpha.id })
+    expect(view.result.current.current).toEqual({ status: "ready", data: alpha })
     view.rerender({ id: beta.id })
     expect(view.result.current.current).toEqual({ status: "ready", data: beta })
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -533,20 +568,23 @@ describe("Project reads stay independent from conversation list/title state", ()
       if (calls === 2) return new Promise<Response>((resolve) => { resolveOld = resolve })
       return Response.json({ data: { projects: [calls === 1 ? alpha : beta] }, meta: { request_id: "req_identity" } })
     })
-    const view = renderHook(({ boundary }) => useProjectList(false, boundary, alpha.id), {
-      initialProps: { boundary: { admitted: true, subject: "old-reader", generation: 1 } },
+    const first = { admitted: true, subject: "old-reader", generation: 1 }
+    const view = renderHook(({ boundary, id }: { boundary: typeof first; id: string | undefined }) => useProjectList(false, boundary, id), {
+      initialProps: { boundary: first, id: undefined as string | undefined },
     })
     await waitFor(() => expect(view.result.current.list).toEqual({ status: "ready", data: [alpha] }))
+    view.rerender({ boundary: first, id: alpha.id })
+    expect(view.result.current.current).toEqual({ status: "ready", data: alpha })
     act(() => view.result.current.refresh())
     await waitFor(() => expect(calls).toBe(2))
-    view.rerender({ boundary: { admitted: false, subject: "", generation: 2 } })
+    view.rerender({ boundary: { admitted: false, subject: "", generation: 2 }, id: alpha.id })
     expect(view.result.current.list.status).toBe("blocked")
     expect(view.result.current.current.status).toBe("blocked")
     expect(signals[1]?.aborted).toBe(true)
     await act(async () => { resolveOld(Response.json({ data: { projects: [alpha] }, meta: { request_id: "req_old" } })); await Promise.resolve() })
     expect(view.result.current.list.status).toBe("blocked")
     expect(calls).toBe(2)
-    view.rerender({ boundary: { admitted: true, subject: "new-reader", generation: 3 } })
+    view.rerender({ boundary: { admitted: true, subject: "new-reader", generation: 3 }, id: undefined })
     await waitFor(() => expect(view.result.current.list).toEqual({ status: "ready", data: [beta] }))
     view.unmount()
   })
@@ -559,8 +597,10 @@ it.each([401, 403, 404, 503])("a deep-link detail HTTP %s clears the earlier can
     ? Response.json({ data: { projects: [alpha] }, meta: { request_id: "req_list" } })
     : Response.json({ error: { code: "redacted" } }, { status }))
   const boundary = { admitted: true, subject: "detail-reader", generation: 1 }
-  const view = renderHook(({ id }) => useProjectList(false, boundary, id), { initialProps: { id: alpha.id } })
-  await waitFor(() => expect(view.result.current.current).toEqual({ status: "ready", data: alpha }))
+  const view = renderHook(({ id }: { id?: string }) => useProjectList(false, boundary, id), { initialProps: {} })
+  await waitFor(() => expect(view.result.current.list.status).toBe("ready"))
+  view.rerender({ id: alpha.id })
+  expect(view.result.current.current).toEqual({ status: "ready", data: alpha })
   view.rerender({ id: "detail-B" })
   expect(view.result.current.current.status).toBe("loading")
   await waitFor(() => expect(view.result.current.current).toEqual({ status: "error", retryable: status === 503 }))
@@ -589,8 +629,10 @@ it("rename refresh aborts the old generation, then reads frozen detail before li
     return new Promise<Response>((resolve) => { deliverList = resolve })
   })
   const boundary = { admitted: true, subject: "reader", generation: 1 }
-  const view = renderHook(() => useProjectList(false, boundary, id))
-  await waitFor(() => expect(view.result.current.current).toEqual({ status: "ready", data: old }))
+  const view = renderHook(({ id }: { id?: string }) => useProjectList(false, boundary, id), { initialProps: {} })
+  await waitFor(() => expect(view.result.current.list.status).toBe("ready"))
+  view.rerender({ id })
+  expect(view.result.current.current).toEqual({ status: "ready", data: old })
   act(() => view.result.current.refresh())
   await waitFor(() => expect(calls).toHaveLength(2))
   let pending!: Promise<typeof fresh>
@@ -619,11 +661,15 @@ it("rename read-back subject/route generation discards held detail and never sta
     heldSignal = init?.signal
     return new Promise<Response>((resolve) => { finish = resolve })
   })
-  const view = renderHook(({ boundary }) => useProjectList(false, boundary, project.id), { initialProps: { boundary: { admitted: true, subject: "old-reader", generation: 1 } } })
-  await waitFor(() => expect(view.result.current.current.status).toBe("ready"))
+  const first = { admitted: true, subject: "old-reader", generation: 1 }
+  const view = renderHook(({ boundary, id }: { boundary: typeof first; id: string | undefined }) => useProjectList(false, boundary, id),
+    { initialProps: { boundary: first, id: undefined as string | undefined } })
+  await waitFor(() => expect(view.result.current.list.status).toBe("ready"))
+  view.rerender({ boundary: first, id: project.id })
+  expect(view.result.current.current.status).toBe("ready")
   const pending = view.result.current.refreshRenamedProject(project.id, new AbortController().signal)
   const rejected = expect(pending).rejects.toMatchObject({ name: "AbortError" })
-  view.rerender({ boundary: { admitted: false, subject: "", generation: 2 } })
+  view.rerender({ boundary: { admitted: false, subject: "", generation: 2 }, id: project.id })
   expect(heldSignal?.aborted).toBe(true)
   await act(async () => { finish(Response.json({ data: { project: { ...project, name: "Late" } }, meta: { request_id: "late" } })); await rejected })
   expect(view.result.current.current.status).toBe("blocked")

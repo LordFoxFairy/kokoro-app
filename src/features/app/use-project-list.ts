@@ -27,11 +27,11 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     if (!signal.aborted && error instanceof ProjectReadError && error.reason === "http" && error.status === 401 && generation !== undefined)
       reportRead401?.({ subject: subject ?? null, generation, signal })
   }, [reportRead401, subject, generation])
-  const key = useMemo(() => ({ generation, subject, admitted, revision }), [generation, subject, admitted, revision])
   const identityKey = useMemo(() => ({ generation, subject, admitted }), [generation, subject, admitted])
-  const renameContext = useMemo(() => ({ key, projectRef }), [key, projectRef])
+  const key = useMemo(() => ({ identityKey, revision }), [identityKey, revision])
+  const detailKey = useMemo(() => ({ key, projectRef }), [key, projectRef])
   const readScopeRef = useRef<{ key: object; active: boolean; epoch: number; controllers: Set<AbortController> } | null>(null)
-  const renameScopeRef = useRef<{ key: object; active: boolean; controllers: Set<AbortController> } | null>(null)
+  const projectScopeRef = useRef<{ key: typeof detailKey; active: boolean; controllers: Set<AbortController>; detailController: AbortController | null } | null>(null)
   useLayoutEffect(() => {
     const scope = { key, active: true, epoch: 0, controllers: new Set<AbortController>() }
     readScopeRef.current = scope
@@ -42,22 +42,27 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     }
   }, [key])
   useLayoutEffect(() => {
-    const scope = { key: renameContext, active: true, controllers: new Set<AbortController>() }
-    renameScopeRef.current = scope
+    const scope = { key: detailKey, active: true, controllers: new Set<AbortController>(), detailController: null }
+    projectScopeRef.current = scope
     return () => {
       scope.active = false
-      for (const controller of scope.controllers) controller.abort()
+      for (const controller of scope.controllers) {
+        controller.abort()
+        readScopeRef.current?.controllers.delete(controller)
+      }
       scope.controllers.clear()
     }
-  }, [renameContext])
+  }, [detailKey])
   const [history, setHistory] = useState<{ key: object; state: ProjectReadState<ProjectInstructionRevisionWire[]> } | null>(null)
   // A durable 202 is a current-actor negative fact. Keep it over slow/failed collection refreshes.
   const [retired, setRetired] = useState<{ key: object; ids: ReadonlySet<string> } | null>(null)
-  const [collection, setCollection] = useState<{ key: object; state: ProjectReadState<Project[]> } | null>(null)
+  const [collection, setCollection] = useState<{ key: typeof key; state: ProjectReadState<Project[]> } | null>(null)
   const [detail, setDetail] = useState<{ key: object; state: ProjectReadState<Project> } | null>(null)
   const refresh = useCallback(() => setRevision((value) => value + 1), [])
   const retireProject = useCallback((target: string) => {
     if (!admitted) return
+    const scope = projectScopeRef.current
+    if (scope?.key.projectRef === target) scope.detailController?.abort()
     setRetired((current) => {
       const ids = current?.key === identityKey ? new Set(current.ids) : new Set<string>()
       ids.add(target)
@@ -74,16 +79,18 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     let controller: AbortController | null = null
     queueMicrotask(() => {
       if (!live || !readFence.active || readFence.key !== key || epoch !== readFence.epoch) return
-      setCollection(null)
       if (!admitted) return
       controller = new AbortController()
       readFence.controllers.add(controller)
+      const publish = (state: ProjectReadState<Project[]>) => setCollection(previous =>
+        previous?.key === key && previous.state.status === "error" && !previous.state.retryable
+          ? previous : { key, state })
       void listProjects(controller.signal).then(
-        (data) => { if (live && readFence.active && epoch === readFence.epoch && !controller?.signal.aborted) setCollection({ key, state: { status: "ready", data } }) },
+        (data) => { if (live && readFence.active && epoch === readFence.epoch && !controller?.signal.aborted) publish({ status: "ready", data }) },
         (error: unknown) => {
           if (live && readFence.active && epoch === readFence.epoch && controller !== null && !controller.signal.aborted) {
             report401(error, controller.signal)
-            setCollection({ key, state: { status: "error", retryable: !denied(error) } })
+            publish({ status: "error", retryable: !denied(error) })
           }
         },
       )
@@ -103,27 +110,36 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     : rawList
   const projectRetired = projectRef !== undefined && retiredIds?.has(projectRef) === true
   const knownProject = list.status === "ready" ? list.data.find((item) => item.id === projectRef) : undefined
-  const detailKey = renameContext
-  const readDetail = admitted && !projectRetired && projectRef !== undefined && list.status === "ready" && knownProject === undefined
+  const collectionDenied = list.status === "error" && !list.retryable
+  // A warm rail refresh needs no duplicate detail read for an already known project.
+  const previouslyKnown = collection?.key.identityKey === identityKey && collection.state.status === "ready"
+    && collection.state.data.some((project) => project.id === projectRef)
+  const readDetail = admitted && !projectRetired && projectRef !== undefined && !collectionDenied
+    && knownProject === undefined && (list.status !== "loading" || !previouslyKnown)
   useEffect(() => {
+    if (!readDetail || projectRef === undefined) return
     const readFence = readScopeRef.current
-    if (!readFence || readFence.key !== key) return
-    const controller = new AbortController()
-    readFence.controllers.add(controller)
+    const projectFence = projectScopeRef.current
+    if (!readFence || readFence.key !== key || !projectFence || projectFence.key !== detailKey) return
     const epoch = readFence.epoch
-    let live = true
-    queueMicrotask(() => { if (live) setDetail(null) })
-    if (readDetail && projectRef !== undefined) void getProject(projectRef, controller.signal).then(
-      (data) => { if (live && readFence.active && epoch === readFence.epoch && !controller.signal.aborted) setDetail({ key: detailKey, state: { status: "ready", data } }) },
-      (error: unknown) => {
-        if (!live || !readFence.active || epoch !== readFence.epoch || controller.signal.aborted) return
-        report401(error, controller.signal)
-        // A denial on either read revokes the whole earlier Project projection.
-        if (denied(error)) setCollection({ key, state: { status: "error", retryable: false } })
-        setDetail({ key: detailKey, state: { status: "error", retryable: !denied(error) && !(error instanceof ProjectReadError && error.status === 404) } })
-      },
-    )
-    return () => { live = false; controller.abort(); readFence.controllers.delete(controller) }
+    queueMicrotask(() => {
+      if (!readFence.active || epoch !== readFence.epoch || !projectFence.active || projectFence.detailController !== null) return
+      const controller = new AbortController()
+      projectFence.detailController = controller
+      readFence.controllers.add(controller)
+      projectFence.controllers.add(controller)
+      const active = () => readFence.active && epoch === readFence.epoch && projectFence.active && !controller.signal.aborted
+      void getProject(projectRef, controller.signal).then(
+        (data) => { if (active()) setDetail({ key: detailKey, state: { status: "ready", data } }) },
+        (error: unknown) => {
+          if (!active()) return
+          report401(error, controller.signal)
+          // Either denial revokes both projections for this generation.
+          if (denied(error)) setCollection({ key, state: { status: "error", retryable: false } })
+          setDetail({ key: detailKey, state: { status: "error", retryable: !denied(error) && !(error instanceof ProjectReadError && error.status === 404) } })
+        },
+      )
+    })
   }, [detailKey, key, projectRef, readDetail, report401])
 
   const readHistory = readInstructions && admitted && projectRef !== undefined && list.status === "ready"
@@ -142,11 +158,13 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     return () => { live = false; controller.abort() }
   }, [detailKey, key, projectRef, readHistory, report401])
 
+  const exact = detail?.key === detailKey ? detail.state : undefined
   const current: ProjectReadState<Project> = !admitted || projectRef === undefined || projectRetired
     ? { status: "blocked" }
-    : knownProject !== undefined ? { status: "ready", data: knownProject }
-      : list.status === "error" ? list
-        : detail?.key === detailKey ? detail.state : { status: "loading" }
+    : collectionDenied ? list
+      : exact?.status === "ready" || exact?.status === "error" && !exact.retryable ? exact
+        : knownProject !== undefined ? { status: "ready", data: knownProject }
+          : exact ?? { status: "loading" }
 
   const instructionHistory: ProjectReadState<ProjectInstructionRevisionWire[]> = !readInstructions || !admitted || projectRef === undefined
     ? { status: "blocked" }
@@ -157,7 +175,7 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
   // ACK invalidates old name reads synchronously. No receipt value enters this hook.
   const refreshRenamedProject = useCallback(async (target: string, signal: AbortSignal): Promise<Project> => {
     const readFence = readScopeRef.current
-    const renameFence = renameScopeRef.current
+    const renameFence = projectScopeRef.current
     if (!admitted || target !== projectRef || !readFence?.active || readFence.key !== key
       || !renameFence?.active || renameFence.key !== detailKey || signal.aborted) {
       throw new DOMException("Aborted", "AbortError")
