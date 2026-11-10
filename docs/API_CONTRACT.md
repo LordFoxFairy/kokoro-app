@@ -1,5 +1,10 @@
 ## A‑13 — Telegram connection in Agents
 
+## Private Run process files (BFF Public 28.33)
+
+The private RunDisplay may list published `workspace_outputs` by immutable version. `GET /api/session/sessions/{sessionId}/runs/{runId}/workspace-outputs/{versionId}/content` uses existing session admission and returns only original bytes, private no-store, and attachment metadata. No query, Range, path-based lookup, Storage URL, or share projection. Canvas uses the display path only as a label.
+
+
 The existing same-origin setup path now relays the canonical Public 28.32
 GET/POST envelope. Opening reads only. An explicit versioned command starts,
 cancels, confirms, or disconnects; an unknown result or 412 is followed by GET,

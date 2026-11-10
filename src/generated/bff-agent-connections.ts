@@ -2,9 +2,9 @@
 import { z } from "zod"
 
 export const BFF_AGENT_CONNECTIONS_PROVENANCE = {
-  "ownerCommit": "3000256cf6c8d2b481b93253631f623f4d38a134",
-  "sourceSha256": "e12a8078f5ecaa741c255a3bcec032d398d35309d845d3cf736dc764a0287d33",
-  "openapiVersion": "28.32.0"
+  "ownerCommit": "5d5b409976713fc8b6d32fbbd426af82f19f6f62",
+  "sourceSha256": "03d4add75d31c6c4dd22e7fcb3b4269556ad3ced87d29a5640976bc74f39810f",
+  "openapiVersion": "28.33.0"
 } as const
 export const AGENT_CONNECTION_READ_ERRORS = [400,401,403,429,503] as readonly number[]
 export const AGENT_CONNECTION_WRITE_ERRORS = [400,401,403,409,412,429,503] as readonly number[]

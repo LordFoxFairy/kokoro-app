@@ -36,12 +36,14 @@ const AGUI_STREAM_IDLE_TIMEOUT_MS = 60_000
 const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "idempotency-key"] as const
 
 async function proxy(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
-  if(/^\/api\/session\/sessions\/[^/]+\/(?:messages\/[^/]+\/(?:feedback|regenerate)|runs\/[^/]+\/display)(?:$|\?)/u.test(new URL(request.url).pathname)) return sessionAnswerActions(request,context.params)
+  if (/^\/api\/session\/sessions\/[^/]+\/(?:messages\/[^/]+\/(?:feedback|regenerate)|runs\/[^/]+\/(?:display|workspace-outputs\/[^/]+\/content))$/u.test(new URL(request.url).pathname)) return sessionAnswerActions(request, context.params)
   if (/^\/api\/session\/sessions\/[^/]+\/(?:archive|restore)$/u.test(new URL(request.url).pathname)) return sessionArchive(request, context.params)
   if (["POST", "DELETE"].includes(request.method) && /^\/api\/session\/sessions\/[^/]+\/share$/u.test(new URL(request.url).pathname)) return sessionShare(request, context.params)
   const requestId = requestIdForRequest(request)
   const { path } = await context.params
   const segments = path ?? []
+  if (segments[0] === "sessions" && (segments[2] === "files" || (segments[2] === "runs" && segments[4] === "workspace-outputs")))
+    return webErrorResponse("bff_route_not_found", 404, requestId)
   if (isProjectTaskFamily(segments)) return webErrorResponse("bff_route_not_found", 404, requestId)
   const config = productBffConfig()
   if (config === null) {

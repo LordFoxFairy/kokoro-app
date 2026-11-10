@@ -92,3 +92,31 @@ it("rejects query/identity/unknown fields before BFF and rejects truncated or wr
   expect((await run(request())).status).toBe(502)
   expect(calls).toHaveLength(1)
 })
+
+
+it("returns only the complete private bytes of an exact workspace version and rejects Range before contacting BFF", async () => {
+  const version = "wsv_" + "a".repeat(64)
+  const path = ["sessions", "session", "runs", "run", "workspace-outputs", version, "content"]
+  const body = Buffer.from('{"text":"原内容"}')
+  const get = (headers?: HeadersInit) => GET(new Request(`http://web.test/api/session/${path.join("/")}`, headers === undefined ? undefined : { headers }), {
+    params: Promise.resolve({ path }),
+  })
+  peer = (req, res) => {
+    res.writeHead(200, {
+      "content-type": "application/json; charset=UTF-8",
+      "content-length": body.length,
+      "content-disposition": "attachment; filename=report.json",
+      "cache-control": "no-store",
+      "x-request-id": String(req.headers["x-kokoro-request-id"]),
+    })
+    res.end(body)
+  }
+  expect((await get({ Range: "bytes=0-1" })).status).toBe(400)
+  expect(calls).toHaveLength(0)
+  const result = await get()
+  expect(result.status).toBe(200)
+  expect(Buffer.from(await result.arrayBuffer())).toEqual(body)
+  expect(result.headers.get("cache-control")).toBe("private, no-store")
+  expect(result.headers.get("x-content-type-options")).toBe("nosniff")
+  expect(calls.map(call => call.url)).toEqual([`/v1/${path.join("/")}`])
+})

@@ -1,4 +1,5 @@
 import { finalAnswerPartsComplete } from "./completed-turn-sections"
+import type { WorkspaceOutputFile } from "@/ui/canvas/canvas-store"
 import type { AnswerActionBoundary } from "./answer-action-scope"
 import { answerActionTarget } from "./answer-action-target"
 import { Button } from "@/components/ui/button"
@@ -35,7 +36,7 @@ export type ConversationThreadProps = {
   preview?: boolean
   brandName?: string
   onOpenActivity?: (runId: string, activityId: string) => void
-  onOpenFile?: (path: string) => void
+  onOpenFile?: (file: WorkspaceOutputFile) => void
   // 成果卡点击 → canvas 打开冻结预览。
   onOpenDelivery?: (delivery: SessionDelivery) => void
   // 产物端点 URL 构造需要（透传到工具行的产物卡）。

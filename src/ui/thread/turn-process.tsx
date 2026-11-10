@@ -5,9 +5,10 @@ import { useT } from "@/i18n/context"
 import styles from "./turn-process.module.css"
 
 /** Whole-turn disclosure is distinct from each adjacent action passage. */
-export function TurnProcess({ enabled, children, onContentFocusChange, inspected = false }: {
+export function TurnProcess({ enabled, children, onContentFocusChange, onInspect, inspected = false }: {
   enabled: boolean
   inspected?: boolean
+  onInspect?: () => void
   children: ReactNode
   onContentFocusChange: (focused: boolean) => void
 }) {
@@ -15,7 +16,7 @@ export function TurnProcess({ enabled, children, onContentFocusChange, inspected
   const [expanded, setExpanded] = useState<boolean | null>(null)
   const open = !enabled || (expanded ?? inspected)
   return <div className={styles.process} data-whole-turn-process={enabled ? "ready" : "pending"}>
-    {enabled ? <Button type="button" variant="ghost" className={styles.summary} aria-controls={id} aria-expanded={open} onClick={() => setExpanded(!open)}>
+    {enabled ? <Button type="button" variant="ghost" className={styles.summary} aria-controls={id} aria-expanded={open} onClick={() => { setExpanded(!open); if (!open) onInspect?.() }}>
       <span>{t("thread.processHeading")}</span><ChevronRight aria-hidden className={styles.chevron} data-open={open} />
     </Button> : null}
     <div id={id} className={styles.content} hidden={!open} inert={!open}

@@ -680,6 +680,7 @@ export const zh = {
   "thread.feedbackUnconfirmed": "评价尚未确认。",
   "thread.readFeedback": "查看评价",
   "thread.readActivityDetails": "读取工具详情",
+  "thread.openProcessFiles": "打开过程文件",
   "thread.regenerationNotReady": "当前会话暂不能重新生成。",
   "thread.readSessionState": "查看会话状态",
   "thread.copyAnswer": "复制回答",

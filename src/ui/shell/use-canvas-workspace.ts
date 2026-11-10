@@ -8,6 +8,8 @@ import { useCallback, useSyncExternalStore } from "react"
 
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { SessionDelivery } from "@/core/state"
+import type { AnswerActionBoundary } from "@/ui/thread/answer-action-scope"
+import { useRunWorkspaceFiles } from "@/ui/thread/use-run-display"
 import {
   canvasSlot,
   closeCanvas,
@@ -18,6 +20,7 @@ import {
   serverCanvasState,
   subscribeCanvas,
   toggleCanvasFullscreen,
+  type WorkspaceOutputFile,
 } from "@/ui/canvas/canvas-store"
 
 type Thread = Parameters<typeof resolveCanvasContent>[1]
@@ -30,26 +33,30 @@ export type CanvasWorkspace = {
   fullscreen: boolean
   isCurrentOpening: () => boolean
   openActivity: (runId: string, activityId: string, subject: string) => void
-  openFile: (path: string) => void
+  openFile: (file: WorkspaceOutputFile) => void
+  files: readonly WorkspaceOutputFile[]
   openDelivery: (delivery: SessionDelivery) => void
-  onSelectFile: (file: { path: string }) => void
   onSelectDelivery: (delivery: SessionDelivery) => void
   onToggleFullscreen: () => void
   onClose: () => void
   onReopen: () => void
 }
 
-export function useCanvasWorkspace(activeId: string | null, thread: Thread, mounted: boolean, boundary?: ProjectReadBoundary): CanvasWorkspace {
+export function useCanvasWorkspace(activeId: string | null, thread: Thread, mounted: boolean, boundary?: ProjectReadBoundary, answerBoundary?: AnswerActionBoundary): CanvasWorkspace {
   const canvasState = useSyncExternalStore(subscribeCanvas, readCanvasState, serverCanvasState)
   const slot = canvasSlot(canvasState, activeId)
+  const opening = slot.content
+  const files = useRunWorkspaceFiles(answerBoundary, thread)
+  const readEpoch = answerBoundary?.readEpoch
+  const fileAdmitted = slot.content?.kind !== "file" || (readEpoch === slot.content.epoch && Boolean(answerBoundary?.isCurrent()))
   const activityAdmitted = slot.content?.kind !== "activity" || Boolean(boundary?.admitted && boundary.subject === slot.content.subject && boundary.generation === slot.content.generation)
   const resolvedCanvas =
-    mounted && activityAdmitted && activeId !== null && slot.open && slot.content !== null
-      ? resolveCanvasContent(slot.content, thread)
+    mounted && activityAdmitted && fileAdmitted && activeId !== null && slot.open && slot.content !== null
+      ? resolveCanvasContent(slot.content, thread, files)
       : null
   const canvasOpen = resolvedCanvas !== null && activeId !== null
-  const canReopenCanvas = mounted && activityAdmitted && activeId !== null && !slot.open && slot.content !== null
-  const opening = slot.content
+  const canReopenCanvas = mounted && activityAdmitted && fileAdmitted && activeId !== null && !slot.open && slot.content !== null &&
+    (opening?.kind !== "file" || files.some(file => file.runId === opening.runId && file.versionId === opening.versionId))
   // A delayed close must see the current store intent even before React has
   // committed the newer selection. Metadata refreshes don't replace it.
   const isCurrentOpening = useCallback(
@@ -60,26 +67,14 @@ export function useCanvasWorkspace(activeId: string | null, thread: Thread, moun
   const openActivity = useCallback((runId: string, activityId: string, subject: string) => {
     if (activeId !== null && boundary?.admitted && boundary.subject === subject) openCanvas(activeId, { kind: "activity", runId, activityId, subject, generation: boundary.generation })
   }, [activeId, boundary])
-  const openFile = useCallback(
-    (path: string) => {
-      if (activeId !== null) {
-        openCanvas(activeId, { kind: "file", path: path.replace(/^\//, "") })
-      }
-    },
-    [activeId],
-  )
+  const openFile = useCallback((file: WorkspaceOutputFile) => {
+    if (activeId !== null && readEpoch && answerBoundary?.readEpoch === readEpoch && answerBoundary.isCurrent())
+      openCanvas(activeId, { kind: "file", runId: file.runId, versionId: file.versionId, epoch: readEpoch })
+  }, [activeId, answerBoundary, readEpoch])
   const openDelivery = useCallback(
     (delivery: SessionDelivery) => {
       if (activeId !== null) {
         openCanvas(activeId, { kind: "delivery", conversationId: delivery.conversationId, artifactId: delivery.artifactId })
-      }
-    },
-    [activeId],
-  )
-  const onSelectFile = useCallback(
-    (file: { path: string }) => {
-      if (activeId !== null) {
-        openCanvas(activeId, { kind: "file", path: file.path })
       }
     },
     [activeId],
@@ -117,7 +112,7 @@ export function useCanvasWorkspace(activeId: string | null, thread: Thread, moun
     openActivity,
     openFile,
     openDelivery,
-    onSelectFile,
+    files,
     onSelectDelivery,
     onToggleFullscreen,
     onClose,

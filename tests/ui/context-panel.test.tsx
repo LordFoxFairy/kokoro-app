@@ -7,6 +7,13 @@ import { ContextPanel } from "@/components/blocks/context-panel/context-panel"
 import { CanvasPanel } from "@/ui/canvas/canvas-panel"
 import { ToolCallRow } from "@/ui/thread/tool-call-row"
 import type { RunProcessActivity } from "@/contract/chat"
+import type { AnswerActionBoundary } from "@/ui/thread/answer-action-scope"
+
+const workspaceFile = {
+  runId: "run_1", versionId: "wsv_" + "1".repeat(64), path: "/outputs/report.md",
+  mime: "text/markdown", bytes: 12, contentSha256: "a".repeat(64),
+}
+const workspaceBoundary = { sessionId: "session_1", readEpoch: {}, isCurrent: () => true } as AnswerActionBoundary
 
 const originalWidth = window.innerWidth
 
@@ -132,32 +139,25 @@ it("多个 Canvas 触发器同时存在时关闭回到实际打开者而不是�
   await waitFor(() => expect(opener).toHaveFocus())
 })
 
-it("Canvas 文件列表的长路径保持可选且不重复渲染原始路径", () => {
-  const longPath = "/workspace/projects/very-long-folder-name/output/final-report.md"
+it("Canvas retains same-path versions and selects the exact row", () => {
+  const file = { ...workspaceFile, path: "/outputs/very-long-folder-name/output/final-report.md", bytes: 2048 }
+  const second = { ...file, runId: "run_2", versionId: "wsv_" + "2".repeat(64) }
   const onSelectFile = vi.fn()
 
   render(
     <LocaleProvider>
-      <CanvasPanel
-        sessionId="session_1"
-        content={{ kind: "file", file: { path: longPath, mime: "text/markdown", bytes: 2048 } }}
-        files={[{ path: longPath, mime: "text/markdown", bytes: 2048 }]}
-        deliveries={[]}
-        fullscreen={false}
-        onSelectFile={onSelectFile}
-        onSelectDelivery={vi.fn()}
-        onToggleFullscreen={vi.fn()}
-        onClose={vi.fn()}
-      />
+      <CanvasPanel sessionId="session_1" content={{ kind: "file", file }} files={[file, second]}
+        deliveries={[]} fullscreen={false} onSelectFile={onSelectFile} onSelectDelivery={vi.fn()}
+        onToggleFullscreen={vi.fn()} onClose={vi.fn()} />
     </LocaleProvider>,
   )
 
   fireEvent.click(screen.getByRole("radio", { name: "Files" }))
-  const fileButton = screen.getByRole("button", { name: /very-long-folder-name\/output\/final-report\.md/ })
-  expect(fileButton).toBeInTheDocument()
-  expect(fileButton).toHaveAttribute("aria-pressed", "true")
-  fireEvent.click(fileButton)
-  expect(onSelectFile).toHaveBeenCalledWith({ path: longPath, mime: "text/markdown", bytes: 2048 })
+  const [firstRow, secondRow] = screen.getAllByRole("button", { name: /very-long-folder-name\/output\/final-report\.md/ })
+  expect(firstRow).toHaveAttribute("aria-pressed", "true")
+  expect(secondRow).toHaveAttribute("aria-pressed", "false")
+  fireEvent.click(secondRow!)
+  expect(onSelectFile).toHaveBeenCalledWith(second)
 })
 
 it("Canvas 从文件列表回到预览时把焦点交给稳定标题", async () => {
@@ -165,8 +165,8 @@ it("Canvas 从文件列表回到预览时把焦点交给稳定标题", async () 
     <LocaleProvider>
       <CanvasPanel
         sessionId="session_1"
-        content={{ kind: "file", file: { path: "out/report.md", mime: "text/markdown", bytes: 12 } }}
-        files={[{ path: "out/report.md", mime: "text/markdown", bytes: 12 }]}
+        content={{ kind: "file", file: workspaceFile }}
+        files={[workspaceFile]}
         deliveries={[]}
         fullscreen={false}
         onSelectFile={vi.fn()}
@@ -178,8 +178,8 @@ it("Canvas 从文件列表回到预览时把焦点交给稳定标题", async () 
   )
 
   fireEvent.click(screen.getByRole("radio", { name: "Files" }))
-  fireEvent.click(screen.getByRole("button", { name: /out\/report\.md/ }))
-  await waitFor(() => expect(screen.getByRole("heading", { name: "out/report.md" })).toHaveFocus())
+  fireEvent.click(screen.getByRole("button", { name: /outputs\/report\.md/ }))
+  await waitFor(() => expect(screen.getByRole("heading", { name: "/outputs/report.md" })).toHaveFocus())
 })
 
 it("Canvas 下载失败后把同一按钮明确变为重新下载", async () => {
@@ -188,7 +188,8 @@ it("Canvas 下载失败后把同一按钮明确变为重新下载", async () => 
     <LocaleProvider>
       <CanvasPanel
         sessionId="session_1"
-        content={{ kind: "file", file: { path: "out/report.md", mime: "text/markdown", bytes: 12 } }}
+        answerActionBoundary={workspaceBoundary}
+        content={{ kind: "file", file: workspaceFile }}
         files={[]}
         deliveries={[]}
         fullscreen={false}
@@ -205,8 +206,9 @@ it("Canvas 下载失败后把同一按钮明确变为重新下载", async () => 
   expect(screen.getAllByRole("alert").length).toBeGreaterThanOrEqual(1)
 })
 
-it("Canvas 在 disabled 提交前的双击也只发起一次下载", async () => {
-  let resolveFetch: ((value: { ok: boolean; blob: () => Promise<Blob> }) => void) | undefined
+it("Canvas 在 disabled 提交前的双击也只发起一次下载，摘要不符不确认", async () => {
+  vi.stubGlobal("crypto", webcrypto)
+  let resolveFetch: ((value: Response) => void) | undefined
   const fetchMock = vi.fn().mockReturnValue(new Promise((resolve) => { resolveFetch = resolve }))
   vi.stubGlobal("fetch", fetchMock)
 
@@ -214,7 +216,8 @@ it("Canvas 在 disabled 提交前的双击也只发起一次下载", async () =>
     <LocaleProvider>
       <CanvasPanel
         sessionId="session_1"
-        content={{ kind: "file", file: { path: "out/report.md", mime: "text/markdown", bytes: 12 } }}
+        answerActionBoundary={workspaceBoundary}
+        content={{ kind: "file", file: workspaceFile }}
         files={[]}
         deliveries={[]}
         fullscreen={false}
@@ -232,8 +235,9 @@ it("Canvas 在 disabled 提交前的双击也只发起一次下载", async () =>
   fireEvent.click(button)
   expect(fetchMock).toHaveBeenCalledTimes(previewRequestCount + 1)
 
-  resolveFetch?.({ ok: true, blob: async () => new Blob(["markdown"]) })
-  await waitFor(() => expect(button).not.toBeDisabled())
+  expect(fetchMock.mock.calls.at(-1)?.[0]).toBe(`/api/session/sessions/session_1/runs/run_1/workspace-outputs/${workspaceFile.versionId}/content`)
+  resolveFetch?.(new Response("wrong digest", { headers: { "content-type": "text/markdown; charset=utf-8", "cache-control": "private, no-store" } }))
+  expect(await screen.findByRole("button", { name: /Retry download|重新下载/ })).toBeEnabled()
 })
 
 it("Canvas 跨会话切换后关闭时不回收到旧会话的已卸载触发器", async () => {
@@ -647,7 +651,7 @@ function ControlledDeliveredCanvas() {
   const canvas = useCanvasWorkspace("session_1", thread, true)
   return <LocaleProvider><button type="button" onClick={() => canvas.openDelivery(textDelivery)}>Open delivered preview</button>
     {canvas.resolvedCanvas ? <ContextPanel sessionId="session_1" content={canvas.resolvedCanvas} files={[]} deliveries={[textDelivery]}
-      readBoundary={textBoundary} fullscreen={canvas.fullscreen} onSelectFile={canvas.onSelectFile} onSelectDelivery={canvas.onSelectDelivery}
+      readBoundary={textBoundary} fullscreen={canvas.fullscreen} onSelectFile={canvas.openFile} onSelectDelivery={canvas.onSelectDelivery}
       onToggleFullscreen={canvas.onToggleFullscreen} onClose={canvas.onClose} /> : null}
   </LocaleProvider>
 }
@@ -665,7 +669,7 @@ it("a new Canvas selection during exit supersedes the old close and focus, inclu
       <button type="button" data-canvas-opener="true" onClick={() => canvas.openDelivery(textDelivery)}>First opener</button>
       <button type="button" data-canvas-opener="true" onClick={() => canvas.openDelivery(second)}>Second opener</button>
       {canvas.resolvedCanvas ? <ContextPanel sessionId="session_1" content={canvas.resolvedCanvas} files={[]} deliveries={thread.deliveries}
-        readBoundary={textBoundary} fullscreen={canvas.fullscreen} onSelectFile={canvas.onSelectFile} onSelectDelivery={canvas.onSelectDelivery}
+        readBoundary={textBoundary} fullscreen={canvas.fullscreen} onSelectFile={canvas.openFile} onSelectDelivery={canvas.onSelectDelivery}
         onToggleFullscreen={canvas.onToggleFullscreen} isCurrentOpening={canvas.isCurrentOpening} onClose={canvas.onClose} /> : null}
     </LocaleProvider>
   }

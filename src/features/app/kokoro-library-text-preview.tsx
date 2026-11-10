@@ -85,7 +85,7 @@ export function LibraryTextPreview({ boundary, read, quietFailure = false }: {
     <Button variant="outline" size="sm" type="button" onClick={() => setAttempt(value => value + 1)}>{t("artifact.retryPreview")}</Button>
   </div>
   if (visible?.kind === "text") return <section className="min-w-0 max-w-full overflow-x-auto" aria-label={t("canvas.previewTab")}>
-    <TextPreviewBody text={visible.text} mime={visible.mimeType} resourcePolicy="text-only" />
+    <TextPreviewBody text={visible.text} mime={visible.mimeType} />
   </section>
   return <div aria-busy="true"><p className="sr-only" role="status">{t("artifact.loadingPreview")}</p></div>
 }

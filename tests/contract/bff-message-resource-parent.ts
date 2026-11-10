@@ -1,7 +1,20 @@
 // Build-time exact additive inverse; never a runtime downgrade.
 import { createHash } from "node:crypto"
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
+export function restorePublic2832WorkspaceOutputsContract(source: string): string {
+  if (!/^  version: 28\.33\.0$/mu.test(source)) return source
+  if (hash(source) !== "03d4add75d31c6c4dd22e7fcb3b4269556ad3ced87d29a5640976bc74f39810f") throw Error("Workspace outputs Public28.33 child drift")
+  const parent = source
+    .replace(/^  \/v1\/sessions\/\{id\}\/runs\/\{runId\}\/workspace-outputs\/\{versionId\}\/content:\n[\s\S]*?(?=^  # AGENT-DISPLAY-PATHS-END)/mu, "")
+    .replace(/^    RunWorkspaceOutputVersion:\n[\s\S]*?(?=^    RunDisplay:)/mu, "")
+    .replace(/(^    RunDisplay:\n[\s\S]*?)^        workspace_outputs:\n[\s\S]*?(?=^        final_answer:)/mu, "$1")
+    .replace("  version: 28.33.0\n", "  version: 28.32.0\n")
+  if (hash(parent) !== "e12a8078f5ecaa741c255a3bcec032d398d35309d845d3cf736dc764a0287d33") throw Error("Workspace outputs complete Public28.32 parent drift")
+  return parent
+}
+
 export function restorePublic2831AgentConnectionContract(source: string): string {
+  source = restorePublic2832WorkspaceOutputsContract(source)
   if (!/^  version: 28\.32\.0$/mu.test(source)) return source
   if (hash(source) !== "e12a8078f5ecaa741c255a3bcec032d398d35309d845d3cf736dc764a0287d33") throw Error("Telegram Public28.32 child drift")
   const parent = source

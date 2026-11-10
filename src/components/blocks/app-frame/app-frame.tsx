@@ -193,7 +193,12 @@ function AppFrameRuntime({
     activeId,
   } = engineState
 
-  const canvas = useCanvasWorkspace(activeId, thread, mounted, projectReadBoundary)
+  const railReadIdentity = JSON.stringify([projectReadBoundary?.subject ?? "injected", projectReadBoundary?.generation ?? 0])
+  const railReadAdmitted = preview || (projectReadBoundary === undefined ? injectedEngine !== undefined : projectReadBoundary.admitted && projectReadBoundary.subject !== null)
+  const answerActionBoundary = useAnswerActionScope({ engine, actorId: projectReadBoundary?.subject ?? null, sessionId: activeId,
+    scope: sessionScope, identity: JSON.stringify([railReadIdentity, projectReadBoundary?.tenant, projectReadBoundary?.authInvalidationHint]),
+    admitted: railReadAdmitted, preview })
+  const canvas = useCanvasWorkspace(activeId, thread, mounted, projectReadBoundary, answerActionBoundary)
   const layout = useAppFrameLayout({
     desktopRailCollapsed,
     canvasOpen: canvas.canvasOpen,
@@ -268,8 +273,6 @@ function AppFrameRuntime({
     moveCoordinator.getSnapshot,
   )
   const moveScopeKey = sessionScopeKey(sessionScope)
-  const railReadIdentity = JSON.stringify([projectReadBoundary?.subject ?? "injected", projectReadBoundary?.generation ?? 0])
-  const railReadAdmitted = preview || (projectReadBoundary === undefined ? injectedEngine !== undefined : projectReadBoundary.admitted && projectReadBoundary.subject !== null)
   // Account MCP selection follows the enabled connector module, not project default bindings.
   const composerConnectionsEnabled = navigation === undefined
     ? featureFlags === undefined && (workspaceCapabilities?.connectors ?? true)
@@ -851,8 +854,6 @@ function AppFrameRuntime({
   const EmptyState = emptyState ?? DefaultEmptyState
   const shareClient: Pick<SessionClient, "createShare" | "revokeShare"> = browserListClient({ preview })
 
-  const answerActionBoundary = useAnswerActionScope({ engine, actorId: projectReadBoundary?.subject ?? null, sessionId: activeId,
-    scope: sessionScope, identity: railReadIdentity, admitted: railReadAdmitted, preview })
 
   const conversationProps: ConversationThreadProps = {
     ...(answerActionBoundary === undefined ? {} : { answerActionBoundary }),
@@ -885,7 +886,7 @@ function AppFrameRuntime({
       if (!answerActionBoundary.isCurrent()) return
       project.dismissProjectContext(); canvas.openActivity(runId, activityId, answerActionBoundary.actorId)
     } } : {}),
-    onOpenFile: (path) => { project.dismissProjectContext(); canvas.openFile(path) },
+    onOpenFile: (file) => { project.dismissProjectContext(); canvas.openFile(file) },
     onOpenDelivery: (delivery) => { project.dismissProjectContext(); canvas.openDelivery(delivery) },
   }
 

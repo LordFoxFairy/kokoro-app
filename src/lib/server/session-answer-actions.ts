@@ -6,11 +6,15 @@ import {
   answerFeedbackSchema,
   answerRegenerationReceiptSchema,
   runDisplaySchema,
+  workspaceOutputMimeSchema,
+  workspaceOutputVersionIdSchema,
 } from "@/contract/answer-actions"
 import { parseArchivedTasksJson } from "@/lib/archived-tasks-json"
 import { productBffConfig, productBffHeaders } from "./product-bff"
 import { requestWithDomain, readBoundedRequestBody, UpstreamResponseIncompleteError, UpstreamResponseTooLargeError } from "./upstream-http"
-/** Four exact answer operations, never a general Session proxy or command recovery loop. */
+const JSON_LIMIT = 1_048_576
+const WORKSPACE_CONTENT_LIMIT = 8_388_608
+/** Exact answer and Run owner reads, never a general Session proxy. */
 export async function sessionAnswerActions(request: Request, params: Promise<{ path: string[] }>): Promise<Response> {
   const deadline = performance.now() + 10000,
     controller = new AbortController(),
@@ -52,6 +56,9 @@ export async function sessionAnswerActions(request: Request, params: Promise<{ p
       url = new URL(request.url),
       sessionId = path[1],
       targetId = path[3]
+    const workspaceContent = path.length === 7 && path[2] === "runs" &&
+      path[4] === "workspace-outputs" && path[6] === "content" &&
+      workspaceOutputVersionIdSchema.safeParse(path[5]).success
     let parts: string[]
     try {
       parts = url.pathname.split("/").slice(3).map(decodeURIComponent)
@@ -59,7 +66,7 @@ export async function sessionAnswerActions(request: Request, params: Promise<{ p
       return fail(400, "answer_actions_invalid_request")
     }
     if (
-      path.length !== 5 ||
+      (path.length !== 5 && !workspaceContent) ||
       path[0] !== "sessions" ||
       !answerActionIdSchema.safeParse(sessionId).success ||
       !answerActionIdSchema.safeParse(targetId).success ||
@@ -67,13 +74,14 @@ export async function sessionAnswerActions(request: Request, params: Promise<{ p
       url.pathname !== `/api/session/${path.map(encodeURIComponent).join("/")}` ||
       request.url.includes("?") ||
       url.hash ||
-      ["if-match", "if-none-match", "last-event-id", "content-encoding", "transfer-encoding"].some((key) => request.headers.has(key))
+      ["if-match", "if-none-match", "last-event-id", "content-encoding", "transfer-encoding",
+        ...(workspaceContent ? ["range", "if-range", "if-modified-since", "if-unmodified-since"] : [])].some((key) => request.headers.has(key))
     )
       return fail(400, "answer_actions_invalid_request")
     const feedback = path[2] === "messages" && path[4] === "feedback",
       regen = path[2] === "messages" && path[4] === "regenerate",
       display = path[2] === "runs" && path[4] === "display"
-    if (!feedback && !regen && !display) return fail(400, "answer_actions_invalid_request")
+    if (!feedback && !regen && !display && !workspaceContent) return fail(400, "answer_actions_invalid_request")
     const method = request.method,
       writing = method === "PUT" || method === "POST"
     if (feedback ? !["GET", "PUT"].includes(method) : regen ? method !== "POST" : method !== "GET") return fail(405, "method_not_allowed")
@@ -113,7 +121,7 @@ export async function sessionAnswerActions(request: Request, params: Promise<{ p
     }
 
     const outgoing = productBffHeaders(config, request, requestId)
-    outgoing.set("accept", "application/json")
+    if (!workspaceContent) outgoing.set("accept", "application/json")
     if (writing) {
       outgoing.set("content-type", "application/json")
       outgoing.set("content-length", String(body!.byteLength))
@@ -126,18 +134,27 @@ export async function sessionAnswerActions(request: Request, params: Promise<{ p
         signal,
         timeoutMs: Math.max(1, Math.ceil(deadline - performance.now())),
         maxRequestBytes: 1024,
-        maxResponseBytes: 1048576,
+        maxResponseBytes: workspaceContent ? WORKSPACE_CONTENT_LIMIT : JSON_LIMIT,
+        maxErrorResponseBytes: JSON_LIMIT,
+        strictResponseLength: workspaceContent,
         ...(body === undefined ? {} : { body }),
       }),
     )
     const size = upstream.headers.get("content-length"),
       status = upstream.status,
       retry = upstream.headers.get("retry-after")
+    const binary = workspaceContent && status === 200
+    const limit = binary ? WORKSPACE_CONTENT_LIMIT : JSON_LIMIT
+    const contentType = upstream.headers.get("content-type") ?? ""
+    const mime = contentType.split(";", 1)[0]?.trim().toLowerCase()
+    const disposition = upstream.headers.get("content-disposition")
     if (
-      !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(upstream.headers.get("content-type") ?? "") ||
+      (binary
+        ? !workspaceOutputMimeSchema.safeParse(mime).success || !disposition || !/^attachment\s*(?:;|$)/iu.test(disposition) || retry !== null
+        : !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(contentType)) ||
       size === null ||
       !/^(?:0|[1-9][0-9]*)$/u.test(size) ||
-      BigInt(size) > BigInt(1048576) ||
+      Number(size) > limit ||
       upstream.headers.get("x-request-id") !== requestId ||
       !/(?:^|,)\s*no-store\s*(?:,|$)/iu.test(upstream.headers.get("cache-control") ?? "") ||
       ["set-cookie", "location", "content-encoding", "transfer-encoding"].some((key) => upstream!.headers.has(key))
@@ -145,28 +162,29 @@ export async function sessionAnswerActions(request: Request, params: Promise<{ p
       return fail(502, "answer_actions_response_invalid")
     if (!upstream.body) return fail(502, "answer_actions_response_invalid")
     reader = upstream.body.getReader()
-    const chunks: Uint8Array[] = []
+    const bytes = new Uint8Array(Number(size))
     let received = 0
     try {
       for (;;) {
         const chunk = await within(() => reader!.read())
         if (chunk.done) break
+        if (chunk.value.byteLength > bytes.length - received) return fail(502, "answer_actions_response_invalid")
+        bytes.set(chunk.value, received)
         received += chunk.value.byteLength
-        if (received > 1048576) return fail(502, "answer_actions_response_invalid")
-        chunks.push(chunk.value)
       }
     } catch {
       check()
       return fail(502, "answer_actions_response_invalid")
     }
-    if (BigInt(size) !== BigInt(received)) return fail(502, "answer_actions_response_invalid")
-    const bytes = new Uint8Array(received)
-    let at = 0
-    for (const chunk of chunks) {
-      bytes.set(chunk, at)
-      at += chunk.length
+    if (received !== bytes.length) return fail(502, "answer_actions_response_invalid")
+    if (binary) {
+      check()
+      return new Response(bytes, { status: 200, headers: {
+        ...headers, "content-type": mime!, "content-length": size, "content-disposition": disposition!,
+        "referrer-policy": "no-referrer", "x-content-type-options": "nosniff",
+      } })
     }
-    const operation = display ? "getSessionRunDisplay" : regen ? "regenerateLatestAssistantMessage" : writing ? "setMessageFeedback" : "getMessageFeedback",
+    const operation = workspaceContent ? "getSessionRunWorkspaceOutputContent" : display ? "getSessionRunDisplay" : regen ? "regenerateLatestAssistantMessage" : writing ? "setMessageFeedback" : "getMessageFeedback",
       success = regen ? 202 : 200
     let result: unknown
     try {

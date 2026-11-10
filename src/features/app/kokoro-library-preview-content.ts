@@ -28,8 +28,14 @@ export async function readVerifiedLibraryText(path: string, metadata: PreviewMet
     throw new Error("library_preview_invalid_response")
   }
 
-  const bytes = new Uint8Array(Number(sizeBytes))
-  const reader = response.body.getReader()
+  const bytes = await readVerifiedPrivateBytes(response.body, Number(sizeBytes), contentSha256, signal)
+  return { kind: "text", text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), mimeType, sizeBytes }
+}
+
+/** Complete bounded bytes must match the admitted owner metadata before use. */
+export async function readVerifiedPrivateBytes(body: ReadableStream<Uint8Array>, size: number, contentSha256: string, signal: AbortSignal) {
+  const bytes = new Uint8Array(size)
+  const reader = body.getReader()
   const cancel = () => { void reader.cancel().catch(() => undefined) }
   signal.addEventListener("abort", cancel, { once: true })
   let offset = 0
@@ -49,7 +55,7 @@ export async function readVerifiedLibraryText(path: string, metadata: PreviewMet
     signal.throwIfAborted()
     const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")
     if (sha256 !== contentSha256) throw new Error("library_preview_digest_mismatch")
-    return { kind: "text", text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), mimeType, sizeBytes }
+    return bytes
   } finally {
     signal.removeEventListener("abort", cancel)
     if (!ended) cancel()

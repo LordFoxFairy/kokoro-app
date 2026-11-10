@@ -1,3 +1,7 @@
+## A‑10 process files
+
+The private Process card opens the existing Canvas Files view. Rows select the original Run and immutable version, even if two outputs have the same path. Preview and download use the same-origin exact-version route; the unused by-path reader and fake file fallback are gone. Web pins BFF Public 28.33 (`5d5b409`). Component, contract and TypeScript checks passed; Root owns the authenticated Worker/Storage browser acceptance.
+
 ## 2026-11-10 · Telegram connection lifecycle (Public 28.32)
 
 The existing Agents dialog consumes the exact BFF owner. Open reads only;

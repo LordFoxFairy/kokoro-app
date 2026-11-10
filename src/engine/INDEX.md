@@ -86,7 +86,7 @@ SET47：可选EngineSnapshot.locallyCreatedSessionId仅证明当前engine尚未�
   awaiting-hitl 不设时限）、`REATTACH_TIMEOUT_MS`（90s 兜底）。
 - `config.ts`：`sessionBaseUrl()`——同源 BFF 代理前缀 `/api/session`（AUTH-P0）；浏览器不再
   直连 Web 同源 BFF 的 Chat projection，真实业务服务地址留服务端代理，`SESSION_PROXY_BASE` 常量。
-- `file-fetch.ts`（client 组件）：`fileFetch`/`useFileBlob` 仅供 workspace File 小对象及隔离 preview；
+- `file-fetch.ts`：同源文件读取与下载 Blob 生命周期；工作区过程文件仅使用已核精确版本字节。
   正式 Delivery 复用 Library 二元详情/浏览器原生 attachment，不经 `/api/session` hash/Blob。
 - `use-session-engine.ts`（client 组件）：`useSessionEngine(engine|null)`——全仓唯一
   React 接缝（useSyncExternalStore）。

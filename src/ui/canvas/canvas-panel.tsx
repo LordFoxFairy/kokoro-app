@@ -9,35 +9,24 @@ import { Spinner } from "@/components/ui/spinner"
 import { Download, Eye, FileCheck2, FolderOpen, Maximize2, Minimize2, Play, SkipBack, X } from "lucide-react"
 
 // 右侧 canvas 工作区面板：会话在左、内容在右（三栏第三栏）。
-// 内容体按来源分派：file=可变直读（重开即最新）、delivery=BFF 二元元数据、
+// 内容体按来源分派：file=Run 精确版本、delivery=BFF 二元元数据、
 // node=通用 ReactNode 插槽；文本预览复用格式矩阵。
 
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 
-import { filePath } from "@/contract/http"
-import { sessionBaseUrl } from "@/engine/config"
 import { downloadFetchedFile, fileFetch } from "@/engine/file-fetch"
 import { beginLibraryArtifactDownload, readLibraryArtifactTextPreview } from "@/features/app/kokoro-library-artifact-client"
 import { isLibraryTextPreviewSupported } from "@/features/app/kokoro-library-preview-content"
 import { LibraryTextPreview } from "@/features/app/kokoro-library-text-preview"
-import type { SessionDelivery, SessionTodo, WorkspaceFileEntry } from "@/core/state"
+import type { SessionDelivery, SessionTodo } from "@/core/state"
 import { useLocale } from "@/i18n/context"
-import { PreviewBody, formatBytes } from "@/ui/thread/artifact-card"
+import { formatBytes } from "@/ui/thread/artifact-card"
 import { cn } from "@/lib/utils"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 
-import type { ResolvedCanvasContent } from "./canvas-store"
+import type { ResolvedCanvasContent, WorkspaceOutputFile } from "./canvas-store"
+import { canPreviewWorkspaceOutput, downloadWorkspaceOutput, readWorkspaceOutputPreview } from "./workspace-output-content"
 import styles from "./canvas-panel.module.css"
-
-export function fileUrl(sessionId: string, path: string): string {
-  const encoded = path.split("/").map(encodeURIComponent).join("/")
-  return `${sessionBaseUrl()}${filePath(sessionId, "__P__")}`.replace("__P__", encoded)
-}
-
-// Workspace File is a distinct small-object flow; Delivery uses native BFF attachment.
-async function downloadFile(url: string, name: string): Promise<boolean> {
-  return downloadFetchedFile(await fileFetch(url), name)
-}
 
 export function formatDeliveryTime(iso: string, locale: string): string {
   const date = new Date(iso)
@@ -71,10 +60,10 @@ export type CanvasPanelProps = {
   preview?: boolean
   deliveriesHasMore?: boolean
   content: ResolvedCanvasContent
-  files: WorkspaceFileEntry[]
+  files: readonly WorkspaceOutputFile[]
   deliveries: SessionDelivery[]
   fullscreen: boolean
-  onSelectFile: (file: WorkspaceFileEntry) => void
+  onSelectFile: (file: WorkspaceOutputFile) => void
   onSelectDelivery: (delivery: SessionDelivery) => void
   onToggleFullscreen: () => void
   onClose: () => void
@@ -117,7 +106,7 @@ export function CanvasPanel({
   const title = content.kind === "activity" ? t("thread.activityDetails") : contentTitle(content)
   const contentKey =
     content.kind === "file"
-      ? `file:${content.file.path}`
+      ? `file:${JSON.stringify([content.file.runId, content.file.versionId])}`
       : content.kind === "delivery"
         ? `delivery:${JSON.stringify([content.delivery.conversationId, content.delivery.artifactId])}`
         : content.kind === "activity" ? `activity:${content.runId}:${content.activityId}` : `node:${content.title}`
@@ -150,8 +139,7 @@ export function CanvasPanel({
     content.kind === "file"
       ? {
           kind: "file" as const,
-          url: fileUrl(sessionId, content.file.path),
-          name: content.file.path.split("/").at(-1) ?? content.file.path,
+          file: content.file,
         }
       : content.kind === "delivery"
         ? {
@@ -236,10 +224,13 @@ export function CanvasPanel({
                 }
                 activeDownloadRef.current = contentKey
                 setDownloadState({ key: contentKey, status: "loading" })
-                const controller = download.kind === "delivery" && !preview ? new AbortController() : null
+                const controller = download.kind === "file" || !preview ? new AbortController() : null
                 downloadControllerRef.current = controller
+                const epoch = answerActionBoundary?.readEpoch
                 const action = download.kind === "file"
-                  ? downloadFile(download.url, download.name)
+                  ? downloadWorkspaceOutput(sessionId, download.file, controller!.signal, () => Boolean(
+                    answerActionBoundary?.sessionId === sessionId && answerActionBoundary.readEpoch === epoch && answerActionBoundary.isCurrent(),
+                  ))
                   : preview
                     ? fileFetch(`/api/dev/preview-files/${encodeURIComponent(download.delivery.artifactId)}`)
                         .then((response) => downloadFetchedFile(response, download.delivery.title))
@@ -384,11 +375,11 @@ function WorkspaceList({
   onSelectDelivery,
 }: {
   selected: ResolvedCanvasContent
-  files: WorkspaceFileEntry[]
+  files: readonly WorkspaceOutputFile[]
   deliveries: SessionDelivery[]
   deliveriesHasMore: boolean
   locale: string
-  onSelectFile: (file: WorkspaceFileEntry) => void
+  onSelectFile: (file: WorkspaceOutputFile) => void
   onSelectDelivery: (delivery: SessionDelivery) => void
 }) {
   const { t } = useLocale()
@@ -440,19 +431,20 @@ function WorkspaceList({
       ) : (
         <ul className={styles.tree}>
           {files.map((entry) => {
-            const selectedFile = selected.kind === "file" && selected.file.path === entry.path
+            const selectedFile = selected.kind === "file" && selected.file.runId === entry.runId && selected.file.versionId === entry.versionId
             return (
-              <li key={entry.path}>
+              <li key={JSON.stringify([entry.runId, entry.versionId])}>
                 <Button
                   variant="ghost"
                   type="button"
                   className={cn(styles.treeItem, selectedFile && styles.treeItemSelected)}
                   data-selected={selectedFile ? "true" : undefined}
+                  data-workspace-version={entry.versionId}
                   aria-pressed={selectedFile}
                   onClick={() => onSelectFile(entry)}
                 >
                   <span className={styles.treeName}>{entry.path}</span>
-                  <span className={styles.meta}>{formatBytes(entry.bytes)}</span>
+                  <span className={styles.meta}>{entry.versionId.slice(4, 12)} · {formatBytes(entry.bytes)}</span>
                 </Button>
               </li>
             )
@@ -484,16 +476,8 @@ function ContentBody({
   readBoundary?: ProjectReadBoundary
 }) {
   switch (content.kind) {
-    case "file": {
-      const name = content.file.path.split("/").at(-1) ?? content.file.path
-      return (
-        <PreviewBody
-          url={fileUrl(sessionId, content.file.path)}
-          mime={content.file.mime}
-          name={name}
-        />
-      )
-    }
+    case "file":
+      return <WorkspaceOutputPreview key={JSON.stringify([content.file.runId, content.file.versionId])} sessionId={sessionId} file={content.file} boundary={readBoundary} />
     case "delivery": {
       const { delivery } = content
       // Small text is separately verified; native 1 GiB downloads remain unbuffered.
@@ -510,4 +494,14 @@ function ContentBody({
     case "node":
       return <>{content.node}</>
   }
+}
+
+
+function WorkspaceOutputPreview({ sessionId, file, boundary }: { sessionId: string; file: WorkspaceOutputFile; boundary: ProjectReadBoundary | undefined }) {
+  const { t } = useLocale()
+  const { runId, versionId, path, mime, bytes, contentSha256 } = file
+  const read = useCallback((signal: AbortSignal) => readWorkspaceOutputPreview(sessionId, { runId, versionId, path, mime, bytes, contentSha256 }, signal),
+    [sessionId, runId, versionId, path, mime, bytes, contentSha256])
+  if (!canPreviewWorkspaceOutput(mime, bytes)) return <p>{t("artifact.cannotPreview")}</p>
+  return <LibraryTextPreview boundary={boundary} read={read} quietFailure />
 }

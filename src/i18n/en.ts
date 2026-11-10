@@ -1901,6 +1901,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "thread.feedbackUnconfirmed": "Feedback is unconfirmed.",
   "thread.readFeedback": "Read feedback",
   "thread.readActivityDetails": "Read activity details",
+  "thread.openProcessFiles": "Open process files",
   "thread.regenerationNotReady": "This conversation is not ready to regenerate.",
   "thread.readSessionState": "Read conversation state",
   "thread.copyAnswer": "Copy response",

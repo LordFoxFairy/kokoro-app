@@ -16,6 +16,10 @@ CanvasContentRef新增activity的Run/activity/subject/generation引用，resolve
 
 仅按已核可选 `SessionDelivery.displayPath` 的虚拟目录分组，原生目录可展开；无目录的旧成果留平列，同路径不同交付版本分别按原 Conversation＋Artifact 选择。目录不参与下载／预览读定位，不表示未交付的过程文件。紧凑宽度继续使用同一 Files／Preview 选择器与可访问名称。
 
+## 过程文件版本
+
+原 Process 的已读 RunDisplay 可在没有 FINAL 时打开同一 Canvas。Files 只投影当前会话已加载并已读的 Run 版本；同路径可并列，内容始终按会话／Run／opaque version 获取。路径只显示，旧按路径 API 和伪造的空文件均不回退。预览复用原文本渲染与准入失效，下载先核原长度和 SHA-256。
+
 ## 协作者
 上游：`@/ui/shell` 的 `useCanvasWorkspace`（订阅 store、绑定 activeId、暴露打开/关闭回调）。
 
