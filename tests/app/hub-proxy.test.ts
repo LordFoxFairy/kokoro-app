@@ -5039,6 +5039,44 @@ it.each([null, "0"])("accepts actual EOF on an empty Next DELETE stream with con
   expect(options?.body).toBeUndefined()
 })
 
+it("artifact favorite retains a correlated early admission rate limit without accepting a wrong success", async () => {
+  const { PUT } = await import("@/app/api/hub/[...path]/route")
+  let attempt = 0
+  vi.mocked(requestWithDomain).mockImplementation(async (target, _domain, options) => {
+    expect(target).toBe("http://bff.test/v1/library/artifacts/conversation-1/artifact-1/favorite")
+    const requestId = new Headers(options.headers).get("x-kokoro-request-id")
+    expect(new TextDecoder().decode(options.body as ArrayBuffer)).toBe('{"favorited":true}')
+    expect(new Headers(options.headers).has("x-kokoro-subject")).toBe(false)
+    attempt += 1
+    if (attempt === 1) return Response.json({ error: { code: "session_rate_limited", message: "Retry later" }, meta: { request_id: requestId } },
+      { status: 429, headers: { "cache-control": "no-store", "retry-after": "15" } })
+    const headers = { "cache-control": "no-store", "x-request-id": requestId ?? "" }
+    return Response.json({ data: { conversation_id: "conversation-1", artifact_id: "artifact-1", favorited: attempt !== 2 },
+      meta: { request_id: requestId } }, { headers })
+  })
+  const call = () => PUT(new Request("http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/favorite", {
+    method: "PUT", headers: { origin: "http://localhost", cookie: sessionCookie(), "content-type": "application/json", "x-kokoro-subject": "forged" },
+    body: '{"favorited":true}',
+  }), params(["library", "artifacts", "conversation-1", "artifact-1", "favorite"]))
+  const limited = await call()
+  expect(limited.status).toBe(429)
+  expect(limited.headers.get("retry-after")).toBe("15")
+  expect(await limited.json()).toMatchObject({ meta: { request_id: limited.headers.get("x-request-id") } })
+  expect((await call()).status).toBe(502)
+  expect((await call()).status).toBe(200)
+})
+
+it("artifact DELETE rejects an actual body before BFF rather than silently stripping it", async () => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({ data: {} }))
+  const target = "http://localhost/api/hub/library/artifacts/conversation-1/artifact-1"
+  const headers = { origin: "http://localhost", "idempotency-key": "original-delete", cookie: sessionCookie() }
+  const response = await DELETE(new Request(target, { method: "DELETE", headers, body: new Uint8Array([1]) }),
+    params(["library", "artifacts", "conversation-1", "artifact-1"]))
+  expect(response.status).toBe(400)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
 it("personal file DELETE sends only the original empty command and rejects a different asset ACK", async () => {
   const { DELETE } = await import("@/app/api/hub/[...path]/route")
   let attempt = 0

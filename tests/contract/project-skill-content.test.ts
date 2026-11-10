@@ -5,7 +5,7 @@ import { projectSkillContentProvenance, projectPackageResponseSchema, projectPac
 import { restorePublic287ProjectSkillContentContract as restore } from "./bff-project-skill-content-parent"
 it("binds Project content to the complete formal owner and exact unmodified Public28.7 parent", () => {
   const source = readFileSync("src/generated/bff-public-openapi.yaml", "utf8")
-  expect(projectSkillContentProvenance.owner_commit).toBe("c9c0782771022d75987a886761b263ab30ff8192")
+  expect(projectSkillContentProvenance.owner_commit).toBe("9a0c45c4db3ef989af64e368f47dfe448c87892b")
   expect(createHash("sha256").update(restore(source)).digest("hex")).toBe("818dfe54d5eb50a72725983be136211c63bb17fa7392f94c5c1d46234db3ebd1")
   for (const changed of [source + "\n", source.replace("getProjectSkillInstallationPackage", "differentProjectMethod"), source.replace("listTeamMembers", "differentUnrelatedMethod")]) expect(() => restore(changed)).toThrow(/drift/)
 })

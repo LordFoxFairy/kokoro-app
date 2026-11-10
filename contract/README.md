@@ -1,3 +1,10 @@
+## A‑09 — Public 28.29 Artifact favorite and retirement
+
+The generated snapshot is the byte-exact BFF `9a0c45c` Git blob (SHA-256
+`be6473bfa58332dee9f0417a10f6b21c8320efa79802151fe5b13f93753d4504`).
+The existing resource generator emits the Artifact mutation validators from that
+snapshot. The Public 28.28 parent and separate scheduled-execution pin remain exact.
+
 ## A‑09 — Public 28.28 Artifact source
 
 The current snapshot is byte-exact BFF `c9c0782` (SHA-256

@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import type { LibraryArtifact, LibraryArtifactClient } from "./kokoro-library-artifact-client"
+import type { LibraryArtifact, LibraryArtifactClient, LibraryArtifactSelector } from "./kokoro-library-artifact-client"
 import type { LibraryArtifactQuery } from "./kokoro-library-model"
 
 type Owner = Readonly<{ admitted: boolean; subject: string | null | undefined; generation: number }>
@@ -70,7 +70,8 @@ export function useLibraryArtifacts(
     }
     const previous = previousLoad.current
     const delay =
-      previous?.boundary === boundary && previous.query.type === query.type && previous.query.query !== query.query
+      previous?.boundary === boundary && previous.query.type === query.type &&
+      previous.query.favoritesOnly === query.favoritesOnly && previous.query.query !== query.query
         ? 225
         : 0
     const timer = delay ? setTimeout(() => void read(), delay) : null
@@ -119,8 +120,30 @@ export function useLibraryArtifacts(
       }
     }
   }, [owner.admitted, fixture, scope, record, client, query])
+  // An exact owner ACK is enough for this window. Retire older reads before
+  // applying it so a page issued before the command cannot put back stale rows.
+  const acknowledge = (selector: LibraryArtifactSelector, favorited: boolean | null) => {
+    const live = active.current
+    if (live?.boundary !== boundary || live.query !== query) return
+    const restartFirstPage = controller.current !== null && !flight.current
+    sequence.current += 1
+    controller.current?.abort()
+    controller.current = null
+    flight.current = false
+    setMore(null)
+    setRecord(prior => {
+      if (prior?.scope.boundary !== boundary || prior.scope.query.favoritesOnly !== query.favoritesOnly) return prior
+      const items = prior.items.flatMap(item => {
+        if (item.conversationId !== selector.conversationId || item.artifactId !== selector.artifactId) return [item]
+        if (favorited === null || query.favoritesOnly === true && !favorited) return []
+        return [{ ...item, favorited }]
+      })
+      return { ...prior, items }
+    })
+    if (restartFirstPage) setAttempt(value => value + 1)
+  }
   const controlled = fixture !== undefined
-  const confirmed = record?.scope.boundary === boundary
+  const confirmed = record?.scope.boundary === boundary && record.scope.query.favoritesOnly === query.favoritesOnly
   const pending = owner.admitted && !controlled && record?.scope !== scope && failure !== scope
   return {
     artifacts: owner.admitted ? (fixture ?? (confirmed ? record.items : [])) : [],
@@ -133,5 +156,6 @@ export function useLibraryArtifacts(
     loadMoreError: !controlled && more?.scope === scope && more.error,
     reload: () => setAttempt((value) => value + 1),
     loadMore,
+    acknowledge,
   }
 }

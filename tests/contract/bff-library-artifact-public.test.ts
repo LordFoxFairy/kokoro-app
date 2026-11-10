@@ -6,13 +6,13 @@ import { expect, it } from "vitest"
 import YAML from "yaml"
 
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
-const OWNER_COMMIT = "c9c0782771022d75987a886761b263ab30ff8192"
-const OWNER_SHA256 = "495afa65989a1308194910b0b5ece62b4f9db0c84f8dc34e7e0f3b00f7c5294f"
-const OWNER_VERSION = "28.28.0"
+const OWNER_COMMIT = "9a0c45c4db3ef989af64e368f47dfe448c87892b"
+const OWNER_SHA256 = "be6473bfa58332dee9f0417a10f6b21c8320efa79802151fe5b13f93753d4504"
+const OWNER_VERSION = "28.29.0"
 
 it("pins the BFF Artifact Product page, binary and two-part selector", async () => {
   const bytes = await readFile(SNAPSHOT)
-  expect(OWNER_COMMIT).toBe("c9c0782771022d75987a886761b263ab30ff8192")
+  expect(OWNER_COMMIT).toBe("9a0c45c4db3ef989af64e368f47dfe448c87892b")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }
@@ -45,6 +45,10 @@ it("pins the BFF Artifact Product page, binary and two-part selector", async () 
     properties: { project_ref: { type: ["string", "null"], pattern: expect.stringMatching(/^\^project_/) } },
   })
   expect(spec.components.schemas.LibraryArtifactItem?.required).not.toContain("project_ref")
+  expect(spec.components.schemas.LibraryArtifactItem?.required).toContain("favorited")
+  expect(list?.parameters).toContainEqual(expect.objectContaining({ name: "favorites_only", schema: { type: "boolean", default: false } }))
+  expect(spec.paths["/v1/library/artifacts/{conversation_id}/{artifact_id}"]?.delete?.operationId).toBe("deleteLibraryArtifact")
+  expect(spec.paths["/v1/library/artifacts/{conversation_id}/{artifact_id}/favorite"]?.put?.operationId).toBe("setLibraryArtifactFavorite")
   expect(detail?.responses).toHaveProperty(["200", "content", "application/json", "schema", "$ref"], "#/components/schemas/LibraryArtifactResponse")
   expect(content?.operationId).toBe("downloadLibraryArtifact")
   expect(content?.parameters).toEqual(

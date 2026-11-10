@@ -1,5 +1,9 @@
 import type { LibraryArtifactQuery } from "./kokoro-library-model"
 import { libraryArtifactDetailResponseSchema, libraryArtifactListResponseSchema, type LibraryArtifactDetailWire, type LibraryArtifactWire } from "@/contract/library-artifact"
+import {
+  isLibraryArtifactDeleteOwnerError, libraryArtifactConversationIdSchema, libraryArtifactDeleteErrorSchema,
+  libraryArtifactDeleteKeySchema, libraryArtifactDeleteResponseSchema, libraryArtifactFavoriteResponseSchema, libraryArtifactIdSchema,
+} from "@/generated/bff-library-artifact-mutations"
 
 export type LibraryArtifact = {
   conversationId: string
@@ -13,6 +17,7 @@ export type LibraryArtifact = {
   deliveredAt: string
   sourceRunId: string
   contentSha256: string
+  favorited: boolean
 }
 
 export type LibraryArtifactDetailView = LibraryArtifact & { projectRef?: string | null }
@@ -35,6 +40,7 @@ function mapArtifact(item: LibraryArtifactWire): LibraryArtifact {
     deliveredAt: item.delivered_at,
     sourceRunId: item.source_run_id,
     contentSha256: item.content_sha256,
+    favorited: item.favorited,
   }
 }
 
@@ -47,9 +53,8 @@ export function matchesLibraryArtifact(selected: LibraryArtifact, detail: Librar
 }
 
 function artifactPath(selector: LibraryArtifactSelector): string {
-  for (const id of [selector.conversationId, selector.artifactId]) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(id)) throw new Error("library_artifact_invalid_selector")
-  }
+  if (!libraryArtifactConversationIdSchema.safeParse(selector.conversationId).success ||
+    !libraryArtifactIdSchema.safeParse(selector.artifactId).success) throw Error("library_artifact_invalid_selector")
   return `/api/hub/library/artifacts/${encodeURIComponent(selector.conversationId)}/${encodeURIComponent(selector.artifactId)}`
 }
 
@@ -72,6 +77,7 @@ export async function listLibraryArtifacts(cursor: string | null, signal: AbortS
   if (cursor !== null) query.set("cursor", cursor)
   if (filter.query !== "") query.set("q", filter.query)
   if (filter.type !== "all") query.set("type", filter.type)
+  if (filter.favoritesOnly === true) query.set("favorites_only", "true")
   const response = await fetch(`/api/hub/library?${query}`, { cache: "no-store", signal })
   const parsed = libraryArtifactListResponseSchema.safeParse(await parsedResponse(response))
   if (!parsed.success) throw new Error("library_artifacts_invalid_response")
@@ -94,6 +100,59 @@ async function readArtifactWire(selector: LibraryArtifactSelector, signal: Abort
 export async function getLibraryArtifact(conversationId: string, artifactId: string, signal: AbortSignal): Promise<LibraryArtifactDetailView> {
   const detail = await readArtifactWire({ conversationId, artifactId }, signal)
   return { ...mapArtifact(detail), ...(detail.project_ref === undefined ? {} : { projectRef: detail.project_ref }) }
+}
+
+async function mutateArtifact(selector: LibraryArtifactSelector, suffix: string, init: RequestInit, signal: AbortSignal) {
+  const deadline = AbortSignal.any([signal, AbortSignal.timeout(23_000)])
+  try {
+    deadline.throwIfAborted()
+    const response = await fetch(`${artifactPath(selector)}${suffix}`, { ...init, cache: "no-store", redirect: "error", signal: deadline })
+    deadline.throwIfAborted()
+    const requestId = response.headers.get("x-request-id")
+    if (!requestId || !/^application\/json(?:\s*;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "") ||
+      !/(?:^|,)\s*no-store\s*(?:,|$)/iu.test(response.headers.get("cache-control") ?? "")) {
+      void response.body?.cancel().catch(() => undefined)
+      return null
+    }
+    const payload: unknown = await response.json()
+    deadline.throwIfAborted()
+    return { status: response.status, requestId, payload }
+  } catch {
+    return null
+  }
+}
+
+function matchesSelector(data: { conversation_id: string; artifact_id: string }, selector: LibraryArtifactSelector): boolean {
+  return data.conversation_id === selector.conversationId && data.artifact_id === selector.artifactId
+}
+
+/** An absolute target value; the browser does not toggle or retry on the owner's behalf. */
+export async function setLibraryArtifactFavorite(selector: LibraryArtifactSelector, favorited: boolean, signal: AbortSignal): Promise<boolean> {
+  const result = await mutateArtifact(selector, "/favorite", {
+    method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ favorited }),
+  }, signal)
+  if (result?.status !== 200) return false
+  const ack = libraryArtifactFavoriteResponseSchema.safeParse(result.payload)
+  return ack.success && ack.data.meta.request_id === result.requestId && matchesSelector(ack.data.data, selector) && ack.data.data.favorited === favorited
+}
+
+export type ArtifactDeletionOutcome = "confirmed" | "unknown" | "rejected" | "auth_required"
+
+/** The caller keeps the original intent/key; a missing row is not a delete ACK. */
+export async function deleteLibraryArtifact(selector: LibraryArtifactSelector, key: string, signal: AbortSignal): Promise<ArtifactDeletionOutcome> {
+  if (!libraryArtifactDeleteKeySchema.safeParse(key).success) return "rejected"
+  const result = await mutateArtifact(selector, "", { method: "DELETE", headers: { "idempotency-key": key } }, signal)
+  if (result === null) return "unknown"
+  if (result.status === 200) {
+    const ack = libraryArtifactDeleteResponseSchema.safeParse(result.payload)
+    return ack.success && matchesSelector(ack.data.data, selector) ? "confirmed" : "unknown"
+  }
+  const failure = libraryArtifactDeleteErrorSchema.safeParse(result.payload)
+  if (failure.success && isLibraryArtifactDeleteOwnerError(result.status, failure.data.error.code, failure.data.error.retryable) && !failure.data.error.retryable) {
+    if (result.status === 401 || result.status === 403) return "auth_required"
+    if ([400, 404, 409].includes(result.status)) return "rejected"
+  }
+  return "unknown"
 }
 
 export const ARTIFACT_TEXT_PREVIEW_MAX_BYTES = 65_536

@@ -17,6 +17,7 @@ export const libraryArtifactItemSchema = z.object({
   content_sha256: z.string().regex(/^[0-9a-f]{64}$/u),
   source_run_id: z.string().min(1).max(191),
   delivered_at: z.string().datetime({ offset: true }),
+  favorited: z.boolean(),
 }).strict()
 
 const cursor = z.string().min(1).max(4096).nullable()

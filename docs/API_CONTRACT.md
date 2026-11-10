@@ -1,3 +1,12 @@
+## A‑09 — Artifact favorite and retirement
+
+The existing same-origin Library detail address accepts empty `DELETE` with one
+original `Idempotency-Key`; its `/favorite` accepts `PUT {"favorited":boolean}`.
+App uses the exact BFF Public 28.29 owner responses. The Artifact list's URL state
+`favorites=1` sends `favorites_only=true` for server-side filtering before pagination.
+An uncertain retirement keeps its original target and key; only a verified exact
+receipt removes the item. No new identity or Storage route is exposed to the browser.
+
 ## A‑09 — Artifact source destination
 
 The existing same-origin exact Artifact detail reads BFF Public 28.28.

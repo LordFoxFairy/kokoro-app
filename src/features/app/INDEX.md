@@ -8,6 +8,10 @@ Composer 复用现 Library CLEAN 文件/FINAL artifact 和 Project resources 列
 
 同一文件页保留 `file_q` / `file_type` URL，文字在校验原始 Unicode code points 后防抖派发；筛选、页窗与游标同代退休。列表只展示 owner 筛选结果，不再按已加载的页面猜命中。筛选遮住未知删除目标时仍可从同页恢复原删除命令；Composer 的无筛选列表调用不变。
 
+## 作品收藏与单件删除（A‑09）
+
+现收藏星标只接受本人的 exact BFF 状态；页面 URL 的 `favorites=1` 对应 owner `favorites_only=true`，不把已加载页当收藏全集。作品删除只提交二元目标和原幂等键，未知保留同一操作供明确重试，只有精确回执才从当前投影退休目标；身份／路由变化丢弃迟到回执。不改变原 Project 归属、个人文件或 Agent 输入协议。
+
 ## 作品来源回跳（A‑09）
 
 列表不猜来源作用域：卡片快捷入口读取同源二元详情，并核同 Conversation / Artifact / Asset / source Run / digest；详情弹窗复用已读值。显式 `project_ref: null` 才回直聊，canonical Project ID 进入原 Project 的会话，省略表示来源不可用且仍可读取详情和下载。AppFrame 与侧栏复用同一个 scope-aware 导航和移动围栏，身份或路由退休取消迟到回跳。

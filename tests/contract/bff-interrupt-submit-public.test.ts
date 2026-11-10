@@ -34,7 +34,7 @@ it("pins interrupt submit to the exact optional BFF Run identifier and restores 
 it("rejects interrupt field and version tampering before restoring the historical contract", () => {
   for (const changed of [
     raw.replace("        interrupt_run_id:\n", "        changed_run_id:\n"),
-    raw.replace("  version: 28.28.0\n", "  version: 28.29.0\n"),
+    raw.replace("  version: 28.29.0\n", "  version: 28.30.0\n"),
   ]) {
     expect(changed).not.toBe(raw)
     expect(() => restorePublic2820InterruptSubmitContract(changed)).toThrow()
@@ -45,7 +45,7 @@ it("pins the optional BFF-owned steer message receipt without changing the previ
   const restored = restorePublic2821SteerReceiptContract(raw)
   expect(createHash("sha256").update(restored).digest("hex")).toBe("a5ea4bb0ef1458a536e3b54e01049267aec2913d147f2ad7bb99a481197d0525")
   const spec = YAML.parse(raw)
-  expect(spec.info.version).toBe("28.28.0")
+  expect(spec.info.version).toBe("28.29.0")
   const receipt = spec.components.schemas.ControlReceipt
   expect(receipt.required).not.toContain("message_id")
   expect(receipt.properties.message_id).toMatchObject({ type: "string", minLength: 1 })

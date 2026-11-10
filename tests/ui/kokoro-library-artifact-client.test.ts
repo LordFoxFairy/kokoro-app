@@ -5,7 +5,7 @@ import { beginLibraryArtifactDownload, getLibraryArtifact, listLibraryArtifacts 
 const item = {
   kind: "artifact", conversation_id: "conversation-1", artifact_id: "artifact-1", asset_id: "asset-1",
   artifact_kind: "document", title: "Report", filename: "report.pdf", mime_type: "application/pdf",
-  size_bytes: "2048", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-09-28T10:00:00Z",
+  size_bytes: "2048", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-09-28T10:00:00Z", favorited: false,
 }
 const page = (items: unknown[], next_cursor: string | null = null) => ({ data: { items, next_cursor }, meta: { request_id: "req-1" } })
 
@@ -20,9 +20,11 @@ it("reads an empty Artifact page with cursor and never calls the old session pat
   expect(fetcher.mock.calls[1]?.[0]).toBe("/api/hub/library?kind=artifact&limit=50&cursor=next-1")
   await listLibraryArtifacts(null, new AbortController().signal, {query:"report & final",type:"documents"})
   expect(fetcher.mock.calls[2]?.[0]).toBe("/api/hub/library?kind=artifact&limit=50&q=report+%26+final&type=documents")
+  await listLibraryArtifacts(null, new AbortController().signal, { query: "", type: "all", favoritesOnly: true })
+  expect(fetcher.mock.calls[3]?.[0]).toBe("/api/hub/library?kind=artifact&limit=50&favorites_only=true")
   const rawQuery = "İ".repeat(200)
   await listLibraryArtifacts(null,new AbortController().signal,{query:rawQuery,type:"all"})
-  const sentQuery = new URL(String(fetcher.mock.calls[3]?.[0]),"http://fixture.local").searchParams.get("q")
+  const sentQuery = new URL(String(fetcher.mock.calls[4]?.[0]),"http://fixture.local").searchParams.get("q")
   expect(sentQuery).toBe(rawQuery)
   expect([...sentQuery!]).toHaveLength(200)
 })

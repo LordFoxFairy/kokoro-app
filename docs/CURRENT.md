@@ -1,3 +1,12 @@
+## 2026-11-10 A‑09 persistent Artifact commands
+
+The current Product contract is byte-exact Public 28.29 from BFF `9a0c45c`.
+Artifact favorites reflect the confirmed owner value; the favorite-only URL view
+filters in the owner before pagination. Single-item retirement uses the original
+key on uncertain results and removes only the acknowledged item; stale pages
+cannot restore it. The native Session and existing source navigation are unchanged.
+Root records the authenticated browser/Worker result separately.
+
 ## 2026-11-10 A‑09 Artifact source navigation
 
 Public 28.28 (`c9c0782`) can establish the current source Project on the exact

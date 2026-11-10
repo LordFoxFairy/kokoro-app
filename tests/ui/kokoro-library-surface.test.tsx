@@ -15,8 +15,8 @@ import { artifactFilter } from "@/features/app/kokoro-library-model"
 import type { LibraryArtifact, LibraryArtifactPage } from "@/features/app/kokoro-library-artifact-client"
 
 const artifacts: LibraryArtifact[] = [
-  { conversationId: "session-1", artifactId: "artifact-slide", assetId: "asset-slide", sourceRunId: "run-slide", contentSha256: "a".repeat(64), artifactKind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", sizeBytes: "1024", deliveredAt: "2026-08-30T12:00:00Z" },
-  { conversationId: "session-2", artifactId: "artifact-doc", assetId: "asset-doc", sourceRunId: "run-doc", contentSha256: "b".repeat(64), artifactKind: "document", title: "研究摘要.pdf", filename: "研究摘要.pdf", mimeType: "application/pdf", sizeBytes: "2048", deliveredAt: "2026-08-29T12:00:00Z" },
+  { conversationId: "session-1", artifactId: "artifact-slide", assetId: "asset-slide", sourceRunId: "run-slide", contentSha256: "a".repeat(64), favorited: false, artifactKind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", sizeBytes: "1024", deliveredAt: "2026-08-30T12:00:00Z" },
+  { conversationId: "session-2", artifactId: "artifact-doc", assetId: "asset-doc", sourceRunId: "run-doc", contentSha256: "b".repeat(64), favorited: false, artifactKind: "document", title: "研究摘要.pdf", filename: "研究摘要.pdf", mimeType: "application/pdf", sizeBytes: "2048", deliveredAt: "2026-08-29T12:00:00Z" },
 ]
 
 const fileOne = {
@@ -827,9 +827,15 @@ it("进入 Agent 作品页签时注入的资料库 fixture 同步渲染", () => 
 })
 
 it("收藏作品跨个人文件切换保留，个人文件深链不预载作品", async () => {
-  const listArtifacts = vi.fn(async () => ({ items: artifacts, nextCursor: null }))
-  const fetchFiles = vi.fn(async () => new Response(JSON.stringify(filePage([])), { status: 200 }))
-  vi.stubGlobal("fetch", fetchFiles)
+  let favorited = false
+  const listArtifacts = vi.fn(async () => ({ items: [{ ...artifactAt(0), favorited }, artifactAt(1)], nextCursor: null }))
+  const fetchSameOrigin = vi.fn(async (_url: string, init?: RequestInit) => {
+    if (init?.method !== "PUT") return Response.json(filePage([]))
+    favorited = (JSON.parse(String(init.body)) as { favorited: boolean }).favorited
+    return Response.json({ data: { conversation_id: "session-1", artifact_id: "artifact-slide", favorited },
+      meta: { request_id: "req-artifact-favorite" } }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-artifact-favorite" } })
+  })
+  vi.stubGlobal("fetch", fetchSameOrigin)
   render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} artifactClient={{ listArtifacts }} /></LocaleProvider>)
 
   await screen.findByTestId("library-files-empty")
@@ -838,7 +844,7 @@ it("收藏作品跨个人文件切换保留，个人文件深链不预载作品"
   showArtifacts()
   await screen.findByText("季度汇报.pptx")
   fireEvent.click(screen.getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" }))
-  expect(screen.getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" })).toHaveAttribute("aria-pressed", "true")
+  await waitFor(() => expect(screen.getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" })).toHaveAttribute("aria-pressed", "true"))
 
   showFiles()
   expect(screen.queryByTestId("library-artifacts")).not.toBeInTheDocument()
@@ -933,18 +939,83 @@ it("无匹配筛选时给出明确空态并可一键恢复", async () => {
   expect(screen.getByText("季度汇报.pptx")).toBeInTheDocument()
 })
 
-it("收藏卡片、打开来源和下载失败均保持明确的可恢复状态", async () => {
+it("收藏只采用 exact owner 回执，收藏筛选也交给 owner", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const artifact = { ...artifactAt(0), favorited: false }
+  let finishFavorites!: (page: LibraryArtifactPage) => void
+  const listArtifacts = vi.fn().mockResolvedValueOnce({ items: [artifact], nextCursor: null })
+    .mockImplementationOnce(() => new Promise<LibraryArtifactPage>(resolve => { finishFavorites = resolve }))
+  let finishFavorite!: (response: Response) => void
+  const sendFavorite = vi.fn().mockImplementation(() => new Promise<Response>(resolve => { finishFavorite = resolve }))
+  vi.stubGlobal("fetch", sendFavorite)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} artifactClient={{ listArtifacts }} /></LocaleProvider>)
+  const name = "仅显示收藏: 季度汇报.pptx"
+  const star = () => screen.getByRole("button", { name })
+  expect(await screen.findByRole("button", { name })).toHaveAttribute("aria-pressed", "false")
+  fireEvent.click(star())
+  expect(star()).toHaveAttribute("aria-pressed", "false")
+  expect(sendFavorite).toHaveBeenCalledWith("/api/hub/library/artifacts/session-1/artifact-slide/favorite",
+    expect.objectContaining({ method: "PUT", body: '{"favorited":true}' }))
+  await act(async () => finishFavorite(Response.json({
+    data: { conversation_id: "session-1", artifact_id: "artifact-slide", favorited: true }, meta: { request_id: "req-artifact-favorite" },
+  }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-artifact-favorite" } })))
+  expect(star()).toHaveAttribute("aria-pressed", "true")
+  expect(listArtifacts).toHaveBeenCalledOnce()
+  toggleFavorites()
+  await waitFor(() => expect(listArtifacts).toHaveBeenLastCalledWith(null, expect.any(AbortSignal), { query: "", type: "all", favoritesOnly: true }))
+  expect(screen.queryByRole("button", { name })).not.toBeInTheDocument()
+  await act(async () => finishFavorites({ items: [{ ...artifact, favorited: true }], nextCursor: null }))
+  expect(star()).toHaveAttribute("aria-pressed", "true")
+})
+
+it("作品删除取消零写；未知回执保原键，exact replay 只退休目标行", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  window.history.replaceState(null, "", "/app/library")
+  const first = artifacts.map(artifact => ({ ...artifact, favorited: false }))
+  let finishOldPage!: (page: LibraryArtifactPage) => void
+  const listArtifacts = vi.fn().mockResolvedValueOnce({ items: first, nextCursor: "previous-window" })
+    .mockImplementationOnce(() => new Promise<LibraryArtifactPage>(resolve => { finishOldPage = resolve }))
+  const sent: Array<{ path: string; key: string | null; body: BodyInit | null | undefined }> = []
+  vi.stubGlobal("fetch", vi.fn(async (target: string | Request, init?: RequestInit) => {
+    expect(init?.method).toBe("DELETE")
+    sent.push({ path: requestUrl(target), key: new Headers(init?.headers).get("idempotency-key"), body: init?.body })
+    return Response.json({
+      data: { conversation_id: "session-1", artifact_id: sent.length === 1 ? "wrong-artifact" : "artifact-slide",
+        deleted_at: "2026-11-10T00:00:00.000Z", replayed: sent.length > 1 },
+    }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-artifact-delete" } })
+  }))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} artifactClient={{ listArtifacts }} /></LocaleProvider>)
+  const trigger = await screen.findByRole("button", { name: "Delete 季度汇报.pptx" })
+  fireEvent.click(screen.getByRole("button", { name: "Load more" }))
+  await waitFor(() => expect(listArtifacts).toHaveBeenCalledTimes(2))
+  const oldSignal = listArtifacts.mock.calls[1]?.[1] as AbortSignal
+  const dialog = () => screen.getByRole("alertdialog", { name: "Delete artifact" })
+  fireEvent.click(trigger)
+  fireEvent.click(within(dialog()).getByRole("button", { name: "Cancel" }))
+  expect(sent).toEqual([])
+
+  fireEvent.click(trigger)
+  fireEvent.click(within(dialog()).getByRole("button", { name: "Delete artifact" }))
+  const retry = await within(dialog()).findByRole("button", { name: "Retry deletion" })
+  expect(trigger).toBeVisible()
+  fireEvent.click(retry)
+  await waitFor(() => expect(trigger).not.toBeInTheDocument())
+  expect(oldSignal.aborted).toBe(true)
+  await act(async () => finishOldPage({ items: first.slice(0, 1), nextCursor: null }))
+  expect(screen.queryByRole("button", { name: "Delete 季度汇报.pptx" })).not.toBeInTheDocument()
+  expect(screen.getByText("研究摘要.pdf")).toBeVisible()
+  expect(sent[0]).toMatchObject({ path: "/api/hub/library/artifacts/session-1/artifact-slide", key: expect.any(String), body: undefined })
+  expect(sent).toEqual([sent[0], sent[0]])
+})
+
+it("打开来源和下载失败均保持明确的可恢复状态", async () => {
   const downloadArtifact = vi.fn(async () => { throw new Error("preflight failed") })
-  const onFavoriteChange = vi.fn()
   const onOpenSession = vi.fn()
   const getArtifact = vi.fn().mockResolvedValue({ ...artifactAt(0), projectRef: null })
-  renderLibrary({ downloadArtifact, onFavoriteChange, onOpenSession, artifactClient: { listArtifacts: vi.fn(), getArtifact } })
+  renderLibrary({ downloadArtifact, onOpenSession, artifactClient: { listArtifacts: vi.fn(), getArtifact } })
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
   const card = listItemAt(0)
-  fireEvent.click(within(card).getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" }))
-  expect(onFavoriteChange).toHaveBeenCalledWith(artifactAt(0), expect.any(Set))
-  expect(within(card).getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" })).toHaveAttribute("aria-pressed", "true")
   fireEvent.click(within(card).getByRole("button", { name: "查看来源会话" }))
   await waitFor(() => expect(onOpenSession).toHaveBeenCalledExactlyOnceWith({ kind: "direct" }, "session-1"))
 
@@ -978,7 +1049,7 @@ it("开发环境未注入 client 的正式资料库请求同源 live，失败可
   vi.stubEnv("NODE_ENV", "development")
   const fetchArtifacts = vi.fn()
     .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-    .mockResolvedValueOnce(new Response(JSON.stringify({ data: { items: [{ kind: "artifact", conversation_id: "session-1", artifact_id: "artifact-slide", asset_id: "asset-slide", artifact_kind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mime_type: "application/pdf", size_bytes: "1024", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-08-30T12:00:00Z" }], next_cursor: null }, meta: { request_id: "req-1" } }), {
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: { items: [{ kind: "artifact", conversation_id: "session-1", artifact_id: "artifact-slide", asset_id: "asset-slide", artifact_kind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mime_type: "application/pdf", size_bytes: "1024", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-08-30T12:00:00Z", favorited: false }], next_cursor: null }, meta: { request_id: "req-1" } }), {
       status: 200,
       headers: { "content-type": "application/json" },
     }))
@@ -1061,7 +1132,7 @@ it("翻页失败时保留当前成果并提供明确的重试入口", async () =
 
 it("收藏筛选为空时 CTA 清除收藏筛选，不导航到新任务", async () => {
   const onPrompt = vi.fn()
-  renderLibrary({ initialFavoriteIds: [], onPrompt })
+  renderLibrary({ onPrompt })
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
   toggleFavorites()
@@ -1078,7 +1149,7 @@ it("正式作品页用二元 Product 列表，空页带 cursor 时继续加载�
   const liveArtifact = {
     kind: "artifact", conversation_id: "conversation-1", artifact_id: "artifact-1", asset_id: "asset-1",
     artifact_kind: "document", title: "正式报告", filename: "report.pdf", mime_type: "application/pdf",
-    size_bytes: "24", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-09-28T10:00:00Z",
+    size_bytes: "24", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-09-28T10:00:00Z", favorited: false,
   }
   const fetcher = vi.fn(async (input: string) => {
     if (input.includes("kind=file")) return new Response(JSON.stringify(filePage([])), { status: 200 })

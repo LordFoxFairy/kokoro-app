@@ -11,8 +11,11 @@ import { DIRECT_SESSION_SCOPE, type SessionScope } from "@/engine/session-scope"
 import { useMemo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useT } from "@/i18n/context"
 
-import { LibraryResults, LibraryToolbar } from "./kokoro-library-sections"
-import { beginLibraryArtifactDownload, getLibraryArtifact, listLibraryArtifacts, matchesLibraryArtifact, type LibraryArtifact, type LibraryArtifactClient, type LibraryArtifactDetailView } from "./kokoro-library-artifact-client"
+import { LibraryArtifactDeleteDialog, LibraryResults, LibraryToolbar } from "./kokoro-library-sections"
+import {
+  beginLibraryArtifactDownload, deleteLibraryArtifact, getLibraryArtifact, listLibraryArtifacts, matchesLibraryArtifact,
+  setLibraryArtifactFavorite, type ArtifactDeletionOutcome, type LibraryArtifact, type LibraryArtifactClient, type LibraryArtifactDetailView,
+} from "./kokoro-library-artifact-client"
 import { KokoroLibraryFiles } from "./kokoro-library-files"
 import { useLibraryFileUpload } from "./kokoro-library-file-upload-state"
 import { DEFAULT_URL_STATE, FILTERS, artifactFilter, type LibraryFilter, type LibraryUrlState } from "./kokoro-library-model"
@@ -21,12 +24,12 @@ import styles from "./kokoro-library-surface.module.css"
 
 
 type ArtifactDownloader = (artifact: LibraryArtifact, signal: AbortSignal) => Promise<void>
+type ArtifactDeletion = { artifact: LibraryArtifact; phase: "confirm" } |
+  { artifact: LibraryArtifact; key: string; phase: "pending" | Exclude<ArtifactDeletionOutcome, "confirmed"> }
 
 export type KokoroLibrarySurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "onOpenSession" | "projectReadBoundary"> & {
   fixtureArtifacts?: readonly LibraryArtifact[]
-  initialFavoriteIds?: readonly string[]
   artifactClient?: LibraryArtifactClient
-  onFavoriteChange?: (artifact: LibraryArtifact, next: ReadonlySet<string>) => void
   downloadArtifact?: ArtifactDownloader
 }
 
@@ -121,17 +124,13 @@ function KokoroArtifactLibrary({
   onPrompt,
   onOpenSession,
   fixtureArtifacts,
-  favoriteIds,
-  setFavoriteIds,
   artifactClient,
-  onFavoriteChange,
   downloadArtifact,
   sourceFocusRef,
 }: KokoroLibrarySurfaceProps & {
   sourceFocusRef: React.RefObject<HTMLButtonElement | null>
-  favoriteIds: ReadonlySet<string>
-  setFavoriteIds: (next: ReadonlySet<string>) => void
 }) {
+  const t = useT()
   // Only an explicit preview selects synthetic transport. Development with a
   // native session admission remains live and must show an unavailable BFF as an error.
   const useFixtureTransport = preview && !artifactClient && !fixtureArtifacts
@@ -158,6 +157,19 @@ function KokoroArtifactLibrary({
     sourceReadRef.current = null
   }, [])
   const detailReturnFocusRef = useRef<HTMLElement | null>(null)
+  const favoriteFlight = useRef<AbortController | null>(null)
+  const [favoriteResult, setFavoriteResult] = useState<{ owner: typeof owner; key: string; status: "pending" | "error" } | null>(null)
+  const deleteFlight = useRef<AbortController | null>(null)
+  const [deleteRecord, setDeleteRecord] = useState<{ owner: typeof owner; intent: ArtifactDeletion } | null>(null)
+  const deletion = deleteRecord?.owner === owner ? deleteRecord.intent : null
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const deleteTrigger = useRef<HTMLButtonElement | null>(null)
+  const retireWrites = useCallback(() => {
+    favoriteFlight.current?.abort()
+    favoriteFlight.current = null
+    deleteFlight.current?.abort()
+    deleteFlight.current = null
+  }, [])
   const [downloadRecord, setDownloadRecord] = useState<{ owner: typeof owner; data: Record<string, "loading" | "error" | "started"> }>({ owner, data: {} })
   const downloadState = downloadRecord.owner === owner ? downloadRecord.data : {}
   const downloadAbortRef = useRef<Map<string, AbortController>>(new Map())
@@ -167,19 +179,28 @@ function KokoroArtifactLibrary({
     let href = window.location.href
     const unsubscribe = subscribeUrlState(() => {
       if (href === window.location.href) return
+      const stillInArtifacts = new URL(href).pathname === window.location.pathname && readLibraryTab() === "artifacts"
       href = window.location.href
       retireSourceRead()
+      retireWrites()
       setSourceResult(null)
       setSelectedDetail(null)
+      setFavoriteResult(null)
+      setDeleteOpen(false)
+      setDeleteRecord(prior => {
+        if (!stillInArtifacts || prior?.owner !== owner || !["pending", "unknown"].includes(prior.intent.phase)) return null
+        return prior.intent.phase === "pending" ? { ...prior, intent: { ...prior.intent, phase: "unknown" } } : prior
+      })
     })
     return () => {
       unsubscribe()
       retireSourceRead()
+      retireWrites()
       if (ownerRef.current === owner) ownerRef.current = null
       for (const controller of downloads.values()) controller.abort()
       downloads.clear()
     }
-  }, [owner, retireSourceRead])
+  }, [owner, retireSourceRead, retireWrites])
   const client = useMemo<LibraryArtifactClient>(() => artifactClient ?? (useFixtureTransport
     ? { listArtifacts: async () => ({ items: [], nextCursor: null }) }
     : { listArtifacts: listLibraryArtifacts }), [artifactClient, useFixtureTransport])
@@ -217,7 +238,7 @@ function KokoroArtifactLibrary({
 
   const normalizedQuery = query.trim().normalize("NFC").toLowerCase()
   // BFF validates the raw query length before normalization, which can expand Unicode.
-  const search = useMemo(()=>({query,type:filter}),[query,filter])
+  const search = useMemo(() => ({ query, type: filter, ...(favoritesOnly ? { favoritesOnly: true } : {}) }), [query, filter, favoritesOnly])
   const page = useLibraryArtifacts(owner,search,client,fixtureSnapshot)
   const {artifacts, nextCursor, loadingMore, loadMoreError, reload, loadMore} = page
   const isFixtureControlled = fixtureSnapshot!==undefined
@@ -228,10 +249,9 @@ function KokoroArtifactLibrary({
       const local = isFixtureControlled || useFixtureTransport
       const matchesFilter = !local || filter === "all" || artifactFilter(artifact.mimeType, artifact.title) === filter
       const matchesQuery = !local || normalized === "" || [artifact.title,artifact.filename].some(value=>value.normalize("NFC").toLowerCase().includes(normalized))
-      const matchesFavorites = !favoritesOnly || favoriteIds.has(artifactKey(artifact))
-      return matchesFilter && matchesQuery && matchesFavorites
+      return matchesFilter && matchesQuery && (!local || !favoritesOnly || artifact.favorited)
     })
-  }, [artifacts, favoriteIds, favoritesOnly, filter, normalizedQuery, isFixtureControlled, useFixtureTransport])
+  }, [artifacts, favoritesOnly, filter, normalizedQuery, isFixtureControlled, useFixtureTransport])
 
   const download = useCallback(async (artifact: LibraryArtifact) => {
     if (!owner.admitted || ownerRef.current !== owner) return
@@ -250,14 +270,62 @@ function KokoroArtifactLibrary({
     }
   }, [downloadArtifact, useFixtureTransport, owner])
 
-  const toggleFavorite = (artifact: LibraryArtifact) => {
-    const next = new Set(favoriteIds)
+  const toggleFavorite = async (artifact: LibraryArtifact) => {
+    if (preview || !owner.admitted || ownerRef.current !== owner || favoriteFlight.current !== null) return
     const key = artifactKey(artifact)
-    if (next.has(key)) next.delete(key)
-    else next.add(key)
-    setFavoriteIds(next)
-    onFavoriteChange?.(artifact, next)
+    const target = !artifact.favorited
+    const href = window.location.href
+    const controller = new AbortController()
+    favoriteFlight.current = controller
+    setFavoriteResult({ owner, key, status: "pending" })
+    try {
+      const confirmed = await setLibraryArtifactFavorite(artifact, target, controller.signal)
+      if (favoriteFlight.current !== controller || controller.signal.aborted || ownerRef.current !== owner || window.location.href !== href) return
+      if (confirmed) {
+        page.acknowledge(artifact, target)
+        setFavoriteResult(null)
+      } else setFavoriteResult({ owner, key, status: "error" })
+    } finally {
+      if (favoriteFlight.current === controller) favoriteFlight.current = null
+    }
   }
+
+  const openDeletion = (artifact: LibraryArtifact, trigger: HTMLButtonElement) => {
+    if (preview || !owner.admitted || ownerRef.current !== owner || deleteFlight.current !== null || deletion?.phase === "auth_required") return
+    if (deletion?.phase === "unknown" && artifactKey(deletion.artifact) !== artifactKey(artifact)) return
+    deleteTrigger.current = trigger
+    if (deletion?.phase !== "unknown") setDeleteRecord({ owner, intent: { artifact, phase: "confirm" } })
+    setDeleteOpen(true)
+  }
+  const closeDeletion = () => {
+    if (deleteFlight.current !== null) return
+    setDeleteOpen(false)
+    if (deletion?.phase !== "unknown" && deletion?.phase !== "auth_required") setDeleteRecord(null)
+  }
+  const submitDeletion = async () => {
+    if (!owner.admitted || ownerRef.current !== owner || !deleteOpen || deleteFlight.current !== null ||
+      (deletion?.phase !== "confirm" && deletion?.phase !== "unknown")) return
+    const href = window.location.href
+    const command = { artifact: deletion.artifact, key: deletion.phase === "confirm" ? `library-artifact-delete:${crypto.randomUUID()}` : deletion.key }
+    const controller = new AbortController()
+    deleteFlight.current = controller
+    setDeleteRecord({ owner, intent: { ...command, phase: "pending" } })
+    try {
+      const result = await deleteLibraryArtifact(command.artifact, command.key, controller.signal)
+      if (deleteFlight.current !== controller || controller.signal.aborted || ownerRef.current !== owner || window.location.href !== href) return
+      if (result === "confirmed") {
+        page.acknowledge(command.artifact, null)
+        setDeleteOpen(false)
+        setDeleteRecord(null)
+      } else setDeleteRecord({ owner, intent: { ...command, phase: result } })
+    } finally {
+      if (deleteFlight.current === controller) deleteFlight.current = null
+    }
+  }
+
+  const lockedDeletionKey = deletion?.phase === "unknown" ? artifactKey(deletion.artifact) : null
+  const retryOutsideResults = deletion?.phase === "unknown" && !deleteOpen &&
+    (page.error || !filteredArtifacts.some(artifact => artifactKey(artifact) === lockedDeletionKey))
 
   const clearFilters = () => {
     updateUrlState({ filter: "all", query: "", favoritesOnly: false })
@@ -270,14 +338,20 @@ function KokoroArtifactLibrary({
     <>
       <LibraryHeader searching={page.queryPending} query={query} view={view} favoritesOnly={favoritesOnly} updateUrlState={updateUrlState} onOpenFiles={() => writeLibraryTab("files")} sourceFocusRef={sourceFocusRef} />
       <LibraryToolbar filter={filter} updateUrlState={updateUrlState} />
+      {retryOutsideResults ? <div className={styles.toolbar}>
+        <span className="min-w-0 break-words text-sm text-muted-foreground">{deletion.artifact.title}</span>
+        <Button type="button" variant="outline" size="sm" onClick={event => openDeletion(deletion.artifact, event.currentTarget)}>{t("library.fileDeleteRetry")}</Button>
+      </div> : null}
       <LibraryResults
         filteredArtifacts={filteredArtifacts}
         view={view}
         favoritesOnly={favoritesOnly}
-        favoriteIds={favoriteIds}
         hasActiveContentFilter={filter !== "all" || query.trim() !== ""}
         downloadState={downloadState}
-        toggleFavorite={toggleFavorite}
+        favoriteState={favoriteResult?.owner === owner ? favoriteResult : null}
+        lockedDeletionKey={lockedDeletionKey}
+        deletionBlocked={deletion?.phase === "auth_required"}
+        {...(preview ? {} : { toggleFavorite, onOpenDelete: openDeletion })}
         download={download}
         onOpenDetail={(artifact, trigger) => {
           if (!owner.admitted || ownerRef.current !== owner) return
@@ -315,6 +389,13 @@ function KokoroArtifactLibrary({
           setSelectedDetail(null)
           onOpenSession(scope, detail.conversationId)
         } } : {})} /> : null}
+      <LibraryArtifactDeleteDialog open={deleteOpen && deletion !== null} title={deletion?.artifact.title ?? ""}
+        phase={deletion?.phase} onClose={closeDeletion} onSubmit={submitDeletion} onReturnFocus={() => {
+          if (ownerRef.current !== owner) return
+          const trigger = deleteTrigger.current
+          if (trigger?.isConnected && !trigger.disabled) trigger.focus()
+          else sourceFocusRef.current?.focus()
+        }} />
     </>
   )
 }
@@ -333,9 +414,6 @@ function LibraryWorkspace(props: KokoroLibrarySurfaceProps) {
     previousSourceRef.current = activeTab
   }, [activeTab])
   const upload = useLibraryFileUpload()
-  // Keep local favorites for the lifetime of this Library page, without
-  // mounting or fetching the inactive data source.
-  const [favoriteIds, setFavoriteIds] = useState<ReadonlySet<string>>(() => new Set(props.initialFavoriteIds))
   return <div className={styles.page} data-testid="library-page">
     {activeTab === "files" ? <>
       <header className={styles.header}>
@@ -343,6 +421,6 @@ function LibraryWorkspace(props: KokoroLibrarySurfaceProps) {
         <h1>{t("library.filesTab")}</h1>
       </header>
       <KokoroLibraryFiles preview={props.preview === true} upload={upload} boundary={props.projectReadBoundary} />
-    </> : <KokoroArtifactLibrary {...props} sourceFocusRef={sourceFocusRef} favoriteIds={favoriteIds} setFavoriteIds={setFavoriteIds} />}
+    </> : <KokoroArtifactLibrary {...props} sourceFocusRef={sourceFocusRef} />}
   </div>
 }
