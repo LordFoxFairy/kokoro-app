@@ -1368,6 +1368,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "library.filesLoadMore": "Load more files",
   "library.filesLoadMoreError": "More files failed to load. Try again.",
   "library.filesRetryMore": "Retry loading more files",
+  "library.fileFilterAria": "Filter personal files by type",
+  "library.fileSearchInvalid": "Search accepts up to 200 characters and no control characters.",
   "library.fileDownload": "Download",
   "library.fileRetryDownload": "Retry download",
   "library.fileDeleteAria": "Delete {title}",

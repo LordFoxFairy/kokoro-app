@@ -14,14 +14,13 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
 
 import { useLibraryFiles } from "./kokoro-library-file-state"
-import { deletePersonalLibraryFile, downloadPersonalLibraryFile, LibraryFileDeleteError, type LibraryFile } from "./kokoro-library-file-client"
+import { deletePersonalLibraryFile, downloadPersonalLibraryFile, isLibraryFileSearchQuery, LibraryFileDeleteError, type LibraryFile, type LibraryFileType } from "./kokoro-library-file-client"
 import { KokoroLibraryFileUpload } from "./kokoro-library-file-upload"
 import type { LibraryUploadIntent } from "./kokoro-library-file-upload-state"
 import styles from "./kokoro-library-surface.module.css"
 
 
-type FileFilter = "all" | "documents" | "images" | "media" | "other"
-type FileUrlState = { query: string; filter: FileFilter }
+type FileUrlState = { query: string; filter: LibraryFileType }
 const FILE_URL_EVENT = "kokoro:library-file-url-state"
 const DEFAULT_FILE_URL_STATE: FileUrlState = { query: "", filter: "all" }
 
@@ -29,7 +28,7 @@ function readFileUrlState(): FileUrlState {
   if (typeof window === "undefined") return DEFAULT_FILE_URL_STATE
   const params = new URLSearchParams(window.location.search)
   const rawFilter = params.get("file_type")
-  const filter: FileFilter = rawFilter === "documents" || rawFilter === "images" || rawFilter === "media" || rawFilter === "other" ? rawFilter : "all"
+  const filter: LibraryFileType = rawFilter === "documents" || rawFilter === "images" || rawFilter === "media" || rawFilter === "other" ? rawFilter : "all"
   return { filter, query: params.get("file_q") ?? "" }
 }
 
@@ -45,7 +44,7 @@ function writeFileUrlState(patch: Partial<FileUrlState>): void {
   if (typeof window === "undefined") return
   const state = { ...readFileUrlState(), ...patch }
   const url = new URL(window.location.href)
-  if (state.query.trim() === "") url.searchParams.delete("file_q")
+  if (state.query.trim() === "" && isLibraryFileSearchQuery(state.query)) url.searchParams.delete("file_q")
   else url.searchParams.set("file_q", state.query)
   if (state.filter === "all") url.searchParams.delete("file_type")
   else url.searchParams.set("file_type", state.filter)
@@ -56,15 +55,6 @@ function writeFileUrlState(patch: Partial<FileUrlState>): void {
 function useFileUrlState(): FileUrlState {
   const snapshot = useSyncExternalStore(subscribeFileUrlState, () => JSON.stringify(readFileUrlState()), () => JSON.stringify(DEFAULT_FILE_URL_STATE))
   return useMemo(() => JSON.parse(snapshot) as FileUrlState, [snapshot])
-}
-
-function fileMatchesFilter(file: LibraryFile, filter: FileFilter): boolean {
-  if (filter === "all") return true
-  const mime = file.mimeType.toLowerCase()
-  if (filter === "images") return mime.startsWith("image/")
-  if (filter === "media") return mime.startsWith("audio/") || mime.startsWith("video/")
-  if (filter === "documents") return mime.startsWith("text/") || mime === "application/pdf" || mime.includes("document") || mime.includes("spreadsheet") || mime.includes("presentation")
-  return !fileMatchesFilter(file, "images") && !fileMatchesFilter(file, "media") && !fileMatchesFilter(file, "documents")
 }
 
 type UploadProps = {
@@ -150,7 +140,8 @@ function LiveFiles({ upload }: { upload: UploadProps }) {
   const t = useT()
   const { locale } = useLocale()
   const { query, filter } = useFileUrlState()
-  const { items, nextCursor, phase, reload, loadMore, acknowledgeDeletion } = useLibraryFiles(upload.refreshRevision)
+  const { items, nextCursor, phase, validQuery, reload, loadMore, acknowledgeDeletion } = useLibraryFiles(upload.refreshRevision, query, filter)
+  const [rejectedQuery, setRejectedQuery] = useState(false)
   const [deletion, setDeletion] = useState<FileDeletion | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const deleteFlight = useRef<AbortController | null>(null)
@@ -197,21 +188,29 @@ function LiveFiles({ upload }: { upload: UploadProps }) {
       if (deleteFlight.current === controller) deleteFlight.current = null
     }
   }
-  const normalizedQuery = query.trim().normalize("NFC").toLowerCase()
-  const visibleItems = useMemo(() => items.filter((file) =>
-    fileMatchesFilter(file, filter) &&
-    (normalizedQuery === "" || [file.filename, file.mimeType].some((value) => value.normalize("NFC").toLowerCase().includes(normalizedQuery))),
-  ), [filter, items, normalizedQuery])
+  const retryOutsideResults = deletion?.phase === "unknown" && !deleteOpen && !items.some((file) => file.assetId === deletion.file.assetId)
+  const queryFeedback = rejectedQuery || !validQuery
 
   return <>
     <div className={styles.toolbar} data-testid="library-file-filters">
       <label className={styles.search}>
         <Search aria-hidden="true" />
-        <Input ref={search} value={query} aria-label={t("library.search")} placeholder={t("library.search")} onChange={(event) => writeFileUrlState({ query: event.target.value })} onKeyDown={(event) => {
-          if (event.key === "Escape" && query !== "") { event.preventDefault(); writeFileUrlState({ query: "" }) }
+        <Input ref={search} value={query} aria-label={t("library.search")} placeholder={t("library.search")}
+          aria-invalid={!validQuery || undefined} aria-describedby={queryFeedback ? "library-file-search-validation" : undefined}
+          onChange={(event) => {
+            const next = event.target.value
+            if (!isLibraryFileSearchQuery(next)) { setRejectedQuery(true); return }
+            setRejectedQuery(false)
+            writeFileUrlState({ query: next })
+          }} onKeyDown={(event) => {
+          if (event.key === "Escape" && (query !== "" || rejectedQuery)) {
+            event.preventDefault()
+            setRejectedQuery(false)
+            writeFileUrlState({ query: "" })
+          }
         }} />
       </label>
-      <select className={styles.fileFilter} aria-label={t("library.filterAria")} value={filter} onChange={(event) => writeFileUrlState({ filter: event.target.value as FileFilter })}>
+      <select className={styles.fileFilter} aria-label={t("library.fileFilterAria")} value={filter} onChange={(event) => writeFileUrlState({ filter: event.target.value as LibraryFileType })}>
         <option value="all">{t("library.filterAll")}</option>
         <option value="documents">{t("library.filterDocuments")}</option>
         <option value="images">{t("library.filterImages")}</option>
@@ -219,11 +218,16 @@ function LiveFiles({ upload }: { upload: UploadProps }) {
         <option value="other">{t("library.filterOther")}</option>
       </select>
     </div>
+    {queryFeedback ? <p id="library-file-search-validation" role="alert" className="text-sm text-destructive">{t("library.fileSearchInvalid")}</p> : null}
+    {retryOutsideResults ? <div className={styles.toolbar}>
+      <span className="min-w-0 break-words text-sm text-muted-foreground">{deletion.file.filename}</span>
+      <Button type="button" variant="outline" size="sm" onClick={(event) => openDeletion(deletion.file, event.currentTarget)}>{t("library.fileDeleteRetry")}</Button>
+    </div> : null}
     <KokoroLibraryFileUpload intent={upload.intent} onSelect={upload.select} onSubmit={upload.submit} />
-    {phase === "loading" ? <div className={styles.stateRegion} role="status">{t("library.filesLoading")}</div> : null}
+    {validQuery && phase === "loading" ? <div className={styles.stateRegion} role="status">{t("library.filesLoading")}</div> : null}
     {phase === "error" ? <div className={styles.stateRegion}><Alert variant="destructive" className={styles.errorState}><AlertDescription><span>{t("library.filesLoadError")}</span><Button type="button" variant="outline" size="sm" onClick={reload}>{t("library.filesRetry")}</Button></AlertDescription></Alert></div> : null}
-    {phase === "ready" && visibleItems.length === 0 ? <FileEmpty /> : null}
-    {phase !== "loading" && phase !== "error" && visibleItems.length > 0 ? <div className={styles.list} data-testid="library-files" role="list" aria-label={t("library.filesTab")}>{visibleItems.map((file) => <FileCard key={file.assetId} file={file} locale={locale}
+    {phase === "ready" && items.length === 0 ? <FileEmpty /> : null}
+    {phase !== "loading" && phase !== "error" && items.length > 0 ? <div className={styles.list} data-testid="library-files" role="list" aria-label={t("library.filesTab")}>{items.map((file) => <FileCard key={file.assetId} file={file} locale={locale}
       deleteDisabled={deletion?.phase === "auth_required" || (deletion?.phase === "unknown" && deletion.file.assetId !== file.assetId)} onDelete={openDeletion} />)}</div> : null}
     {phase !== "loading" && phase !== "error" && nextCursor !== null ? <div className={styles.pagination}>{phase === "moreError" ? <Alert variant="destructive" className={styles.loadMoreError}><AlertDescription><span>{t("library.filesLoadMoreError")}</span><Button type="button" variant="outline" size="sm" onClick={loadMore}>{t("library.filesRetryMore")}</Button></AlertDescription></Alert> : <Button type="button" variant="outline" size="sm" disabled={phase === "loadingMore"} onClick={loadMore}>{phase === "loadingMore" ? t("library.filesLoading") : t("library.filesLoadMore")}</Button>}</div> : null}
     <AlertDialog open={deleteOpen} onOpenChange={(open) => { if (!open) closeDeletion() }}>

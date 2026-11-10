@@ -1,3 +1,11 @@
+## 2026-11-10 A‑09 personal Library server search
+
+Files use the existing URL filters and same-origin list endpoint with BFF Public 28.27
+(`e52952d`). The server, not the loaded page, filters before pagination. A new filter retires
+old data/cursors immediately; the surrounding actions keep the same owner scope and an
+uncertain deletion can still resume with its original key. The Composer's unfiltered list
+and Artifact search are unchanged. Root records the exact authenticated browser evidence.
+
 ## 2026-11-09 A‑08 最近任务最终答复（未提交候选）
 
 基线 `311535e7`。唯一 Public28.25 固定 BFF `8d7892c8`，最近任务复用当前 scope 的私有 snapshot 识别无交付且具有 owner durable 标记的最终答复；只选择 assistant Message ID，不读取正文。草稿恢复与实时／持久正文链保持。真实 native Chromium／BFF／Agent 组合验收归 Root。

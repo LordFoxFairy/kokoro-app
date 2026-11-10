@@ -1,3 +1,10 @@
+## A‑09 — Public 28.27 personal file filters
+
+The generated current snapshot is the byte-exact BFF `e52952d` artifact, SHA-256
+`52b59b49be42bc3c1126b6fc94b1d88c440b7ac911c2631e8a0305f43f96bd08`.
+It adds file q/type to existing listLibrary without a second route or response.
+Historical inverses and the independent Public 28.23 scheduled pin remain fixed.
+
 ## A‑09 · Public 28.26 个人文件删除
 
 唯一公开 snapshot 按 BFF `697cece8c913349c9424a024bd6d8003bb3adeae` canonical Git blob 固定，SHA‑256 `c80d5aaba1732eca0fb7bc8f32f500adef99e7d884f579cfb7944b8b11e8901a`。现资源生成器从同一来源生成个人文件删除的 Asset/key、闭合回执及 status/code/retryable 校验，不新增可编辑契约副本。旧 A‑12 28.23 与其它独立来源保持；test-only 完整逆变换仍核原父字节，运行时只消费当前协议。

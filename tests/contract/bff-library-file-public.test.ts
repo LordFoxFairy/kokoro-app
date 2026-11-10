@@ -6,13 +6,13 @@ import { expect, it } from "vitest"
 import YAML from "yaml"
 
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
-const OWNER_COMMIT = "697cece8c913349c9424a024bd6d8003bb3adeae"
-const OWNER_SHA256 = "c80d5aaba1732eca0fb7bc8f32f500adef99e7d884f579cfb7944b8b11e8901a"
-const OWNER_VERSION = "28.26.0"
+const OWNER_COMMIT = "e52952ddbf35fb0239712f4ba81f188b0314e540"
+const OWNER_SHA256 = "52b59b49be42bc3c1126b6fc94b1d88c440b7ac911c2631e8a0305f43f96bd08"
+const OWNER_VERSION = "28.27.0"
 
 it("pins the BFF owner Library file operation and distinct Asset wire", async () => {
   const bytes = await readFile(SNAPSHOT)
-  expect(OWNER_COMMIT).toBe("697cece8c913349c9424a024bd6d8003bb3adeae")
+  expect(OWNER_COMMIT).toBe("e52952ddbf35fb0239712f4ba81f188b0314e540")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }
@@ -28,6 +28,10 @@ it("pins the BFF owner Library file operation and distinct Asset wire", async ()
   expect(get.operationId).toBe("listLibrary")
   expect(get.parameters.find((parameter) => parameter.name === "kind")).toMatchObject({ required: true, schema: { enum: ["file", "artifact"] } })
   expect(get.parameters.find((parameter) => parameter.name === "limit")?.schema).toMatchObject({ minimum: 1, maximum: 100, default: 50 })
+  expect(get.parameters.find((parameter) => parameter.name === "q")?.schema).toMatchObject({ type: "string", maxLength: 200, default: "" })
+  expect(get.parameters.find((parameter) => parameter.name === "type")?.schema).toMatchObject({
+    type: "string", enum: ["all", "slides", "documents", "spreadsheets", "images", "video", "audio", "other", "media"], default: "all",
+  })
   expect(get.responses["200"]?.content?.["application/json"].schema.$ref).toBe("#/components/schemas/LibraryListResponse")
   expect(spec.components.schemas.LibraryFilePage).toMatchObject({
     properties: { items: { items: { $ref: "#/components/schemas/LibraryFileItem" } } },

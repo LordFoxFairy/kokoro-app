@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 const routerPush = vi.hoisted(() => vi.fn())
@@ -595,26 +595,107 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-it("个人文件搜索和类型筛选使用可恢复的 URL 状态", async () => {
-  const fileTwo = { ...fileOne, asset_id: "asset-personal-2", filename: "图片.png", mime_type: "image/png" }
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(filePage([fileOne, fileTwo])), { status: 200 })))
+it("个人文件改筛选立即退休旧页，类型改动合并正在防抖的词，刷新按同一 URL 查询 owner", async () => {
+  const oldMatch = { ...fileOne, filename: "旧图片.png", mime_type: "image/png" }
+  const serverOnly = { ...fileOne, asset_id: "asset-personal-2", filename: "图片.png", mime_type: "image/png" }
+  let completeOldPage!: (response: Response) => void
+  let oldPageSignal: AbortSignal | null | undefined
+  const oldPage = new Promise<Response>((resolve) => { completeOldPage = resolve })
+  const fetchFiles = vi.fn(async (target: string | Request, init?: RequestInit) => {
+    const query = new URL(requestUrl(target), "https://test.invalid").searchParams
+    if (query.get("cursor") === "old-cursor") {
+      oldPageSignal = init?.signal
+      return oldPage
+    }
+    if (query.get("q") && query.get("type") === "images") return Response.json(filePage([serverOnly]))
+    return Response.json(filePage([oldMatch], "old-cursor"))
+  })
+  vi.stubGlobal("fetch", fetchFiles)
   render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
 
-  await screen.findByText("私人备忘.pdf")
+  await screen.findByText(oldMatch.filename)
+  fireEvent.click(screen.getByRole("button", { name: "加载更多文件" }))
+  expect(oldPageSignal?.aborted).toBe(false)
   const query = screen.getByRole("textbox", { name: "搜索文件" })
-  fireEvent.change(query, { target: { value: "图片" } })
-  expect(screen.queryByText("私人备忘.pdf")).not.toBeInTheDocument()
-  expect(screen.getByText("图片.png")).toBeInTheDocument()
-  expect(window.location.search).toContain("file_q=%E5%9B%BE%E7%89%87")
+  fireEvent.change(query, { target: { value: "图" } })
+  expect(screen.queryByText(oldMatch.filename)).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "加载更多文件" })).not.toBeInTheDocument()
+  expect(oldPageSignal?.aborted).toBe(true)
+  expect(fetchFiles).toHaveBeenCalledTimes(2)
 
-  const filter = screen.getByRole("combobox", { name: "筛选作品类型" })
-  fireEvent.change(filter, { target: { value: "images" } })
+  const filter = screen.getByRole("combobox")
+  await act(async () => { fireEvent.change(filter, { target: { value: "images" } }) })
+  expect(fetchFiles).toHaveBeenCalledTimes(3)
+  expect(requestUrl(fetchFiles.mock.calls[2]![0])).toBe("/api/hub/library?kind=file&limit=50&q=%E5%9B%BE&type=images")
+  await screen.findByText(serverOnly.filename)
+  await act(async () => { completeOldPage(Response.json(filePage([oldMatch], "obsolete-next"))); await oldPage })
+  expect(screen.queryByText(oldMatch.filename)).not.toBeInTheDocument()
+
+  fireEvent.change(query, { target: { value: "图片" } })
+  expect(screen.queryByText(serverOnly.filename)).not.toBeInTheDocument()
+  expect(fetchFiles).toHaveBeenCalledTimes(3)
+  await screen.findByText(serverOnly.filename)
+  expect(requestUrl(fetchFiles.mock.calls[3]![0])).toBe("/api/hub/library?kind=file&limit=50&q=%E5%9B%BE%E7%89%87&type=images")
+  expect(filter).toHaveAccessibleName("按类型筛选个人文件")
+  expect(window.location.search).toContain("file_q=%E5%9B%BE%E7%89%87")
   expect(window.location.search).toContain("file_type=images")
 
   cleanup()
   render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
-  await screen.findByText("图片.png")
-  expect(screen.queryByText("私人备忘.pdf")).not.toBeInTheDocument()
+  await screen.findByText(serverOnly.filename)
+  expect(fetchFiles).toHaveBeenCalledTimes(5)
+  expect(requestUrl(fetchFiles.mock.calls[4]![0])).toBe(requestUrl(fetchFiles.mock.calls[3]![0]))
+})
+
+it("文件搜索按 200 个原始 Unicode code points 接受输入，拒绝非法深链且不发 owner 请求", async () => {
+  const fetchFiles = vi.fn<(target: string | Request) => Promise<Response>>(async () => Response.json(filePage([fileOne])))
+  vi.stubGlobal("fetch", fetchFiles)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByText(fileOne.filename)
+  const input = screen.getByRole("textbox", { name: "搜索文件" })
+  const valid = "🧪".repeat(200)
+  fireEvent.change(input, { target: { value: valid } })
+  await waitFor(() => expect(fetchFiles).toHaveBeenCalledTimes(2))
+  const params = new URL(requestUrl(fetchFiles.mock.calls[1]![0]), "https://test.invalid").searchParams
+  expect(params.get("q")).toBe(valid)
+  fireEvent.change(input, { target: { value: valid + "🧪" } })
+  expect(input).toHaveValue(valid)
+  expect(screen.getByRole("alert")).toHaveTextContent("搜索词最多 200 个字符")
+  act(() => {
+    window.history.replaceState(null, "", "/app/library?tab=files&file_q=raw%7F")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  expect(input).toHaveAttribute("aria-invalid", "true")
+  expect(screen.queryByText(fileOne.filename)).not.toBeInTheDocument()
+  expect(fetchFiles).toHaveBeenCalledTimes(2)
+})
+
+it("新筛选已无目标行时，仍从文件页恢复未知删除的同一命令", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  const image = { ...fileOne, asset_id: "image-1", filename: "Other.png", mime_type: "image/png" }
+  const deletes: { target: string; key: string | null }[] = []
+  vi.stubGlobal("fetch", vi.fn(async (target: string | Request, init?: RequestInit) => {
+    if (init?.method !== "DELETE") return Response.json(filePage(requestUrl(target).includes("type=images") ? [image] : [fileOne]))
+    deletes.push({ target: requestUrl(target), key: new Headers(init.headers).get("idempotency-key") })
+    if (deletes.length === 1) throw new Error("lost delete ACK")
+    return fileDeletionReceipt(fileOne.asset_id, true)
+  }))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: `Delete ${fileOne.filename}` }))
+  const dialog = () => within(screen.getByRole("alertdialog", { name: "Delete file" }))
+  fireEvent.click(dialog().getByRole("button", { name: "Delete file" }))
+  await dialog().findByRole("button", { name: "Retry deletion" })
+  fireEvent.click(dialog().getByRole("button", { name: "Close" }))
+  fireEvent.change(screen.getByRole("combobox", { name: "Filter personal files by type" }), { target: { value: "images" } })
+  await screen.findByText(image.filename)
+  expect(within(screen.getByTestId("library-files")).queryByText(fileOne.filename)).not.toBeInTheDocument()
+  const recovery = screen.getByRole("button", { name: "Retry deletion" })
+  fireEvent.click(recovery)
+  fireEvent.click(dialog().getByRole("button", { name: "Retry deletion" }))
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument())
+  expect(deletes).toEqual([deletes[0], deletes[0]])
+  expect(screen.getByText(image.filename)).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Retry deletion" })).not.toBeInTheDocument()
 })
 
 type LibraryProps = React.ComponentProps<typeof KokoroLibrarySurface>

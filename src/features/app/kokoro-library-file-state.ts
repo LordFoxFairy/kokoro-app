@@ -1,16 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { listLibraryFiles, type LibraryFile, type LibraryFilePage } from "./kokoro-library-file-client"
+import { isLibraryFileSearchQuery, listLibraryFiles, type LibraryFile, type LibraryFileType } from "./kokoro-library-file-client"
 
 type Phase = "loading" | "ready" | "error" | "loadingMore" | "moreError"
 type FileState = { items: readonly LibraryFile[]; nextCursor: string | null; phase: Phase }
-type ListFiles = (cursor: string | null, signal: AbortSignal) => Promise<LibraryFilePage>
-
 const INITIAL: FileState = { items: [], nextCursor: null, phase: "loading" }
 
-/** Tab-local read state; unmount aborts the page and discards late results. */
-export function useLibraryFiles(refreshRevision = 0, listFiles: ListFiles = listLibraryFiles) {
-  const [state, setState] = useState<FileState>(INITIAL)
+/** Search and paging retire together, without retiring the surrounding file actions. */
+export function useLibraryFiles(refreshRevision: number, query: string, type: LibraryFileType) {
+  const [attempt, setAttempt] = useState(0)
+  const scope = useMemo(() => ({ search: { query, type }, refreshRevision, attempt, validQuery: isLibraryFileSearchQuery(query) }),
+    [attempt, query, refreshRevision, type])
+  const [record, setRecord] = useState<{ scope: typeof scope; view: FileState } | null>(null)
+  const state = record?.scope === scope ? record.view : INITIAL
+  const active = useRef<typeof scope | null>(null)
+  const previousSearch = useRef<typeof scope | null>(null)
   const requestId = useRef(0)
   const controllerRef = useRef<AbortController | null>(null)
   const usedCursors = useRef(new Set<string>())
@@ -19,61 +23,83 @@ export function useLibraryFiles(refreshRevision = 0, listFiles: ListFiles = list
   // ACK. The acknowledged IDs retire that projection only for this tab scope.
   const retired = useRef(new Set<string>())
 
+  useLayoutEffect(() => {
+    active.current = scope
+    usedCursors.current.clear()
+    inFlightCursor.current = null
+    return () => {
+      active.current = null
+      controllerRef.current?.abort()
+      controllerRef.current = null
+    }
+  }, [scope])
+
   const load = useCallback(async (cursor: string | null) => {
+    if (active.current !== scope || !scope.validQuery) return
     const id = ++requestId.current
     controllerRef.current?.abort()
     const controller = new AbortController()
     controllerRef.current = controller
-    if (cursor === null) {
-      usedCursors.current.clear()
-      setState(INITIAL)
-    } else {
+    const isCurrent = () => active.current === scope && id === requestId.current && !controller.signal.aborted
+    if (cursor !== null) {
       inFlightCursor.current = cursor
-      setState((current) => ({ ...current, phase: "loadingMore" }))
+      setRecord((current) => current?.scope === scope ? { scope, view: { ...current.view, phase: "loadingMore" } } : current)
     }
     try {
-      const page = await listFiles(cursor, controller.signal)
-      if (controller.signal.aborted || id !== requestId.current) return
+      const page = await listLibraryFiles(cursor, controller.signal, scope.search)
+      if (!isCurrent()) return
       if (cursor !== null) usedCursors.current.add(cursor)
       const nextCursor = page.nextCursor !== null && usedCursors.current.has(page.nextCursor) ? null : page.nextCursor
-      setState((current) => {
-        const byId = new Map((cursor === null ? [] : current.items).map((item) => [item.assetId, item]))
+      setRecord((current) => {
+        if (active.current !== scope) return current
+        const prior = cursor !== null && current?.scope === scope ? current.view.items : []
+        const byId = new Map(prior.map((item) => [item.assetId, item]))
         for (const item of page.items) if (!retired.current.has(item.assetId)) byId.set(item.assetId, item)
-        return { items: [...byId.values()], nextCursor, phase: "ready" }
+        return { scope, view: { items: [...byId.values()], nextCursor, phase: "ready" } }
       })
     } catch {
-      if (controller.signal.aborted || id !== requestId.current) return
-      setState((current) => ({ ...current, phase: cursor === null ? "error" : "moreError" }))
+      if (!isCurrent()) return
+      setRecord((current) => active.current === scope ? { scope, view: {
+        ...(current?.scope === scope ? current.view : INITIAL), phase: cursor === null ? "error" : "moreError",
+      } } : current)
     } finally {
-      if (id === requestId.current) inFlightCursor.current = null
+      if (isCurrent()) {
+        controllerRef.current = null
+        inFlightCursor.current = null
+      }
     }
-  }, [listFiles])
+  }, [scope])
 
   useEffect(() => {
-    const requestSequence = requestId
-    let active = true
-    queueMicrotask(() => { if (active) void load(null) })
-    return () => {
-      active = false
-      requestSequence.current++
-      controllerRef.current?.abort()
+    const previous = previousSearch.current
+    previousSearch.current = scope
+    if (!scope.validQuery) return
+    if (previous && previous.search.type === scope.search.type && previous.search.query !== scope.search.query &&
+      previous.refreshRevision === scope.refreshRevision && previous.attempt === scope.attempt) {
+      const timer = setTimeout(() => void load(null), 225)
+      return () => clearTimeout(timer)
     }
-  }, [load, refreshRevision])
+    let live = true
+    queueMicrotask(() => { if (live) void load(null) })
+    return () => { live = false }
+  }, [load, scope])
 
-  const reload = useCallback(() => { void load(null) }, [load])
+  const reload = useCallback(() => { setAttempt((value) => value + 1) }, [])
   const acknowledgeDeletion = useCallback((assetId: string) => {
     retired.current.add(assetId)
-    setState((current) => ({ ...current, items: current.items.filter((item) => item.assetId !== assetId) }))
+    setRecord((current) => current === null ? null : { ...current, view: {
+      ...current.view, items: current.view.items.filter((item) => item.assetId !== assetId),
+    } })
   }, [])
   const loadMore = useCallback(() => {
     const cursor = state.nextCursor
-    if (cursor === null || state.phase === "loadingMore" || inFlightCursor.current === cursor) return
+    if (active.current !== scope || cursor === null || state.phase === "loadingMore" || inFlightCursor.current === cursor) return
     if (usedCursors.current.has(cursor)) {
-      setState((current) => ({ ...current, nextCursor: null }))
+      setRecord((current) => current?.scope === scope ? { scope, view: { ...current.view, nextCursor: null } } : current)
       return
     }
     void load(cursor)
-  }, [load, state.nextCursor, state.phase])
+  }, [load, scope, state.nextCursor, state.phase])
 
-  return { ...state, reload, loadMore, acknowledgeDeletion }
+  return { ...state, validQuery: scope.validQuery, reload, loadMore, acknowledgeDeletion }
 }

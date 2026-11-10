@@ -1470,6 +1470,8 @@ export const zh = {
   "library.filesLoadMore": "加载更多文件",
   "library.filesLoadMoreError": "更多文件加载失败，请重试。",
   "library.filesRetryMore": "重试加载更多文件",
+  "library.fileFilterAria": "按类型筛选个人文件",
+  "library.fileSearchInvalid": "搜索词最多 200 个字符，不接受控制字符。",
   "library.fileDownload": "下载",
   "library.fileRetryDownload": "重试下载",
   "library.fileDeleteAria": "删除 {title}",

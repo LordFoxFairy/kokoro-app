@@ -25,7 +25,7 @@ it("pins the fixed Public27 owner and restores the entire sealed Public26 parent
   const { default: YAML } = await import("yaml")
   const { restorePublic26MessagePartsContract } = await import("./bff-tool-display-parent")
   const source = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
-  expect(createHash("sha256").update(source).digest("hex")).toBe("c80d5aaba1732eca0fb7bc8f32f500adef99e7d884f579cfb7944b8b11e8901a")
+  expect(createHash("sha256").update(source).digest("hex")).toBe("52b59b49be42bc3c1126b6fc94b1d88c440b7ac911c2631e8a0305f43f96bd08")
   const parent = restorePublic26MessagePartsContract(source)
   expect(createHash("sha256").update(parent).digest("hex")).toBe("20d26736cf23da32c242c2c7cf75c45affb62c5d27696dcecb0bc6193bc39a09")
   const { restorePublic28ProjectResourceContract } = await import("./bff-project-resource-parent")

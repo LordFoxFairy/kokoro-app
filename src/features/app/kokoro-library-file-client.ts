@@ -12,6 +12,18 @@ export type LibraryFile = {
 }
 
 export type LibraryFilePage = { items: readonly LibraryFile[]; nextCursor: string | null }
+export type LibraryFileType = "all" | "documents" | "images" | "media" | "other"
+export type LibraryFileSearch = { query: string; type: LibraryFileType }
+
+/** The owner validates the raw text before trim/NFC; count Unicode code points, not UTF-16 units. */
+export function isLibraryFileSearchQuery(query: string): boolean {
+  let length = 0
+  for (const character of query) {
+    const first = character.charCodeAt(0)
+    if (++length > 200 || first <= 0x1f || first === 0x7f) return false
+  }
+  return true
+}
 
 export class LibraryFileDeleteError extends Error {
   constructor(readonly kind: "unknown" | "rejected" | "auth_required") {
@@ -21,9 +33,14 @@ export class LibraryFileDeleteError extends Error {
 }
 
 /** BFF personal Library read; file identity and shape never pass through ArtifactRecord. */
-export async function listLibraryFiles(cursor: string | null, signal: AbortSignal): Promise<LibraryFilePage> {
+export async function listLibraryFiles(cursor: string | null, signal: AbortSignal, search?: LibraryFileSearch): Promise<LibraryFilePage> {
   const query = new URLSearchParams({ kind: "file", limit: String(PAGE_LIMIT) })
   if (cursor !== null) query.set("cursor", cursor)
+  if (search !== undefined) {
+    if (!isLibraryFileSearchQuery(search.query)) throw new Error("library_files_invalid_query")
+    if (search.query !== "") query.set("q", search.query)
+    if (search.type !== "all") query.set("type", search.type)
+  }
   const response = await fetch(`/api/hub/library?${query}`, { cache: "no-store", signal })
   if (!response.ok) throw new Error(`library_files_http_${response.status}`)
   let payload: unknown

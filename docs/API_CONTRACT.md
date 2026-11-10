@@ -1,3 +1,11 @@
+## A‑09 — Personal Library server search
+
+Files keep the visible `file_q` / `file_type` URL state. The existing same-origin
+`GET /api/hub/library?kind=file` passes nondefault `q` / `type` to the exact BFF Public 28.27
+operation. BFF/Storage filter before pagination; the App does not treat a loaded window as
+the complete Library. The Composer chooser's unfiltered request, Artifact filters,
+deletion command shape, and native Session boundary are unchanged.
+
 ## A‑09 · 个人文件删除同源契约
 
 `DELETE /api/hub/library/files/{asset_id}` 只接精确 opaque Asset ID、单原幂等键与空请求，无 query、身份或 scope 参数。沿原生浏览器 Session 仅转发给 BFF 28.26 同一路径；BFF 负责本人范围，Storage 负责删除回执。只有本次 request ID、确切 Asset 与正规生成的 200 回执验证成功才确认删除；网络故障或未验证回执不确认，允许显式同键同 Asset 重试，无自动写入重试。失败不猜删除，不把逻辑 ACK 当物理清理。
