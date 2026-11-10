@@ -127,7 +127,7 @@
 .treeName { display: inline-flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .treeIcon { width: 0.95rem; height: 0.95rem; flex: 0 0 auto; color: var(--primary); }
 
-.deliveryBody { display: flex; flex-direction: column; gap: 0.65rem; }
+.deliveryBody { display: flex; min-width: 0; flex-direction: column; gap: 0.65rem; }
 .deliveryNote { margin: 0; padding: 0.5rem 0.65rem; border-left: 2px solid var(--primary); border-radius: var(--radius-sm); background: var(--accent); color: var(--muted-foreground); font-size: 0.8125rem; }
 .toolBody { display: flex; flex-direction: column; gap: 0.4rem; }
 .toolBlock { max-height: 50vh; overflow: auto; margin: 0; padding: 0.65rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }

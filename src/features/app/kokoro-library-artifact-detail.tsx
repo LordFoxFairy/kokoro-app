@@ -1,22 +1,26 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { useLocale, useT } from "@/i18n/context"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { formatBytes } from "@/ui/thread/artifact-card"
 import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
-import { matchesLibraryArtifact, type LibraryArtifact, type LibraryArtifactDetailView, type getLibraryArtifact } from "./kokoro-library-artifact-client"
+import { matchesLibraryArtifact, readLibraryArtifactDetailTextPreview, type LibraryArtifact, type LibraryArtifactDetailView, type getLibraryArtifact } from "./kokoro-library-artifact-client"
+import { isLibraryTextPreviewSupported } from "./kokoro-library-preview-content"
+import { LibraryTextPreview } from "./kokoro-library-text-preview"
 import styles from "./kokoro-library-surface.module.css"
 
-/** Exact metadata only: no content buffering, speculative thumbnails or rich preview. */
-export function LibraryArtifactDetail({ artifact, read, admitted, generation, onClose, onReturnFocus, onDownload, downloadState, onOpenSource }: {
+/** Read exact metadata first. Verified text is a separate, user-requested action. */
+export function LibraryArtifactDetail({ artifact, read, admitted, generation, boundary, onClose, onReturnFocus, onDownload, downloadState, onOpenSource }: {
   artifact: LibraryArtifact
   read: typeof getLibraryArtifact
   admitted: boolean
   generation: number
+  boundary: ProjectReadBoundary | undefined
   onClose: () => void
   onReturnFocus: () => void
   onDownload: (artifact: LibraryArtifact) => Promise<void>
@@ -27,6 +31,7 @@ export function LibraryArtifactDetail({ artifact, read, admitted, generation, on
   const [attempt, setAttempt] = useState(0)
   const scope = useMemo(() => ({ admitted, generation, read, attempt }), [admitted, generation, read, attempt])
   const [result, setResult] = useState<{ scope: typeof scope; detail: LibraryArtifactDetailView | null; error: string | null } | null>(null)
+  const [previewSelection, setPreviewSelection] = useState<typeof result>(null)
   useEffect(() => {
     if (!admitted) return
     const controller = new AbortController()
@@ -41,6 +46,9 @@ export function LibraryArtifactDetail({ artifact, read, admitted, generation, on
   }, [artifact, read, scope, admitted])
   const visible = admitted && result?.scope === scope ? result : null
   const detail = visible?.detail
+  const canPreview = boundary?.admitted === true && boundary.subject !== null
+  const supportsPreview = detail ? isLibraryTextPreviewSupported(detail.mimeType, detail.sizeBytes) : false
+  const previewOpen = detail !== undefined && detail !== null && previewSelection === visible
   const errorKey = visible?.error === "library_artifact_not_found" ? "library.fileNotFound"
     : visible?.error === "library_artifact_auth_required" ? "library.fileAuthRequired" : "library.loadError"
   return <Dialog open onOpenChange={open => { if (!open) onClose() }}>
@@ -61,12 +69,21 @@ export function LibraryArtifactDetail({ artifact, read, admitted, generation, on
           <div><dt>{t("library.detailDelivered")}</dt><dd><time dateTime={detail.deliveredAt}>{formatDeliveryTime(detail.deliveredAt, locale)}</time></dd></div>
         </dl>
         <div className={styles.artifactDetailActions}>
+          {canPreview && supportsPreview ? <Button type="button" variant="outline" aria-expanded={previewOpen} aria-disabled={previewOpen}
+            onClick={() => { if (!previewOpen) setPreviewSelection(visible) }}>{t("canvas.previewTab")}</Button> : null}
           {onOpenSource && detail.projectRef !== undefined ? <Button variant="outline" onClick={() => onOpenSource(detail)}>{t("library.openSource")}</Button> : null}
           <Button disabled={downloadState === "loading"} aria-busy={downloadState === "loading"} onClick={() => void onDownload(detail)}><Download aria-hidden="true" />{t(downloadState === "error" ? "library.fileRetryDownload" : "library.fileDownload")}</Button>
         </div>
+        {previewOpen ? <ArtifactTextPreview detail={detail} boundary={boundary} /> : canPreview && !supportsPreview
+          ? <p>{t("artifact.unsupported")}</p> : null}
         {onOpenSource && detail.projectRef === undefined ? <p role="status">{t("library.sourceUnavailable")}</p> : null}
         {downloadState ? <p role={downloadState === "error" ? "alert" : "status"}>{t(downloadState === "loading" ? "library.downloading" : downloadState === "error" ? "library.downloadFailed" : "library.downloadStarted")}</p> : null}
       </> : null}
     </DialogContent>
   </Dialog>
+}
+
+function ArtifactTextPreview({ detail, boundary }: { detail: LibraryArtifactDetailView; boundary: ProjectReadBoundary | undefined }) {
+  const read = useCallback((signal: AbortSignal) => readLibraryArtifactDetailTextPreview(detail, signal), [detail])
+  return <LibraryTextPreview boundary={boundary} read={read} />
 }

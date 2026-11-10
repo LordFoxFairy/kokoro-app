@@ -567,6 +567,7 @@ describe("/api/hub/[...path] proxy", () => {
     );
     expect(response.status).toBe(200);
     expect(response.headers.get("content-disposition")).toContain("report.bin");
+    expect(response.headers.get("cache-control")).toContain("no-transform");
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(response.headers.get("x-owner-secret")).toBeNull();
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(
@@ -790,6 +791,7 @@ describe("/api/hub/[...path] proxy", () => {
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("x-request-id")).toBe("req_download_1");
     expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("cache-control")).toContain("no-transform");
     expect(response.headers.get("x-owner-secret")).toBeNull();
     expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe(
       "http://bff.test/v1/library/files/asset-1/content",

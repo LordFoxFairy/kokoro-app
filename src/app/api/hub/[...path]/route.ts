@@ -258,6 +258,7 @@ function connectionProjectionError(
 function safeDownloadHeaders(
   headers: Headers,
   maxBytes: number,
+  preserveLibraryLength: boolean,
 ): Headers | null {
   const type = headers.get("content-type");
   const rawLength = headers.get("content-length");
@@ -299,7 +300,8 @@ function safeDownloadHeaders(
     "content-type": type,
     "content-length": rawLength,
     "content-disposition": disposition ?? "",
-    "cache-control": "private, no-store",
+    // Next must not gzip exact Library bytes and drop the validated length.
+    "cache-control": preserveLibraryLength ? "private, no-store, no-transform" : "private, no-store",
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
     "x-request-id": requestId,
@@ -307,11 +309,11 @@ function safeDownloadHeaders(
 }
 
 function personalDownloadHeaders(headers: Headers): Headers | null {
-  return safeDownloadHeaders(headers, MAX_PERSONAL_DOWNLOAD_BYTES);
+  return safeDownloadHeaders(headers, MAX_PERSONAL_DOWNLOAD_BYTES, true);
 }
 
-function artifactDownloadHeaders(headers: Headers): Headers | null {
-  return safeDownloadHeaders(headers, MAX_ARTIFACT_DOWNLOAD_BYTES);
+function artifactDownloadHeaders(headers: Headers, preserveLibraryLength: boolean): Headers | null {
+  return safeDownloadHeaders(headers, MAX_ARTIFACT_DOWNLOAD_BYTES, preserveLibraryLength);
 }
 
 function invalidPersonalDownloadResponse(): Response {
@@ -2801,7 +2803,7 @@ async function proxyHubRequest(
       return invalidDownload();
     }
     if (upstream.status === 200) {
-      const safeHeaders = artifactDownloadHeaders(upstream.headers);
+      const safeHeaders = artifactDownloadHeaders(upstream.headers, artifactDownload);
       if (safeHeaders === null || upstream.body === null) {
         await upstream.body?.cancel();
         return invalidDownload();

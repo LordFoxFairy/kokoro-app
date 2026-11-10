@@ -1,3 +1,15 @@
+## A‑09/A‑10 — Verified Library and Canvas preview
+
+No new endpoint or BFF wire. Personal Preview reuses the selected CLEAN list SHA
+and same-origin content GET. Artifact detail reuses the verified selector/metadata;
+Canvas additionally checks Asset, source Run, MIME and size against its Delivery.
+Every content GET re-admits the caller. A single 10-second budget includes optional
+metadata, full stream, SHA-256 and fatal UTF-8; max 65,536 bytes for text/plain,
+text/markdown and text/csv. The exact Library byte responses set private/no-store/
+no-transform to preserve the validated original Content-Length; not applied to the
+Project or generic Hub paths. Preview does not execute markup, follow a Storage URL,
+or buffer the unbounded native attachment flow.
+
 ## A‑09 — Artifact favorite and retirement
 
 The existing same-origin Library detail address accepts empty `DELETE` with one

@@ -1,3 +1,10 @@
+## 资料库与 Canvas 正式内容预览（A‑09/A‑10）
+
+`kokoro-library-preview-content.ts` 复用现同源内容读取、一次 deadline、EOF／SHA／UTF‑8；
+`kokoro-library-text-preview.tsx` 统一正式主体代际、关闭／迟到处理和只读渲染。个人卡与作品详情按需打开，
+Canvas Delivery 核原会话、Asset、来源 Run 和元数据。正文不入持久缓存，不启旧工作区路径，
+超界留原下载。产品验收见 Root TODO。
+
 ## 当前消息的资源客户端（A‑08）
 
 Composer 复用现 Library CLEAN 文件/FINAL artifact 和 Project resources 列表/上传，不建立第二 API 或文件缓存。`uploadProjectResource` 增加可选 AbortSignal，既有 Project 页面调用保持原义，Composer 退休上传时可终止网络并忽略迟到成功；未知结果仍保原 File/key 供显式重试。

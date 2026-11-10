@@ -70,6 +70,18 @@ describe("FileChip / PreviewBody / fileUrl", () => {
     expect(screen.getByText('She said "hi"')).toBeInTheDocument()
   })
 
+  it("CSV 超出表格复杂度时提示下载，不渲染前 200 行作为完整结果", async () => {
+    const csv = Array.from({ length: 201 }, (_, i) => `row-${i},value`).join("\n")
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new TextEncoder().encode(csv).buffer,
+    }))
+    render(<PreviewBody url="http://s.local/large-table.csv" mime="text/csv" name="large-table.csv" />, { wrapper: LocaleProvider })
+    expect(await screen.findByText("无法预览，请下载查看。")).toBeVisible()
+    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+    expect(screen.queryByText("row-0")).not.toBeInTheDocument()
+  })
+
   it("文本预览离开时取消在途字节请求", () => {
     let signal: AbortSignal | null | undefined
     vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => {

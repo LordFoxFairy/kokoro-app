@@ -1,3 +1,12 @@
+## 2026-11-10 A‑09/A‑10 owner-backed content preview
+
+Personal Library files, Artifact detail and Canvas Delivery use the same bounded
+content verification and read-only UTF-8 renderer. Personal and Artifact previews
+are explicit; Canvas verifies its exact Asset and source Run before requesting bytes.
+The existing BFF Public 28.29 contract is unchanged. The Web exact Library attachment
+response prevents compression from dropping its verified original length; Project
+download and ordinary traffic are unchanged. Root owns the authenticated browser proof.
+
 ## 2026-11-10 A‑09 persistent Artifact commands
 
 The current Product contract is byte-exact Public 28.29 from BFF `9a0c45c`.

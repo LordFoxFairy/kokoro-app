@@ -15,6 +15,8 @@ import styles from "./artifact-card.module.css"
 
 const TEXT_PREVIEW_MAX_BYTES = 64 * 1024
 const CSV_PREVIEW_MAX_ROWS = 200
+const CSV_PREVIEW_MAX_COLUMNS = 64
+const CSV_PREVIEW_MAX_CELLS = 2_000
 
 export function formatBytes(count: number): string {
   if (count < 1024) return `${count} B`
@@ -57,9 +59,11 @@ function useTextPreview(url: string, enabled: boolean, retryKey: number): TextPr
 }
 
 function CsvTable({ text }: { text: string }) {
-  const rows = parseCsv(text).slice(0, CSV_PREVIEW_MAX_ROWS)
+  const t = useT()
+  const rows = parseCsv(text)
+  if (rows === null) return <p className={styles.note}>{t("artifact.cannotPreview")}</p>
   return (
-    <div className={styles.tableWrap}>
+    <div className={styles.tableWrap} role="group" aria-label={t("canvas.previewTab")} tabIndex={0}>
       <table className={styles.table}>
         <tbody>
           {rows.map((row, i) => (
@@ -75,58 +79,66 @@ function CsvTable({ text }: { text: string }) {
   )
 }
 
-// CSV 预览不能直接用 line.split(",")：营销文案、地址和带引号的字段经常包含逗号，
-// 还要处理双引号转义与 CRLF。这里保持轻量的 RFC4180 子集解析，预览上限仍由调用方控制。
-function parseCsv(text: string): string[][] {
+// Preserve quotes, CRLF, embedded newlines and empty cells. Reject malformed
+// or over-complex input rather than rendering a deceptively partial table.
+function parseCsv(text: string): string[][] | null {
   const rows: string[][] = []
   let row: string[] = []
   let cell = ""
   let quoted = false
+  let closedQuote = false
+  let cells = 0
 
   const pushCell = () => {
     row.push(cell)
     cell = ""
+    closedQuote = false
+    cells += 1
+    return row.length <= CSV_PREVIEW_MAX_COLUMNS && cells <= CSV_PREVIEW_MAX_CELLS
   }
   const pushRow = () => {
-    if (row.length > 0 && row.some((value) => value.length > 0)) {
-      rows.push(row)
-    }
+    rows.push(row)
     row = []
+    return rows.length <= CSV_PREVIEW_MAX_ROWS
   }
 
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index]
     if (quoted) {
-      if (char === '"') {
-        if (text[index + 1] === '"') {
-          cell += '"'
-          index += 1
-        } else {
-          quoted = false
-        }
+      if (char !== '"') cell += char
+      else if (text[index + 1] === '"') {
+        cell += '"'
+        index += 1
       } else {
-        cell += char
+        quoted = false
+        closedQuote = true
       }
-      continue
-    }
-
-    if (char === '"' && cell.length === 0) {
-      quoted = true
     } else if (char === ",") {
-      pushCell()
-    } else if (char === "\n") {
-      pushCell()
-      pushRow()
-    } else if (char !== "\r") {
-      cell += char
-    }
+      if (!pushCell()) return null
+    } else if (char === "\n" || char === "\r") {
+      if (char === "\r" && text[index + 1] === "\n") index += 1
+      if (!pushCell() || !pushRow()) return null
+    } else if (closedQuote) return null
+    else if (char === '"') {
+      if (cell.length !== 0) return null
+      quoted = true
+    } else cell += char
   }
 
-  if (cell.length > 0 || row.length > 0) {
-    pushCell()
-    pushRow()
-  }
+  if (quoted) return null
+  if ((cell.length > 0 || row.length > 0 || closedQuote) && (!pushCell() || !pushRow())) return null
   return rows
+}
+
+/** Pure presentation shared by Workspace and verified, bounded Library previews. */
+export function TextPreviewBody({ text, mime, resourcePolicy = "default" }: {
+  text: string
+  mime: string
+  resourcePolicy?: "default" | "text-only"
+}) {
+  if (mime === "text/markdown") return <MarkdownMessage content={text} resourcePolicy={resourcePolicy} />
+  if (mime === "text/csv") return <CsvTable text={text} />
+  return <pre className={styles.code}>{mime === "application/json" ? formatJson(text) : text}</pre>
 }
 
 function TextualPreview({ url, mime }: { url: string; mime: string }) {
@@ -146,19 +158,9 @@ function TextualPreview({ url, mime }: { url: string; mime: string }) {
       </Alert>
     )
   }
-  const body =
-    mime === "text/markdown" ? (
-      <MarkdownMessage content={preview.text} />
-    ) : mime === "application/json" ? (
-      <pre className={styles.code}>{formatJson(preview.text)}</pre>
-    ) : mime === "text/csv" ? (
-      <CsvTable text={preview.text} />
-    ) : (
-      <pre className={styles.code}>{preview.text}</pre>
-    )
   return (
     <>
-      {body}
+      <TextPreviewBody text={preview.text} mime={mime} />
       {preview.truncated ? <p className={styles.note}>{t("artifact.truncated")}</p> : null}
     </>
   )

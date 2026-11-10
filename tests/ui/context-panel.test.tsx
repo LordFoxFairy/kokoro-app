@@ -333,30 +333,44 @@ import { createSessionStreamState } from "@/core/state"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { resetCanvasStore } from "@/ui/canvas/canvas-store"
 
-const artifactText = "# Real delivery\n中文正文 <script>alert(1)</script> ![no network](https://foreign.test/x.png)"
+const artifactText = "# Real delivery\n中文正文 <script>alert(1)</script> ![no network](https://foreign.test/x.png) [reference label](https://foreign.test/reference)"
 const artifactBytes = new TextEncoder().encode(artifactText)
-const textDelivery = { conversationId: "session_1", artifactId: "artifact_text", assetId: "asset_text", artifactKind: "document" as const, title: "Delivered text", mime: "text/markdown", size: artifactBytes.length, runId: "run_1", createdAt: "2026-10-25T00:00:00Z" }
+const textDelivery = { conversationId: "session_1", artifactId: "artifact_text", assetId: "asset_text", artifactKind: "document" as const, title: "Delivered text", mime: "text/plain", size: artifactBytes.length, runId: "run_1", createdAt: "2026-10-25T00:00:00Z" }
 const textBoundary = { admitted: true, subject: "preview-reader", generation: 1 }
-function textMetadata(artifactId = "artifact_text") {
-  return Response.json({ data: { kind: "artifact", conversation_id: "session_1", artifact_id: artifactId, asset_id: "asset_text", artifact_kind: "document", title: "Delivered text", filename: "report.md", mime_type: "text/markdown", size_bytes: String(artifactBytes.length), content_sha256: createHash("sha256").update(artifactBytes).digest("hex"), source_run_id: "run_1", delivered_at: "2026-10-25T00:00:00Z" }, meta: { request_id: "preview-request" } })
+function textMetadata(artifactId = "artifact_text", mime = "text/plain", assetId = "asset_text") {
+  return Response.json({ data: { kind: "artifact", conversation_id: "session_1", artifact_id: artifactId, asset_id: assetId, artifact_kind: "document", title: "Delivered text", filename: "report.md", mime_type: mime, size_bytes: String(artifactBytes.length), content_sha256: createHash("sha256").update(artifactBytes).digest("hex"), source_run_id: "run_1", delivered_at: "2026-10-25T00:00:00Z", favorited: false }, meta: { request_id: "preview-request" } })
 }
-function textResponse() { return new Response(artifactBytes, { headers: { "content-type": "text/markdown", "content-length": String(artifactBytes.length) } }) }
+function textResponse(mime = "text/plain") { return new Response(artifactBytes, { headers: { "content-type": mime, "content-length": String(artifactBytes.length) } }) }
 function renderTextCanvas(boundary: ProjectReadBoundary | undefined, delivery = textDelivery, sessionId = "session_1") {
   return <LocaleProvider><CanvasPanel sessionId={sessionId} content={{ kind: "delivery", delivery }} files={[]} deliveries={[delivery]} fullscreen={false} onSelectFile={vi.fn()} onSelectDelivery={vi.fn()} onToggleFullscreen={vi.fn()} onClose={vi.fn()} {...(boundary === undefined ? {} : { readBoundary: boundary })} /></LocaleProvider>
 }
 afterEach(() => { resetCanvasStore(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.localStorage.removeItem("kokoro.web.auth-index-subject") })
 
-it("Canvas opens the actual bounded delivered bytes, not just metadata, without executing Markdown or fetching external resources", async () => {
+it("Canvas renders verified delivered Markdown without navigation, embeds or external loads", async () => {
   window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
   vi.stubGlobal("crypto", webcrypto)
-  const fetcher = vi.fn().mockResolvedValueOnce(textMetadata()).mockResolvedValueOnce(textResponse())
+  const mime = "text/markdown"
+  const fetcher = vi.fn().mockResolvedValueOnce(textMetadata("artifact_text", mime)).mockResolvedValueOnce(textResponse(mime))
   vi.stubGlobal("fetch", fetcher)
-  const view = render(renderTextCanvas(textBoundary))
-  await waitFor(() => expect(view.container.querySelector("pre")).toHaveTextContent("Real delivery"))
-  expect(view.container.querySelector("pre")?.textContent).toBe(artifactText)
-  expect(view.container.querySelector("script, img, iframe")).toBeNull()
+  const view = render(renderTextCanvas(textBoundary, { ...textDelivery, mime }))
+  expect(await screen.findByRole("heading", { name: "Real delivery" })).toBeVisible()
+  expect(screen.getByText(/no network/)).toBeVisible()
+  expect(screen.getByText(/reference label/)).toBeVisible()
+  expect(view.container.querySelector("script, img, iframe, a[href]")).toBeNull()
   expect(fetcher.mock.calls.map(([path]) => path)).toEqual(["/api/hub/library/artifacts/session_1/artifact_text", "/api/hub/library/artifacts/session_1/artifact_text/content"])
   expect(screen.getByRole("button", { name: "Download" })).toBeEnabled()
+})
+
+it("Canvas does not request content when exact detail points to a different Asset", async () => {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
+  vi.stubGlobal("crypto", webcrypto)
+  const fetcher = vi.fn().mockResolvedValueOnce(textMetadata("artifact_text", "text/plain", "foreign_asset"))
+    .mockResolvedValueOnce(textResponse())
+  vi.stubGlobal("fetch", fetcher)
+  const view = render(renderTextCanvas(textBoundary))
+  expect(await screen.findByRole("alert")).toHaveTextContent("Cannot preview — please download.")
+  expect(view.container.querySelector("pre")).toBeNull()
+  expect(fetcher).toHaveBeenCalledOnce()
 })
 
 it.each([undefined, { admitted: false, subject: "preview-reader", generation: 1 }])("missing or retired trusted boundary refuses preview but leaves native download available %j", async boundary => {

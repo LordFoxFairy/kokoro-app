@@ -1,5 +1,10 @@
 import { isLibraryFileDeleteOwnerError, libraryFileAssetIdSchema, libraryFileDeleteErrorSchema, libraryFileDeleteKeySchema, libraryFileDeleteResponseSchema, libraryFileListResponseSchema } from "@/contract/library-file"
 import { downloadFetchedFile, fileFetch } from "@/engine/file-fetch"
+import {
+  readVerifiedLibraryText,
+  withLibraryPreviewDeadline,
+  type LibraryTextPreviewResult,
+} from "./kokoro-library-preview-content"
 
 const PAGE_LIMIT = 50
 
@@ -8,6 +13,7 @@ export type LibraryFile = {
   filename: string
   mimeType: string
   sizeBytes: string
+  contentSha256: string
   createdAt: string
 }
 
@@ -57,10 +63,26 @@ export async function listLibraryFiles(cursor: string | null, signal: AbortSigna
       filename: item.filename,
       mimeType: item.mime_type,
       sizeBytes: item.size_bytes,
+      contentSha256: item.content_sha256,
       createdAt: item.created_at,
     })),
     nextCursor: parsed.data.data.next_cursor,
   }
+}
+
+function personalLibraryFileContentPath(assetId: string): string {
+  return `/api/hub/library/files/${encodeURIComponent(assetId)}/content`
+}
+
+/** Preview only the bytes described by this authenticated personal Library row. */
+export async function readPersonalLibraryFilePreview(
+  file: Pick<LibraryFile, "assetId" | "mimeType" | "sizeBytes" | "contentSha256">,
+  signal: AbortSignal,
+): Promise<LibraryTextPreviewResult> {
+  if (!libraryFileAssetIdSchema.safeParse(file.assetId).success) throw new Error("library_file_invalid_asset")
+  return withLibraryPreviewDeadline(signal, deadline => readVerifiedLibraryText(
+    personalLibraryFileContentPath(file.assetId), file, deadline,
+  ))
 }
 
 /** Same-origin personal byte delivery; the file card, not ArtifactRecord, owns this intent. */
@@ -68,7 +90,7 @@ export async function downloadPersonalLibraryFile(file: LibraryFile, signal: Abo
   if (!libraryFileAssetIdSchema.safeParse(file.assetId).success) throw new Error("library_file_invalid_asset")
   const expectedSize = Number(file.sizeBytes)
   if (!Number.isSafeInteger(expectedSize) || expectedSize < 0 || expectedSize > 1_048_576) throw new Error("library_file_invalid_size")
-  const response = await fileFetch(`/api/hub/library/files/${encodeURIComponent(file.assetId)}/content`, signal)
+  const response = await fileFetch(personalLibraryFileContentPath(file.assetId), signal)
   if (!response.ok) {
     if (response.status === 404) throw new Error("library_file_not_found")
     if (response.status === 401 || response.status === 403) throw new Error("library_file_auth_required")

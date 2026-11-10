@@ -374,7 +374,7 @@ function KokoroArtifactLibrary({
         {...(onOpenSession === undefined ? {} : { onOpenSource: openSourceFromCard })}
       />
       {selectedDetail ? <LibraryArtifactDetail key={artifactKey(selectedDetail.artifact)} artifact={selectedDetail.artifact}
-        read={readDetail} admitted={owner.admitted} generation={owner.generation} onClose={() => setSelectedDetail(null)} onReturnFocus={() => {
+        read={readDetail} admitted={owner.admitted} generation={owner.generation} boundary={projectReadBoundary} onClose={() => setSelectedDetail(null)} onReturnFocus={() => {
           const buttons = document.querySelector('[data-testid="library-page"]')?.querySelectorAll<HTMLElement>("[data-library-artifact-key]")
           const current = [...(buttons ?? [])].find(button => button.dataset.libraryArtifactKey === artifactKey(selectedDetail.artifact))
           const previous = detailReturnFocusRef.current

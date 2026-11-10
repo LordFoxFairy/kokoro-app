@@ -12,18 +12,19 @@ import { Download, FileCheck2, Maximize2, Minimize2, Play, SkipBack, X } from "l
 // 内容体按来源分派：file=可变直读（重开即最新）、delivery=BFF 二元元数据、
 // node=通用 ReactNode 插槽；文本预览复用格式矩阵。
 
-import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 
 import { filePath } from "@/contract/http"
 import { sessionBaseUrl } from "@/engine/config"
 import { downloadFetchedFile, fileFetch } from "@/engine/file-fetch"
-import { ARTIFACT_TEXT_PREVIEW_MAX_BYTES, beginLibraryArtifactDownload, readLibraryArtifactTextPreview } from "@/features/app/kokoro-library-artifact-client"
+import { beginLibraryArtifactDownload, readLibraryArtifactTextPreview } from "@/features/app/kokoro-library-artifact-client"
+import { isLibraryTextPreviewSupported } from "@/features/app/kokoro-library-preview-content"
+import { LibraryTextPreview } from "@/features/app/kokoro-library-text-preview"
 import type { SessionDelivery, SessionTodo, WorkspaceFileEntry } from "@/core/state"
 import { useLocale } from "@/i18n/context"
 import { PreviewBody, formatBytes } from "@/ui/thread/artifact-card"
 import { cn } from "@/lib/utils"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
-import { AUTH_INDEX_SUBJECT_KEY, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
 
 import type { ResolvedCanvasContent } from "./canvas-store"
 import styles from "./canvas-panel.module.css"
@@ -430,62 +431,13 @@ function WorkspaceList({
 
 function DeliveryTextPreview({ delivery, sessionId, boundary }: { delivery: SessionDelivery; sessionId: string; boundary: ProjectReadBoundary | undefined }) {
   const { t } = useLocale()
-  const subject = boundary?.subject ?? null
-  const admitted = boundary?.admitted === true
-  const generation = boundary?.generation
-  const eligible = sessionId === delivery.conversationId && Number.isSafeInteger(delivery.size) && delivery.size >= 0 && delivery.size <= ARTIFACT_TEXT_PREVIEW_MAX_BYTES && (delivery.mime === "text/plain" || delivery.mime === "text/markdown")
-  const scope = useMemo(() => ({ subject, admitted, generation, conversationId: delivery.conversationId, artifactId: delivery.artifactId, mime: delivery.mime, size: delivery.size, eligible }), [subject, admitted, generation, delivery.conversationId, delivery.artifactId, delivery.mime, delivery.size, eligible])
-  const [result, setResult] = useState<{ scope: typeof scope; kind: "text"; text: string } | { scope: typeof scope; kind: "failed" | "unsupported" } | null>(null)
-  const live = useRef<typeof scope | null>(null)
-  const retiredActor = useRef<string | null>(null)
-  const actor = JSON.stringify([subject, generation])
-  useLayoutEffect(() => {
-    live.current = scope
-    return () => { if (live.current === scope) live.current = null }
-  }, [scope])
-  useEffect(() => {
-    if (!eligible || !admitted || subject === null) return
-    const controller = new AbortController()
-    const current = () => live.current === scope && !controller.signal.aborted
-    const markerMatches = () => {
-      try { return readBrowserAuthIndexSubject() === subject }
-      catch { return false }
-    }
-    const retire = () => {
-      retiredActor.current = actor
-      controller.abort()
-      if (live.current === scope) setResult({ scope, kind: "failed" })
-    }
-    const storage = (event: StorageEvent) => {
-      if (event.key !== null && event.key !== AUTH_INDEX_SUBJECT_KEY) return
-      // Events are queued: A→B→A must retire A even when storage is already A.
-      if (event.key === null || event.oldValue !== event.newValue || !markerMatches()) retire()
-    }
-    window.addEventListener("storage", storage)
-    window.addEventListener("pagehide", retire)
-    void Promise.resolve().then(async () => {
-      if (!current()) return
-      if (retiredActor.current === actor || !markerMatches()) { retire(); return }
-      const preview = await readLibraryArtifactTextPreview(scope, controller.signal)
-      if (!current()) return
-      if (!markerMatches()) { retire(); return }
-      if (preview.kind === "text") {
-        if (preview.mimeType !== scope.mime || Number(preview.sizeBytes) !== scope.size) throw new Error("library_artifact_preview_metadata_changed")
-        setResult({ scope, kind: "text", text: preview.text })
-      } else setResult({ scope, kind: "unsupported" })
-    }).catch(() => { if (current()) setResult({ scope, kind: "failed" }) })
-    return () => {
-      controller.abort()
-      window.removeEventListener("storage", storage)
-      window.removeEventListener("pagehide", retire)
-    }
-  }, [scope, eligible, admitted, subject, actor])
-  const visible = result?.scope === scope ? result : null
-  if (!admitted || subject === null || sessionId !== delivery.conversationId) return <p className="sr-only" role="status">{t("artifact.cannotPreview")}</p>
-  if (!eligible || visible?.kind === "unsupported") return <p>{t("artifact.cannotPreview")}</p>
-  if (visible?.kind === "text") return <pre className="whitespace-pre-wrap break-words" aria-label={t("canvas.previewTab")}>{visible.text}</pre>
-  if (visible?.kind === "failed") return <p className="sr-only" role="alert">{t("artifact.cannotPreview")}</p>
-  return <div aria-busy="true"><p className="sr-only" role="status">{t("artifact.loadingPreview")}</p></div>
+  const { conversationId, artifactId, assetId, runId, mime, size } = delivery
+  const read = useCallback((signal: AbortSignal) => readLibraryArtifactTextPreview({ conversationId, artifactId }, signal, {
+    assetId, sourceRunId: runId, mimeType: mime, sizeBytes: String(size),
+  }), [conversationId, artifactId, assetId, runId, mime, size])
+  if (sessionId !== conversationId) return <p className="sr-only" role="status">{t("artifact.cannotPreview")}</p>
+  if (!isLibraryTextPreviewSupported(mime, size)) return <p>{t("artifact.cannotPreview")}</p>
+  return <LibraryTextPreview boundary={boundary} read={read} quietFailure />
 }
 
 function ContentBody({

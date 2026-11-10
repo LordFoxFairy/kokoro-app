@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { Download, FileText, Search, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -14,8 +15,10 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
 
 import { useLibraryFiles } from "./kokoro-library-file-state"
-import { deletePersonalLibraryFile, downloadPersonalLibraryFile, isLibraryFileSearchQuery, LibraryFileDeleteError, type LibraryFile, type LibraryFileType } from "./kokoro-library-file-client"
+import { deletePersonalLibraryFile, downloadPersonalLibraryFile, isLibraryFileSearchQuery, LibraryFileDeleteError, readPersonalLibraryFilePreview, type LibraryFile, type LibraryFileType } from "./kokoro-library-file-client"
 import { KokoroLibraryFileUpload } from "./kokoro-library-file-upload"
+import { LibraryTextPreview } from "./kokoro-library-text-preview"
+import { isLibraryTextPreviewSupported } from "./kokoro-library-preview-content"
 import type { LibraryUploadIntent } from "./kokoro-library-file-upload-state"
 import styles from "./kokoro-library-surface.module.css"
 
@@ -73,10 +76,17 @@ type DownloadPhase = "idle" | "loading" | "not_found" | "auth_required" | "faile
 type FileDeletion = { file: LibraryFile; phase: "confirm" } |
   { file: LibraryFile; key: string; phase: "pending" | "unknown" | "rejected" | "auth_required" }
 
-function FileCard({ file, locale, deleteDisabled, onDelete }: {
-  file: LibraryFile; locale: string; deleteDisabled: boolean; onDelete: (file: LibraryFile, trigger: HTMLButtonElement) => void
+function FileCard({ file, locale, boundary, deleteDisabled, onDelete }: {
+  file: LibraryFile; locale: string; boundary: ProjectReadBoundary | undefined
+  deleteDisabled: boolean; onDelete: (file: LibraryFile, trigger: HTMLButtonElement) => void
 }) {
   const t = useT()
+  const filenameId = useId()
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const { assetId, mimeType, sizeBytes, contentSha256 } = file
+  const readPreview = useCallback((signal: AbortSignal) => readPersonalLibraryFilePreview({
+    assetId, mimeType, sizeBytes, contentSha256,
+  }, signal), [assetId, mimeType, sizeBytes, contentSha256])
   const [downloadPhase, setDownloadPhase] = useState<DownloadPhase>("idle")
   const controllerRef = useRef<AbortController | null>(null)
   useEffect(() => () => { controllerRef.current?.abort() }, [])
@@ -107,10 +117,26 @@ function FileCard({ file, locale, deleteDisabled, onDelete }: {
     <CardContent className={`${styles.artifactMain} ${styles.fileCardMain}`}>
       <span className={styles.typeIcon}><FileText aria-hidden="true" /></span>
       <span className={styles.cardBody}>
-        <span className={styles.cardTitle}>{file.filename}</span>
+        <span className={styles.cardTitle} id={filenameId}>{file.filename}</span>
         <span className={styles.meta}>{file.mimeType} · {new Intl.NumberFormat(locale).format(BigInt(file.sizeBytes))} B · {formatDeliveryTime(file.createdAt, locale)}</span>
       </span>
       <span className={styles.fileDownloadControls}>
+        {boundary?.admitted && boundary.subject && isLibraryTextPreviewSupported(mimeType, sizeBytes) ? (
+          <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+            <DialogTrigger asChild>
+              <Button type="button" variant="outline" size="sm" aria-describedby={filenameId}>
+                {t("canvas.previewTab")}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className={styles.artifactDetail} closeLabel={t("canvas.close")}>
+              <DialogHeader>
+                <DialogTitle>{t("canvas.previewTab")}</DialogTitle>
+                <DialogDescription className="break-words">{file.filename}</DialogDescription>
+              </DialogHeader>
+              {previewOpen ? <LibraryTextPreview boundary={boundary} read={readPreview} /> : null}
+            </DialogContent>
+          </Dialog>
+        ) : null}
         <Button
           type="button"
           variant="outline"
@@ -136,7 +162,7 @@ function FileCard({ file, locale, deleteDisabled, onDelete }: {
   </Card>
 }
 
-function LiveFiles({ upload }: { upload: UploadProps }) {
+function LiveFiles({ upload, boundary }: { upload: UploadProps; boundary: ProjectReadBoundary | undefined }) {
   const t = useT()
   const { locale } = useLocale()
   const { query, filter } = useFileUrlState()
@@ -227,7 +253,7 @@ function LiveFiles({ upload }: { upload: UploadProps }) {
     {validQuery && phase === "loading" ? <div className={styles.stateRegion} role="status">{t("library.filesLoading")}</div> : null}
     {phase === "error" ? <div className={styles.stateRegion}><Alert variant="destructive" className={styles.errorState}><AlertDescription><span>{t("library.filesLoadError")}</span><Button type="button" variant="outline" size="sm" onClick={reload}>{t("library.filesRetry")}</Button></AlertDescription></Alert></div> : null}
     {phase === "ready" && items.length === 0 ? <FileEmpty /> : null}
-    {phase !== "loading" && phase !== "error" && items.length > 0 ? <div className={styles.list} data-testid="library-files" role="list" aria-label={t("library.filesTab")}>{items.map((file) => <FileCard key={file.assetId} file={file} locale={locale}
+    {phase !== "loading" && phase !== "error" && items.length > 0 ? <div className={styles.list} data-testid="library-files" role="list" aria-label={t("library.filesTab")}>{items.map((file) => <FileCard key={file.assetId} file={file} locale={locale} boundary={boundary}
       deleteDisabled={deletion?.phase === "auth_required" || (deletion?.phase === "unknown" && deletion.file.assetId !== file.assetId)} onDelete={openDeletion} />)}</div> : null}
     {phase !== "loading" && phase !== "error" && nextCursor !== null ? <div className={styles.pagination}>{phase === "moreError" ? <Alert variant="destructive" className={styles.loadMoreError}><AlertDescription><span>{t("library.filesLoadMoreError")}</span><Button type="button" variant="outline" size="sm" onClick={loadMore}>{t("library.filesRetryMore")}</Button></AlertDescription></Alert> : <Button type="button" variant="outline" size="sm" disabled={phase === "loadingMore"} onClick={loadMore}>{phase === "loadingMore" ? t("library.filesLoading") : t("library.filesLoadMore")}</Button>}</div> : null}
     <AlertDialog open={deleteOpen} onOpenChange={(open) => { if (!open) closeDeletion() }}>
@@ -267,5 +293,5 @@ export function KokoroLibraryFiles({ preview, upload, boundary }: { preview: boo
   if (preview) return <FileEmpty />
   if (boundary !== undefined && (!boundary.admitted || boundary.subject === null))
     return <div className={styles.stateRegion} role="status">{t("library.filesLoading")}</div>
-  return <LiveFiles key={JSON.stringify([boundary?.tenant, boundary?.subject, boundary?.generation, boundary?.authInvalidationHint])} upload={upload} />
+  return <LiveFiles key={JSON.stringify([boundary?.tenant, boundary?.subject, boundary?.generation, boundary?.authInvalidationHint])} upload={upload} boundary={boundary} />
 }

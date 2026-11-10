@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs"
+import { createHash, webcrypto } from "node:crypto"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
@@ -328,6 +329,72 @@ it("完整响应已读取但共享下载 helper 尚在异步 Blob 阶段时取�
   await waitFor(() => expect(within(card).getByTestId("library-file-download")).not.toBeDisabled())
   expect(dom.createObjectURL).not.toHaveBeenCalled()
   expect(dom.click).not.toHaveBeenCalled()
+})
+
+it("opens one personal file preview on demand and retires the in-flight body across owners", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  vi.stubGlobal("crypto", webcrypto)
+  const marker = "kokoro.web.auth-index-subject"
+  const previousMarker = window.localStorage.getItem(marker)
+  const exactContent = "/api/hub/library/files/asset-personal-1/content"
+  const oldText = "Retired owner preview content"
+  const newText = "Current owner preview content"
+  const fileFor = (filename: string, text: string) => ({ ...fileOne, filename, mime_type: "text/plain",
+    size_bytes: String(Buffer.byteLength(text)), content_sha256: createHash("sha256").update(text).digest("hex") })
+  const oldFile = fileFor("old-owner.txt", oldText)
+  const newFile = fileFor("current-owner.txt", newText)
+  const unsupportedFile = { ...fileOne, asset_id: "asset-no-preview", filename: "download-only.pdf" }
+  const responseFor = (text: string) => new Response(text, { status: 200, headers: {
+    "content-type": "text/plain", "content-length": String(Buffer.byteLength(text)),
+    "cache-control": "private, no-store", "x-request-id": "preview-content",
+  } })
+  let resolveOld!: (response: Response) => void
+  const oldResponse = new Promise<Response>(resolve => { resolveOld = resolve })
+  const reads: AbortSignal[] = []
+  const request = vi.fn(async (target: string | Request, init?: RequestInit) => {
+    if (requestUrl(target) !== exactContent) {
+      return Response.json(filePage([window.localStorage.getItem(marker) === "owner-a" ? oldFile : newFile, unsupportedFile]))
+    }
+    if (!init?.signal) throw new Error("preview must be cancellable")
+    reads.push(init.signal)
+    return reads.length === 1 ? oldResponse : responseFor(newText)
+  })
+  vi.stubGlobal("fetch", request)
+  const tree = (subject: string, generation: number) => <LocaleProvider>
+    <KokoroLibrarySurface onPrompt={vi.fn()} projectReadBoundary={{ admitted: true, subject, tenant: subject, generation }} />
+  </LocaleProvider>
+  window.localStorage.setItem(marker, "owner-a")
+  try {
+    const view = render(tree("owner-a", 1))
+    await screen.findByText(oldFile.filename)
+    expect(reads).toHaveLength(0)
+    expect(screen.queryByRole("button", { name: "Preview", description: unsupportedFile.filename })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: `Download ${unsupportedFile.filename}` })).toBeInTheDocument()
+    const opener = screen.getByRole("button", { name: "Preview", description: oldFile.filename })
+    fireEvent.click(opener)
+    expect(screen.getByRole("dialog", { name: "Preview", description: oldFile.filename })).toBeInTheDocument()
+    await waitFor(() => expect(reads).toHaveLength(1))
+
+    window.localStorage.setItem(marker, "owner-b")
+    view.rerender(tree("owner-b", 2))
+    expect(reads[0]?.aborted).toBe(true)
+    await act(async () => { resolveOld(responseFor(oldText)); await oldResponse })
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(screen.queryByText(oldText)).not.toBeInTheDocument()
+
+    await screen.findByText(newFile.filename)
+    expect(reads).toHaveLength(1)
+    const currentOpener = screen.getByRole("button", { name: "Preview", description: newFile.filename })
+    fireEvent.click(currentOpener)
+    expect(await screen.findByText(newText)).toBeInTheDocument()
+    expect(reads).toHaveLength(2)
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Preview" })).getByRole("button", { name: "Close" }))
+    await waitFor(() => expect(currentOpener).toHaveFocus())
+    expect(screen.queryByText(newText)).not.toBeInTheDocument()
+  } finally {
+    if (previousMarker === null) window.localStorage.removeItem(marker)
+    else window.localStorage.setItem(marker, previousMarker)
+  }
 })
 
 it("用户点击单文件上传后只以重新读取的个人 GET 显示文件", async () => {
