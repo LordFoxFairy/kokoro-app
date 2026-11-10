@@ -2478,6 +2478,7 @@ export const zh = {
   "agents.setupTitle": "在 {platform} 中继续设置",
   "agents.setupScan": "用手机相机扫描以开始聊天。",
   "agents.setupApprove": "在 Slack 中批准此连接。",
+  "agents.disconnected": "未连接",
   "agents.continueIn": "在 {platform} 继续",
   "agents.qrCode": "{platform} 连接二维码",
   "agents.closeSetup": "关闭 Agent 设置",

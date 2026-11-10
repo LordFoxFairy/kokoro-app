@@ -41,6 +41,8 @@ Composer 复用现 Library CLEAN 文件/FINAL artifact 和 Project resources 列
 
 # App product surfaces
 
+- `kokoro-agents-surface.tsx` bounds the existing Agent setup to the open dialog and selected platform. Close, selection, retry and unmount abort the old request and reject late results. An unfinished setup loses its QR/link at the owner deadline; only explicit Retry rereads. A connected status does not reuse a setup ticket or depend on that ticket's lifetime.
+
 - `kokoro-project-workspace.tsx` keeps the Project host and its existing context state mounted across root and Task views. The root keeps its measured grid/composer; Task uses an independent flex timeline and one shell composer.
 - `project-context-composition.tsx` presents the same instruction, resource, recommendation and Skills sections; `project-context-dialogs.tsx` owns only their existing instruction/resource dialog assembly. Instruction history preserves owner order, selects the owner-marked current revision on open, and never derives the current label from position. Network clients and command lifetimes stay with the existing controllers.
 - `project-workspace-dialogs.tsx` retains only the independent scheduled preview. `project-websites-dialog.tsx` opens for the current admitted Project when its website feature is enabled; search and unsaved changes remain local, and save/unlink use the existing Hub boundary and the BFF version. An uncertain or stale write is followed by a fresh owner read, never an automatic write. Neither UI nor BFF visits or publishes the linked website.

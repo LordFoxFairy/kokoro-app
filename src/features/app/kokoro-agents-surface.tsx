@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import {
   BadgeCheck,
@@ -34,12 +34,17 @@ import styles from "./kokoro-agents-surface.module.css"
 
 const PLATFORM_VALUES = ["telegram", "line", "slack"] as const satisfies readonly AgentPlatform[]
 type Platform = AgentPlatform
-type ConnectionStatus = "connected" | "expired" | "pending"
+type SetupState = { kind: "loading" } | { kind: "error" } |
+  { kind: "ready"; status: "connected" | "expired" } |
+  { kind: "ready"; status: "pending" | "disconnected"; setup: AgentConnectionSetup; expiresAt: number }
+const EXPIRED_SETUP = { kind: "ready", status: "expired" } as const
+const MAX_TIMER_DELAY_MS = 2_147_483_647
 
 const CONNECTION_STATUS_LABEL_KEYS = {
   connected: "settings.connected",
   expired: "team.errInviteExpired",
   pending: "team.pendingLabel",
+  disconnected: "agents.disconnected",
 } as const
 
 const FEATURES = [
@@ -49,10 +54,12 @@ const FEATURES = [
   { title: "agents.chatAppsTitle", description: "agents.chatAppsDescription", icon: MessageCircleMore },
 ] as const
 
-function connectionStatus(setup: AgentConnectionSetup, now = Date.now()): ConnectionStatus {
+function receivedSetup(setup: AgentConnectionSetup): SetupState {
+  if (setup.status === "connected") return { kind: "ready", status: "connected" }
+  if (setup.status === "expired") return EXPIRED_SETUP
   const expiresAt = Date.parse(setup.expires_at)
-  if (setup.status === "expired" || (Number.isFinite(expiresAt) && expiresAt <= now)) return "expired"
-  return setup.status === "connected" ? "connected" : "pending"
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return EXPIRED_SETUP
+  return { kind: "ready", status: setup.status, setup, expiresAt }
 }
 
 function PlatformMark({ platform }: { platform: Platform | "whatsapp" | "messenger" }) {
@@ -98,39 +105,71 @@ function SetupDialog({
 }) {
   const t = useT()
   const [platform, setPlatform] = useState<Platform>("telegram")
-  const [setupState, setSetupState] = useState<
-    | { kind: "loading" }
-    | { kind: "error" }
-    | { kind: "ready"; setup: AgentConnectionSetup }
-  >({ kind: "loading" })
+  const [setupState, setSetupState] = useState<SetupState>({ kind: "loading" })
   const [retryKey, setRetryKey] = useState(0)
   const requestSeqRef = useRef(0)
+  const setupRequestRef = useRef<AbortController | null>(null)
   const firstTabRef = useRef<HTMLButtonElement | null>(null)
   const tabRefs = useRef<Partial<Record<Platform, HTMLButtonElement | null>>>({})
-  const activeConnectionStatus = setupState.kind === "ready" && setupState.setup.platform === platform
-    ? connectionStatus(setupState.setup)
-    : null
+  const activeConnectionStatus = setupState.kind === "ready" ? setupState.status : null
+  const ticket = "setup" in setupState ? setupState : null
+  const setupInstruction = t(platform === "slack" ? "agents.setupApprove" : "agents.setupScan")
 
   useEffect(() => {
     if (!open) return
     const requestSeq = ++requestSeqRef.current
-    void client.connectionSetup(platform).then((value) => {
-      if (requestSeq !== requestSeqRef.current) return
-      setSetupState(value.platform === platform ? { kind: "ready", setup: value } : { kind: "error" })
+    const controller = new AbortController()
+    setupRequestRef.current = controller
+    const current = () => requestSeq === requestSeqRef.current && !controller.signal.aborted
+    void client.connectionSetup(platform, controller.signal).then((value) => {
+      if (!current()) return
+      setSetupState(value.platform === platform ? receivedSetup(value) : { kind: "error" })
     }).catch(() => {
-      if (requestSeq === requestSeqRef.current) setSetupState({ kind: "error" })
+      if (current()) setSetupState({ kind: "error" })
     })
     return () => {
       if (requestSeq === requestSeqRef.current) requestSeqRef.current += 1
+      if (setupRequestRef.current === controller) setupRequestRef.current = null
+      controller.abort()
     }
   }, [client, open, platform, retryKey])
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      requestSeqRef.current += 1
-      setSetupState({ kind: "loading" })
+  useEffect(() => {
+    if (!open || ticket === null) return
+    let timer: number | undefined
+    let retired = false
+    const checkExpiry = () => {
+      if (retired) return
+      window.clearTimeout(timer)
+      const remaining = ticket.expiresAt - Date.now()
+      if (remaining <= 0) setSetupState(current => current === ticket ? EXPIRED_SETUP : current)
+      else timer = window.setTimeout(checkExpiry, Math.min(remaining, MAX_TIMER_DELAY_MS))
     }
+    queueMicrotask(checkExpiry)
+    window.addEventListener("focus", checkExpiry)
+    document.addEventListener("visibilitychange", checkExpiry)
+    return () => {
+      retired = true
+      window.clearTimeout(timer)
+      window.removeEventListener("focus", checkExpiry)
+      document.removeEventListener("visibilitychange", checkExpiry)
+    }
+  }, [open, ticket])
+
+  const retireSetup = () => {
+    requestSeqRef.current += 1
+    setupRequestRef.current?.abort()
+    setupRequestRef.current = null
+    setSetupState({ kind: "loading" })
+  }
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) retireSetup()
     onOpenChange(nextOpen)
+  }
+  const retrySetup = () => {
+    retireSetup()
+    setRetryKey(current => current + 1)
   }
 
   const onCloseAutoFocus = (event: Event) => {
@@ -161,12 +200,12 @@ function SetupDialog({
         onCloseAutoFocus={onCloseAutoFocus}
       >
         <DialogHeader className={styles.dialogHeader}>
-          <DialogDescription className="sr-only">{t("agents.setupScan")}</DialogDescription>
+          <DialogDescription className="sr-only">{t("agents.platforms")}</DialogDescription>
         </DialogHeader>
         <div className={styles.dialogScrollArea} data-testid="agent-setup-scroll">
           <Tabs value={platform} onValueChange={(value) => {
-            if (!PLATFORM_VALUES.includes(value as Platform)) return
-            setSetupState({ kind: "loading" })
+            if (value === platform || !PLATFORM_VALUES.includes(value as Platform)) return
+            retireSetup()
             setPlatform(value as Platform)
           }} className={styles.platformTabs}>
             <TabsList className={styles.platformTabsList} aria-label={t("agents.platforms")}>
@@ -187,56 +226,31 @@ function SetupDialog({
             </TabsList>
             {PLATFORM_VALUES.map((value) => {
               const qrLabel = t("agents.qrCode", { platform: t(`agents.platform.${value}`) })
-              const readyForPlatform = setupState.kind === "ready" && setupState.setup.platform === value
-              const action: ReactNode = readyForPlatform
-                ? connectionStatus(setupState.setup) === "expired"
-                  ? <Button
-                    type="button"
-                    className={styles.continueButton}
-                    disabled
-                  >
-                    {t("agents.continueIn", { platform: t(`agents.platform.${value}`) })}
-                  </Button>
-                  : <Button asChild className={styles.continueButton}>
-                    <a href={setupState.setup.continue_url} target="_blank" rel="noreferrer">
-                      {t("agents.continueIn", { platform: t(`agents.platform.${value}`) })}
-                    </a>
-                  </Button>
-                : setupState.kind === "error"
-                  ? <Button
-                    type="button"
-                    className={styles.continueButton}
-                    onClick={() => {
-                      setSetupState({ kind: "loading" })
-                      setRetryKey((current) => current + 1)
-                    }}
-                  >
-                    {t("firstSite.retry")}
-                  </Button>
-                  : <Button className={styles.continueButton} disabled>
-                    {t("agents.continueIn", { platform: t(`agents.platform.${value}`) })}
-                  </Button>
+              const status = value === platform ? activeConnectionStatus : null
+              const activeTicket = ticket?.setup.platform === value ? ticket : null
+              const continueLabel = t("agents.continueIn", { platform: t(`agents.platform.${value}`) })
+              const showSetup = status !== "connected" && status !== "expired"
               return (
                 <TabsContent key={value} value={value} className={styles.platformPanel}>
-                  {setupState.kind === "ready" && setupState.setup.platform === value ? <div
+                  {status !== null ? <div
                     className={styles.connectionStatus}
                     data-testid="agent-connection-status"
-                    data-status={connectionStatus(setupState.setup)}
-                    data-connection-status={connectionStatus(setupState.setup)}
+                    data-status={status}
+                    data-connection-status={status}
                     role="status"
-                    aria-label={t(CONNECTION_STATUS_LABEL_KEYS[connectionStatus(setupState.setup)])}
+                    aria-label={t(CONNECTION_STATUS_LABEL_KEYS[status])}
                   >
                     <span className={styles.connectionStatusDot} aria-hidden="true" />
-                    {t(CONNECTION_STATUS_LABEL_KEYS[connectionStatus(setupState.setup)])}
+                    {t(CONNECTION_STATUS_LABEL_KEYS[status])}
                   </div> : null}
-                  <div
+                  {showSetup ? <div
                     className={styles.qrCode}
                     data-qr-state={setupState.kind}
                     aria-busy={setupState.kind === "loading" || undefined}
                     aria-live="polite"
                   >
-                    {setupState.kind === "ready" && setupState.setup.platform === value ? <QRCodeSVG
-                      value={setupState.setup.qr_value}
+                    {activeTicket ? <QRCodeSVG
+                      value={activeTicket.setup.qr_value}
                       size={140}
                       bgColor="var(--card)"
                       fgColor="var(--foreground)"
@@ -251,25 +265,21 @@ function SetupDialog({
                       <Skeleton className={styles.qrLoading} aria-hidden="true" />
                     </div>}
                     {setupState.kind !== "error" ? <div className={styles.qrLogo} aria-hidden="true"><PlatformMark platform={value} /></div> : null}
-                  </div>
+                  </div> : null}
                   <div className={styles.dialogCopy}>
-                    <DialogTitle className={styles.dialogTitle}>{t("agents.setupTitle", { platform: t(`agents.platform.${value}`) })}</DialogTitle>
-                    <p>{t(value === "slack" ? "agents.setupApprove" : "agents.setupScan")}</p>
+                    <DialogTitle className={styles.dialogTitle}>{status === "connected" ? t(`agents.platform.${value}`) : t("agents.setupTitle", { platform: t(`agents.platform.${value}`) })}</DialogTitle>
+                    {showSetup ? <p>{setupInstruction}</p> : null}
                   </div>
-                  {action}
-                  {setupState.kind === "ready"
-                    && setupState.setup.platform === value
-                    && connectionStatus(setupState.setup) === "expired" ? <Button
-                      type="button"
-                      variant="outline"
-                      className={styles.regenerateButton}
-                      onClick={() => {
-                        setSetupState({ kind: "loading" })
-                        setRetryKey((current) => current + 1)
-                      }}
-                    >
-                      {t("firstSite.retry")}
-                    </Button> : null}
+                  {activeTicket ? <Button asChild className={styles.continueButton}>
+                    <a href={activeTicket.setup.continue_url} target="_blank" rel="noreferrer" onClick={event => {
+                      // A throttled tab may return to focus before its timer runs.
+                      if (Date.now() < activeTicket.expiresAt) return
+                      event.preventDefault()
+                      setSetupState(current => current === activeTicket ? EXPIRED_SETUP : current)
+                    }}>{continueLabel}</a>
+                  </Button> : setupState.kind === "loading" ? <Button className={styles.continueButton} disabled>{continueLabel}</Button>
+                    : setupState.kind === "error" || status === "expired" ? <Button
+                      type="button" className={styles.continueButton} onClick={retrySetup}>{t("firstSite.retry")}</Button> : null}
                 </TabsContent>
               )
             })}

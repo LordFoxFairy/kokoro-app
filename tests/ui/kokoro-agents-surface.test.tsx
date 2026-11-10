@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import type { ComponentProps } from "react"
 
@@ -177,9 +177,10 @@ it("setup 失败时显示可重试错误且不渲染假链接", async () => {
 })
 
 it.each([
-  ["connected", setup("telegram", { status: "connected" })],
+  ["connected", setup("telegram", { status: "connected", expires_at: "2020-08-30T06:30:00.000Z" })],
   ["pending", setup("telegram", { status: "pending" })],
-  ["expired", setup("telegram", { status: "connected", expires_at: "2020-08-30T06:30:00.000Z" })],
+  ["disconnected", setup("telegram")],
+  ["expired", setup("telegram", { status: "expired" })],
 ] as const)("依据 status 和 expires_at 渲染 %s 连接状态", async (expectedStatus, response) => {
   const client: AgentClient = { connectionSetup: vi.fn().mockResolvedValue(response) }
   renderAgents({ client })
@@ -188,34 +189,68 @@ it.each([
   const dialog = screen.getByRole("dialog")
   const status = await within(dialog).findByTestId("agent-connection-status")
   expect(status).toHaveAttribute("data-status", expectedStatus)
-  expect(status).toHaveAccessibleName(expectedStatus === "connected" ? "已连接" : expectedStatus === "expired" ? "邀请已过期。" : "待接受的邀请")
-
-  if (expectedStatus === "expired") {
-    expect(within(dialog).getByRole("button", { name: "在 Telegram 继续" })).toBeDisabled()
-    expect(within(dialog).getByRole("button", { name: "重试" })).toBeInTheDocument()
+  expect(status).toHaveAccessibleName({ connected: "已连接", expired: "邀请已过期。", pending: "待接受的邀请", disconnected: "未连接" }[expectedStatus])
+  if (expectedStatus === "expired" || expectedStatus === "connected") {
+    expect(within(dialog).queryByRole("img", { name: "Telegram 连接二维码" })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole("link", { name: "在 Telegram 继续" })).not.toBeInTheDocument()
   }
+  if (expectedStatus === "expired") expect(within(dialog).getByRole("button", { name: "重试" })).toBeInTheDocument()
 
   fireEvent.click(within(dialog).getByRole("button", { name: "关闭 Agent 设置" }))
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
 })
 
-it("过期连接禁用 Continue，并通过重试重新生成可继续的连接", async () => {
-  const connectionSetup = vi.fn()
-    .mockResolvedValueOnce(setup("telegram", { status: "pending", expires_at: "2020-08-30T06:30:00.000Z" }))
+it("未完成 setup 到期即撤下票据，零自动请求，显式重试替换请求代次", async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date("2026-08-30T06:30:00.000Z"))
+  const connectionSetup = vi.fn<AgentClient["connectionSetup"]>()
+    .mockResolvedValueOnce(setup("telegram", { status: "pending", expires_at: "2026-08-30T06:30:01.000Z" }))
     .mockResolvedValueOnce(setup("telegram", { status: "pending" }))
-  renderAgents({ client: { connectionSetup } })
+  try {
+    renderAgents({ client: { connectionSetup } })
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "开始体验" })) })
+    const dialog = within(screen.getByRole("dialog"))
+    expect(dialog.getByRole("img", { name: "Telegram 连接二维码" })).toBeInTheDocument()
+    expect(dialog.getByRole("link", { name: "在 Telegram 继续" })).toBeInTheDocument()
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+    expect(dialog.getByTestId("agent-connection-status")).toHaveAttribute("data-status", "expired")
+    expect(dialog.queryByRole("img", { name: "Telegram 连接二维码" })).not.toBeInTheDocument()
+    expect(dialog.queryByRole("link", { name: "在 Telegram 继续" })).not.toBeInTheDocument()
+    expect(dialog.queryByRole("button", { name: "在 Telegram 继续" })).not.toBeInTheDocument()
+    expect(connectionSetup).toHaveBeenCalledTimes(1)
+    await act(async () => { fireEvent.click(dialog.getByRole("button", { name: "重试" })) })
+    expect(connectionSetup).toHaveBeenCalledTimes(2)
+    expect(connectionSetup.mock.calls[0]?.[1]?.aborted).toBe(true)
+    expect(dialog.getByTestId("agent-connection-status")).toHaveAttribute("data-status", "pending")
+    expect(dialog.getByRole("link", { name: "在 Telegram 继续" })).toBeInTheDocument()
+  } finally { cleanup(); vi.useRealTimers() }
+})
+
+it("换平台、关闭和卸载均取消 setup，非合作迟到响应不会覆盖当前面板", async () => {
+  const attempts: { platform: AgentPlatform; signal: AbortSignal | undefined; resolve: (value: AgentConnectionSetup) => void }[] = []
+  const connectionSetup = vi.fn<AgentClient["connectionSetup"]>().mockImplementation((platform, signal) =>
+    new Promise(resolve => { attempts.push({ platform, signal, resolve }) }))
+  const view = renderAgents({ client: { connectionSetup } })
   fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
+  const dialog = within(screen.getByRole("dialog"))
+  const telegram = attempts[0]!
+  fireEvent.focus(dialog.getByRole("tab", { name: "LINE" }))
+  const line = attempts[1]!
+  expect(telegram.signal?.aborted).toBe(true)
+  expect(line.platform).toBe("line")
+  await act(async () => { telegram.resolve(setup("telegram")) })
+  expect(dialog.getByRole("heading", { name: "在 LINE 中继续设置" })).toBeInTheDocument()
+  expect(dialog.queryByRole("link")).not.toBeInTheDocument()
 
-  const dialog = screen.getByRole("dialog")
-  await within(dialog).findByTestId("agent-connection-status")
-  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  fireEvent.click(dialog.getByRole("button", { name: "关闭 Agent 设置" }))
+  expect(line.signal?.aborted).toBe(true)
+  await act(async () => { line.resolve(setup("line")) })
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
 
-  await waitFor(() => expect(connectionSetup).toHaveBeenCalledTimes(2))
-  await waitFor(() => expect(within(dialog).getByTestId("agent-connection-status")).toHaveAttribute("data-status", "pending"))
-  expect(within(dialog).getByRole("link", { name: /在 Telegram 继续/ })).toBeInTheDocument()
-
-  fireEvent.click(within(dialog).getByRole("button", { name: "关闭 Agent 设置" }))
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+  fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
+  const reopened = attempts[2]!
+  view.unmount()
+  expect(reopened.signal?.aborted).toBe(true)
 })
 
 it("桌面能力卡布局由 agents-surface 容器宽度决定，而不是 pointer 条件", () => {

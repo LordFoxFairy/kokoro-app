@@ -2026,6 +2026,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "agents.setupTitle": "Continue setup in {platform}",
   "agents.setupScan": "Scan with your phone camera to start chatting.",
   "agents.setupApprove": "Approve this connection in Slack.",
+  "agents.disconnected": "Not connected",
   "agents.continueIn": "Continue in {platform}",
   "agents.qrCode": "{platform} connection QR code",
   "agents.closeSetup": "Close Agent setup",
