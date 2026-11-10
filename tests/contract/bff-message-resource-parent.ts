@@ -1,7 +1,19 @@
 // Build-time exact additive inverse; never a runtime downgrade.
 import { createHash } from "node:crypto"
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
+export function restorePublic2830ProjectWebsitesContract(source: string): string {
+  if (!/^  version: 28\.31\.0$/mu.test(source)) return source
+  if (hash(source) !== "9fea8041e3eac479e5ea008e120729fb37637636bb6bf3ad8b94ac161ac8a88c") throw Error("Project websites Public28.31 child drift")
+  const parent = source
+    .replace("  version: 28.31.0\n", "  version: 28.30.0\n")
+    .replace(/^  \/v1\/projects\/\{project_id\}\/websites:\n[\s\S]*?(?=^  \/v1\/projects\/\{projectId\}:)/mu, "")
+    .replace(/^    ProjectWebsitesProjectId:\n[\s\S]*?(?=^    Project:)/mu, "")
+    .replace(/^    ProjectWebsitesSuccess:\n[\s\S]*?(?=^    PersonalizationReadSuccess:)/mu, "")
+  if (hash(parent) !== "2e459bd39f73686ac6d458011b777f08ea17b79a1467e563cdbb299e044a3cf9") throw Error("Project websites complete Public28.30 parent drift")
+  return parent
+}
 export function restorePublic2829DeliveryDisplayContract(source: string): string {
+  source = restorePublic2830ProjectWebsitesContract(source)
   if (!/^  version: 28\.30\.0$/mu.test(source)) return source
   if (hash(source) !== "2e459bd39f73686ac6d458011b777f08ea17b79a1467e563cdbb299e044a3cf9") throw Error("Delivery display Public28.30 child drift")
   const parent = source

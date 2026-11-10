@@ -291,7 +291,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "firstSite.executionMode": "Option d’exécution",
   "firstSite.sameTask": "Même tâche",
   "firstSite.agent": "Agent",
-  "firstSite.websitesHint": "Suivez les versions, les analyses et les mises à jour au même endroit.",
+  "firstSite.websitesHint": "Conservez les liens vers les sites web de ce projet.",
   "firstSite.addWebsitePrompt": "Ajoutez un site web à cet espace de travail et suivez ses mises à jour.",
   "firstSite.scheduledTasks": "Tâches planifiées",
   "firstSite.scheduledTasksHint": "Exécutez des tâches dans ce projet à une heure définie.",

@@ -291,7 +291,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "firstSite.executionMode": "실행 옵션",
   "firstSite.sameTask": "같은 작업",
   "firstSite.agent": "에이전트",
-  "firstSite.websitesHint": "버전, 분석 및 업데이트를 한곳에서 추적합니다.",
+  "firstSite.websitesHint": "이 프로젝트의 웹사이트 링크를 저장하세요.",
   "firstSite.addWebsitePrompt": "이 워크스페이스에 웹사이트를 추가하고 계속 추적 및 업데이트합니다.",
   "firstSite.scheduledTasks": "예약 작업",
   "firstSite.scheduledTasksHint": "이 프로젝트에서 지정된 시간에 작업을 실행합니다.",

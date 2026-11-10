@@ -308,7 +308,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "firstSite.executionMode": "実行オプション",
   "firstSite.sameTask": "同じタスク",
   "firstSite.agent": "エージェント",
-  "firstSite.websitesHint": "バージョン、分析、更新を一か所で追跡します。",
+  "firstSite.websitesHint": "このプロジェクトのウェブサイトへのリンクを保存します。",
   "firstSite.addWebsitePrompt": "このワークスペースにウェブサイトを追加し、継続的に追跡・更新します。",
   "firstSite.scheduledTasks": "スケジュールタスク",
   "firstSite.scheduledTasksHint": "このプロジェクトで指定した時間にタスクを実行します。",

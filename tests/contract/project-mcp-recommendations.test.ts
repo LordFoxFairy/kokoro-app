@@ -5,10 +5,10 @@ import YAML from "yaml";
 it("fixes the entire formal Public28.2 blob and the independent naturally idempotent three-ref configuration", () => {
   const bytes = readFileSync("src/generated/bff-public-openapi.yaml");
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(
-    "2e459bd39f73686ac6d458011b777f08ea17b79a1467e563cdbb299e044a3cf9",
+    "9fea8041e3eac479e5ea008e120729fb37637636bb6bf3ad8b94ac161ac8a88c",
   );
   const spec = YAML.parse(bytes.toString("utf8"));
-  expect(spec.info.version).toBe("28.30.0");
+  expect(spec.info.version).toBe("28.31.0");
   const route = spec.paths["/v1/projects/{projectId}/mcp-recommendations"];
   expect(route.put["x-kokoro-idempotency"]).toBe("natural");
   expect(
@@ -29,7 +29,7 @@ it("strict generated decoders bind canonical refs/CAS and the new inverse protec
   );
   for (const changed of [
     raw + "\n",
-    raw.replace("  version: 28.30.0\n", "  version: 28.23.0\n"),
+    raw.replace("  version: 28.31.0\n", "  version: 28.23.0\n"),
     raw.replace("kind: { const: custom_api }", "kind: { const: changed }"),
     raw.replace("listTeamMembers", "otherOperation"),
   ]) {

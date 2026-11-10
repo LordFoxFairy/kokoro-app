@@ -43,7 +43,7 @@ Composer 复用现 Library CLEAN 文件/FINAL artifact 和 Project resources 列
 
 - `kokoro-project-workspace.tsx` keeps the Project host and its existing context state mounted across root and Task views. The root keeps its measured grid/composer; Task uses an independent flex timeline and one shell composer.
 - `project-context-composition.tsx` presents the same instruction, resource, recommendation and Skills sections; `project-context-dialogs.tsx` owns only their existing instruction/resource dialog assembly. Instruction history preserves owner order, selects the owner-marked current revision on open, and never derives the current label from position. Network clients and command lifetimes stay with the existing controllers.
-- `project-workspace-dialogs.tsx` retains only the existing root website/scheduled preview dialogs. This context slice adds no website, scheduling or ACL capability.
+- `project-workspace-dialogs.tsx` retains only the independent scheduled preview. `project-websites-dialog.tsx` opens for the current admitted Project when its website feature is enabled; search and unsaved changes remain local, and save/unlink use the existing Hub boundary and the BFF version. An uncertain or stale write is followed by a fresh owner read, never an automatic write. Neither UI nor BFF visits or publishes the linked website.
 - Canvas owns conversation artifacts separately. Project settings temporarily hide/inert its existing view, preserving its slot and unsaved component state; closing settings restores it without writing a Canvas close preference.
 
 ## Project pin consumer

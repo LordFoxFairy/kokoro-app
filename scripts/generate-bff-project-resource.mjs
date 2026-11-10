@@ -11,10 +11,11 @@ const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-project-resource.ts")
 const libraryOutputPath = join(root, "src/generated/bff-library-file-delete.ts")
 const artifactOutputPath = join(root, "src/generated/bff-library-artifact-mutations.ts")
+const websiteOutputPath = join(root, "src/generated/bff-project-websites.ts")
 const provenance = {
-  ownerCommit: "0c6be20abbf34a2d5b9bdf9db9d582f6cea064b1",
-  sourceSha256: "2e459bd39f73686ac6d458011b777f08ea17b79a1467e563cdbb299e044a3cf9",
-  openapiVersion: "28.30.0",
+  ownerCommit: "7f109384651741ee9df2e4931ef7a566053cea81",
+  sourceSha256: "9fea8041e3eac479e5ea008e120729fb37637636bb6bf3ad8b94ac161ac8a88c",
+  openapiVersion: "28.31.0",
 }
 const names = ["ProjectResourceItem", "ProjectResourceItemResponse", "ProjectResourceDeletionResponse", "ErrorEnvelope"]
 
@@ -38,20 +39,26 @@ export function inspectBffProjectResourceContract(spec) {
 
 // Deliberately limited to the scalar/closed-object vocabulary consumed by this slice.
 // Unsupported owner schema constructs fail generation instead of being weakened.
-function renderSchema(schema, schemas, ancestry = []) {
+function renderSchema(schema, schemas, ancestry = [], aliases = {}) {
   if (schema.$ref) {
     const name = schema.$ref.replace("#/components/schemas/", "")
     assert.ok(schemas[name] && !ancestry.includes(name), `Unsupported schema reference ${schema.$ref}`)
-    return renderSchema(schemas[name], schemas, [...ancestry, name])
+    return aliases[name] ?? renderSchema(schemas[name], schemas, [...ancestry, name], aliases)
   }
   if (schema.const !== undefined) return `z.literal(${JSON.stringify(schema.const)})`
   if (schema.type === "object") {
     assert.equal(schema.additionalProperties, false, "Project resource objects must remain closed")
     const properties = Object.entries(schema.properties).map(([key, value]) => {
-      const rendered = renderSchema(value, schemas, ancestry)
+      const rendered = renderSchema(value, schemas, ancestry, aliases)
       return `${JSON.stringify(key)}: ${rendered}${schema.required.includes(key) ? "" : ".optional()"}`
     })
     return `z.object({ ${properties.join(", ")} }).strict()`
+  }
+  if (schema.type === "array") {
+    let rendered = `z.array(${renderSchema(schema.items, schemas, ancestry, aliases)})`
+    if (schema.maxItems !== undefined) rendered += `.max(${schema.maxItems})`
+    if (schema.uniqueItems === true) rendered += ".refine(values => new Set(values).size === values.length, \"Duplicate entries\")"
+    return rendered
   }
   if (schema.type === "boolean") return "z.boolean()"
   assert.equal(schema.type, "string", "Unsupported Project resource scalar")
@@ -67,6 +74,16 @@ function renderSchema(schema, schemas, ancestry = []) {
   if (schema.format !== undefined) {
     assert.equal(schema.format, "date-time", "Unsupported Project resource string format")
     rendered += ".datetime({ offset: true })"
+  }
+  if (schema["x-kokoro-utf8-byte-limit"] !== undefined) {
+    const limit = schema["x-kokoro-utf8-byte-limit"]
+    assert.ok(Number.isSafeInteger(limit) && limit > 0)
+    rendered += `.refine(value => new TextEncoder().encode(value).byteLength <= ${limit}, "UTF-8 byte limit exceeded")`
+  }
+  if (schema["x-kokoro-decimal-maximum"] !== undefined) {
+    const maximum = schema["x-kokoro-decimal-maximum"]
+    assert.ok(typeof maximum === "string" && /^[1-9][0-9]*$/u.test(maximum) && Number.isSafeInteger(Number(maximum)) && schema.pattern)
+    rendered += `.refine(value => Number(value) <= ${maximum}, "Decimal maximum exceeded")`
   }
   return rendered
 }
@@ -166,6 +183,54 @@ export function isLibraryArtifactDeleteOwnerError(status: number, code: string, 
 `
 }
 
+export function renderBffProjectWebsitesArtifact(spec, source = provenance) {
+  assert.equal(spec.info.version, source.openapiVersion, "Project websites version drift")
+  const path = spec.paths["/v1/projects/{project_id}/websites"]
+  const schemas = spec.components.schemas
+  assert.equal(path.get.operationId, "getProjectWebsites")
+  assert.equal(path.get["x-kokoro-permission"], "project.read")
+  assert.equal(path.get.requestBody, undefined)
+  assert.equal(path.put.operationId, "replaceProjectWebsites")
+  assert.equal(path.put["x-kokoro-permission"], "project.update")
+  assert.equal(path.put["x-kokoro-idempotency"], "natural")
+  assert.equal(path.put.requestBody.required, true)
+  assert.match(path.put.description, /at most 65536 bytes/u)
+  assert.deepEqual(path.parameters, [{
+    name: "project_id", in: "path", required: true,
+    schema: { $ref: "#/components/schemas/ProjectWebsitesProjectId" },
+  }])
+  const put = path.put.requestBody.content["application/json"].schema
+  assert.equal(put.$ref, "#/components/schemas/ReplaceProjectWebsitesRequest")
+  const response = path.get.responses["200"].$ref
+  assert.equal(response, "#/components/responses/ProjectWebsitesSuccess")
+  assert.equal(path.put.responses["200"].$ref, response)
+  const ack = spec.components.responses.ProjectWebsitesSuccess.content["application/json"].schema
+  assert.equal(ack.$ref, "#/components/schemas/ProjectWebsitesResponse")
+  const urls = schemas.ProjectWebsiteUrls
+  const aliases = {
+    ProjectWebsitesProjectId: "projectWebsitesProjectIdSchema",
+    ProjectWebsitesStateVersion: "projectWebsitesStateVersionSchema",
+    ProjectWebsiteUrls: "projectWebsiteUrlsSchema",
+  }
+  assert.equal(urls.uniqueItems, true)
+  assert.equal(urls.maxItems, 16)
+  assert.equal(urls.items["x-kokoro-utf8-byte-limit"], 2048)
+  return `// Generated by scripts/generate-bff-project-resource.mjs. Do not edit.
+import { z } from "zod"
+
+export const BFF_PROJECT_WEBSITES_PROVENANCE = ${JSON.stringify(source, null, 2)} as const
+export const PROJECT_WEBSITE_URL_LIMIT = ${urls.maxItems}
+export const PROJECT_WEBSITE_URL_MAX_BYTES = ${urls.items["x-kokoro-utf8-byte-limit"]}
+export const PROJECT_WEBSITES_BODY_LIMIT = 65536
+export const projectWebsitesProjectIdSchema = ${renderSchema(schemas.ProjectWebsitesProjectId, schemas)}
+export const projectWebsitesStateVersionSchema = ${renderSchema(schemas.ProjectWebsitesStateVersion, schemas)}
+export const projectWebsiteUrlsSchema = ${renderSchema(urls, schemas)}
+export const replaceProjectWebsitesRequestSchema = ${renderSchema(put, schemas, [], aliases)}
+export const projectWebsitesResponseSchema = ${renderSchema(ack, schemas, [], aliases)}
+export type ProjectWebsitesState = z.infer<typeof projectWebsitesResponseSchema>["data"]
+`
+}
+
 async function main() {
   const mode = process.argv[2]
   assert.ok(mode === "--write" || mode === "--check", "expected --write or --check")
@@ -175,14 +240,17 @@ async function main() {
   const rendered = renderBffProjectResourceArtifact(inspectBffProjectResourceContract(spec))
   const library = renderBffLibraryFileDeletionArtifact(spec)
   const artifact = renderBffLibraryArtifactMutations(spec)
+  const websites = renderBffProjectWebsitesArtifact(spec)
   if (mode === "--write") {
     await writeFile(outputPath, rendered)
     await writeFile(libraryOutputPath, library)
     await writeFile(artifactOutputPath, artifact)
+    await writeFile(websiteOutputPath, websites)
   } else {
     assert.equal(await readFile(outputPath, "utf8"), rendered, "Generated Project resource decoder drift")
     assert.equal(await readFile(libraryOutputPath, "utf8"), library, "Generated Library deletion decoder drift")
     assert.equal(await readFile(artifactOutputPath, "utf8"), artifact, "Generated Artifact mutation decoder drift")
+    assert.equal(await readFile(websiteOutputPath, "utf8"), websites, "Generated Project websites decoder drift")
   }
   process.stdout.write(`BFF resource artifacts ${mode.slice(2)} passed\n`)
 }

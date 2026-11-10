@@ -1,3 +1,11 @@
+## A‑06 — Project website references
+
+The existing same-origin Project adapter reads or conditionally replaces the
+active Project's website references through BFF Public 28.31. A PUT supplies the
+last read state version; a stale version or unknown result is resolved by reading
+the owner again, not by replaying the write. These are URL references, not an
+external fetch or publication request. Ordinary Project and session shapes are unchanged.
+
 ## A‑10 — Private delivered Artifact display paths
 
 Public 28.30 exposes optional `display_path` on `PrivateDelivery` and the existing

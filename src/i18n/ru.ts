@@ -291,7 +291,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "firstSite.executionMode": "Параметр запуска",
   "firstSite.sameTask": "Та же задача",
   "firstSite.agent": "Агент",
-  "firstSite.websitesHint": "Отслеживайте версии, аналитику и обновления в одном месте.",
+  "firstSite.websitesHint": "Сохраняйте ссылки на сайты этого проекта.",
   "firstSite.addWebsitePrompt": "Добавьте сайт в это рабочее пространство и поддерживайте его актуальность.",
   "firstSite.scheduledTasks": "Запланированные задачи",
   "firstSite.scheduledTasksHint": "Запускайте задачи в этом проекте в заданное время.",

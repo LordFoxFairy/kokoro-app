@@ -1,3 +1,10 @@
+## A‑06 — Public 28.31 Project website references
+
+The current complete snapshot is the exact BFF `7f109384651741ee9df2e4931ef7a566053cea81`
+Git blob, SHA-256 `9fea8041e3eac479e5ea008e120729fb37637636bb6bf3ad8b94ac161ac8a88c`.
+The existing Project resource generation command emits the website GET/PUT
+validators from the same snapshot. The independent Scheduled executions pin is unchanged.
+
 ## A‑10 — Public 28.30 private Artifact display paths
 
 The current full BFF snapshot is Public 28.30 at BFF `0c6be20abbf34a2d5b9bdf9db9d582f6cea064b1`,

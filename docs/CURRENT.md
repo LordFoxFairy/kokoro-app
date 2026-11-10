@@ -1,3 +1,11 @@
+## 2026-11-10 A‑06 Project website references
+
+The current Product snapshot is byte-exact Public 28.31 from BFF `7f10938`.
+Project website references are an owned list with a versioned save. The existing
+Project dialog searches the list and stages additions or removals; Cancel never
+writes. There is no synthetic site catalog, external fetch, or publishing action.
+Root records the authenticated browser evidence separately.
+
 ## 2026-11-10 A‑11 creation scene drafts
 
 An explicit presentation range or website category is part of the same visible,
