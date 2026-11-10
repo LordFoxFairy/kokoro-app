@@ -24,6 +24,25 @@ describe("useDraft persistence", () => {
   const owner = { admitted: true, subject: "draft-owner", tenant: "tenant-a", generation: 1 }
   const refs: SelectedResourceRef[] = [{ kind: "asset", resource_id: "selected-asset" }]
 
+  it("stores attachment selection, subsequent typing and removal before any timer or pagehide", () => {
+    vi.useFakeTimers()
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    const { result } = renderHook(() => useDraft(null, true, undefined, owner))
+    const persisted = () => JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}").__pending__
+    act(() => result.current.updateDraft("draft before choosing"))
+    expect(persisted()).toBeUndefined()
+    act(() => result.current.updateResourceRefs(refs))
+    expect(persisted()).toMatchObject({ text: "draft before choosing", refs })
+    act(() => result.current.updateDraft("last keystroke before hard reload"))
+    expect(persisted()).toMatchObject({ text: "last keystroke before hard reload", refs })
+    act(() => result.current.updateResourceRefs([]))
+    expect(persisted()).toMatchObject({ text: "last keystroke before hard reload", refs: [] })
+    act(() => result.current.updateDraft("ordinary typing without attachments"))
+    expect(persisted()).toMatchObject({ text: "last keystroke before hard reload", refs: [] })
+    act(() => vi.advanceTimersByTime(200))
+    expect(persisted()).toMatchObject({ text: "ordinary typing without attachments", refs: [] })
+  })
+
   it("flushes a pending draft before an earlier pagehide auth listener commits retirement", () => {
     vi.useFakeTimers()
     expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
@@ -37,16 +56,13 @@ describe("useDraft persistence", () => {
         return { draft, retire: () => setBoundary({ ...owner, admitted: false, generation: 2 }) }
       })
       retire = result.current.retire
-      act(() => {
-        result.current.draft.updateResourceRefs(refs)
-        result.current.draft.updateDraft("typed immediately before reload")
-      })
+      act(() => result.current.draft.updateDraft("typed immediately before reload"))
       expect(window.localStorage.getItem(DRAFTS_KEY)).toBeNull()
       const old = result.current.draft
       act(() => window.dispatchEvent(new PageTransitionEvent("pagehide")))
       expect(old.readCurrentDraft()).toBeNull()
       expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}").__pending__)
-        .toMatchObject({ text: "typed immediately before reload", refs })
+        .toBe("typed immediately before reload")
     } finally { window.removeEventListener("pagehide", authPageHide) }
   })
 
@@ -72,9 +88,8 @@ describe("useDraft persistence", () => {
     rerender({ activeId: "a", boundary: { ...owner, generation: 2 } })
     expect(result.current.readCurrentDraft()).toEqual({ text: "flush this on pagehide", refs })
     const afterPageShow = result.current
-    act(() => result.current.updateDraft("old pending edit"))
     expect(admitBrowserAuthSessionIndexes(owner.subject, owner.subject, "tenant-b")).toBe(true)
-    act(() => vi.advanceTimersByTime(200))
+    act(() => afterPageShow.updateDraft("late old-tenant edit"))
     rerender({ activeId: "a", boundary: { ...owner, tenant: "tenant-b", generation: 3 } })
     expect(result.current.readCurrentDraft()).toEqual({ text: "", refs: [] })
     expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}").a).toMatchObject({ text: "flush this on pagehide", refs })
@@ -87,6 +102,7 @@ describe("useDraft persistence", () => {
     expect(result.current.readCurrentDraft()).toEqual({ text: "new tenant text", refs: [{ kind: "artifact", resource_id: "tenant-b-ref" }] })
     const otherTab = { subject: owner.subject, tenant: owner.tenant, text: "newer other-tenant edit", refs }
     act(() => {
+      result.current.updateResourceRefs([])
       result.current.updateDraft("waiting on debounce")
       window.localStorage.setItem(DRAFTS_KEY, JSON.stringify({ a: otherTab }))
       vi.advanceTimersByTime(200)

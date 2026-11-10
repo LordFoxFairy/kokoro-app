@@ -1,7 +1,7 @@
 "use client"
 
 // 未发送草稿 controller：按原会话、待创建或项目槽位持久化文本与 opaque refs。
-// 与会话 store 分键：逐键改动不惊动引擎、也不跨 tab 抢占（草稿是本地正在编辑态）。
+// 与会话 store 分键：草稿编辑不惊动引擎；没有附件的输入沿原防抖写入。
 // 键控派生（非 effect 同步 setState）：mounted 门控保证 SSR/水合首帧一致（服务端无 localStorage）。
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
@@ -196,7 +196,8 @@ export function useDraft(activeId: string | null, mounted: boolean, projectRef?:
   type Scope = typeof scope
   type Access = typeof access
   type Edit = { scope: Scope; value: Draft }
-  type PendingWrite = Edit & { replaces: DraftOwner | null; timer: ReturnType<typeof setTimeout> }
+  type DraftWrite = Edit & { replaces: DraftOwner | null }
+  type PendingWrite = DraftWrite & { timer: ReturnType<typeof setTimeout> }
   const committed = useRef<{ scope: Scope; mounted: boolean; retired: boolean } | null>(null)
   const [draftEdit, setDraftEdit] = useState<Edit | null>(null)
   const latestEdit = useRef<Edit | null>(null)
@@ -219,7 +220,7 @@ export function useDraft(activeId: string | null, mounted: boolean, projectRef?:
     pendingWriteRef.current = null
     return pending
   }, [])
-  const writePending = useCallback((pending: PendingWrite | null) => {
+  const writePending = useCallback((pending: DraftWrite | null) => {
     if (pending !== null && accessIsCurrent(pending.scope.access) && actor.current())
       writeDraft(pending.scope.key, pending.value, pending.scope.access.owner, pending.replaces)
   }, [accessIsCurrent, actor])
@@ -260,25 +261,31 @@ export function useDraft(activeId: string | null, mounted: boolean, projectRef?:
     setDraftEdit(edit)
     return edit
   }, [scope])
-  const update = useCallback((next: Draft) => {
+  const update = useCallback((next: Draft, immediately: boolean) => {
     const edit = publish(next)
     const previous = takePendingWrite()
     if (previous?.scope.key !== scope.key) writePending(previous)
+    const replaces = previous?.scope === scope ? previous.replaces
+      : foreign === null ? null : { subject: foreign.subject, tenant: foreign.tenant }
+    const write = { ...edit, replaces }
+    // Confirmed user attachment edits must survive an immediate reload, even
+    // when the document gets neither a debounce turn nor a pagehide callback.
+    if (immediately) { writePending(write); return }
     const timer = setTimeout(() => {
       if (pendingWriteRef.current?.timer === timer) flushPendingWrite()
     }, DRAFT_WRITE_DEBOUNCE_MS)
-    const replaces = previous?.scope === scope ? previous.replaces
-      : foreign === null ? null : { subject: foreign.subject, tenant: foreign.tenant }
-    pendingWriteRef.current = { ...edit, replaces, timer }
+    pendingWriteRef.current = { ...write, timer }
   }, [flushPendingWrite, foreign, publish, scope, takePendingWrite, writePending])
   const updateDraft = useCallback((text: string) => {
-    if (isCurrent()) update(withText(latestValue(), text))
+    if (!isCurrent()) return
+    const current = latestValue()
+    update(withText(current, text), refsOf(current).length !== 0)
   }, [isCurrent, latestValue, update])
   const updateResourceRefs = useCallback((refs: readonly SelectedResourceRef[]) => {
     if (!owner || !isCurrent()) return
     const next = selectedResourceRefsSchema.safeParse(refs)
     const current = latestValue()
-    if (next.success && !sameRefs(refsOf(current), next.data)) update({ ...owner, text: textOf(current), refs: next.data })
+    if (next.success && !sameRefs(refsOf(current), next.data)) update({ ...owner, text: textOf(current), refs: next.data }, true)
   }, [isCurrent, latestValue, owner, update])
   const clearDraft = useCallback((keepResources = false) => {
     if (!isCurrent()) return
