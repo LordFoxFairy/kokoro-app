@@ -12,6 +12,10 @@ CanvasContentRef新增activity的Run/activity/subject/generation引用，resolve
 - `canvas-store.ts`：事件总线 store——按会话键各存一槽（内容+开合+全屏）；`openCanvas`/`closeCanvas`/`reopenCanvas`/`toggleCanvasFullscreen`/`canvasSlot`/`resolveCanvasContent`/`subscribe`/`read`/`serverState`/`resetCanvasStore`(test)。
 - `useCanvasResize`：main/canvas 宽度拖拽；观察实际 workspace 容器并在 rail/窗口变窄时钳制第三栏，保证 main 最小宽度。
 
+## 已交付成果目录
+
+仅按已核可选 `SessionDelivery.displayPath` 的虚拟目录分组，原生目录可展开；无目录的旧成果留平列，同路径不同交付版本分别按原 Conversation＋Artifact 选择。目录不参与下载／预览读定位，不表示未交付的过程文件。紧凑宽度继续使用同一 Files／Preview 选择器与可访问名称。
+
 ## 协作者
 上游：`@/ui/shell` 的 `useCanvasWorkspace`（订阅 store、绑定 activeId、暴露打开/关闭回调）。
 

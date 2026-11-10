@@ -98,6 +98,8 @@ export type SessionDelivery = {
   conversationId: string
   artifactId: string
   assetId: string
+  /** Owner-proven virtual origin for display only, never a read locator. */
+  displayPath?: string
   artifactKind: "document" | "code" | "image" | "audio" | "video" | "data" | "archive" | "other"
   title: string
   mime: string

@@ -35,6 +35,7 @@
 }
 
 .viewToggle { flex: 0 0 auto; }
+.viewIcon { display: none; }
 .heading { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 0.15rem; }
 .name { min-width: 0; margin: 0; overflow: hidden; color: var(--foreground); font-size: 0.875rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .meta { min-width: 0; overflow: hidden; color: var(--muted-foreground); font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
@@ -122,6 +123,10 @@
 .tree { margin: 0; padding: 0; list-style: none; }
 .treeItem { display: flex; width: 100%; min-height: 2.35rem; align-items: center; justify-content: space-between; gap: 0.75rem; border-radius: var(--radius-sm); padding: 0.4rem 0.55rem; color: var(--foreground); font-size: 0.8125rem; text-align: left; }
 .treeItem:hover { background: var(--accent); }
+.directorySummary { display: list-item; padding: 0.45rem 0.55rem; border-radius: var(--radius-sm); color: var(--foreground); font-size: 0.8125rem; font-weight: 500; overflow-wrap: anywhere; cursor: pointer; }
+.directorySummary:hover { background: var(--accent); }
+.directorySummary:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.directoryEntries { padding-inline-start: 0.75rem; }
 .treeItemSelected { background: var(--accent); box-shadow: inset 2px 0 var(--primary); color: var(--accent-foreground); }
 .treeItemSelected:hover { background: var(--accent); }
 .treeName { display: inline-flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -190,13 +195,12 @@
   .actions { flex-basis: 100%; justify-content: flex-end; margin-left: 0; }
   .action { min-height: 2.75rem; }
   .closeAction { width: 2.75rem; min-width: 2.75rem; }
-  .treeItem { min-height: 2.75rem; }
+  .treeItem, .directorySummary { min-height: 2.75rem; }
 }
 
 /* The Manus Canvas takeover uses a single 56px document header: title and
- * status stay on the left, compact actions stay on the right. Preview/list
- * is still available in the desktop-width panel, while the takeover avoids a
- * second toolbar row that steals the working surface. */
+ * status stay on the left, compact actions stay on the right. Keep both
+ * views accessible without a second toolbar row. */
 @media (max-width: 960px) {
   .desktopPanel .head {
     height: 3.5rem;
@@ -206,7 +210,14 @@
     padding: 0.5rem 1rem;
   }
 
-  .desktopPanel .viewToggle { display: none; }
+  .desktopPanel .viewItem {
+    width: 2.75rem;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    padding-inline: 0;
+  }
+  .desktopPanel .viewIcon { display: block; }
+  .desktopPanel .viewLabel { display: none; }
   .desktopPanel .heading { min-width: 0; flex: 1 1 auto; }
   .desktopPanel .name { flex: 0 1 auto; font-size: 0.95rem; }
   .desktopPanel .meta { max-width: 100%; font-size: 0.72rem; }

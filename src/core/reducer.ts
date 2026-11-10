@@ -481,6 +481,7 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
           runId: event.run_id,
           createdAt: event.timestamp,
           ...(payload.note !== undefined ? { note: payload.note } : {}),
+          ...(payload.display_path === undefined ? {} : { displayPath: payload.display_path }),
         },
       ]
       break

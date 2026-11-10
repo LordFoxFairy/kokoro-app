@@ -6,7 +6,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Empty, EmptyDescription } from "@/components/ui/empty"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Spinner } from "@/components/ui/spinner"
-import { Download, FileCheck2, Maximize2, Minimize2, Play, SkipBack, X } from "lucide-react"
+import { Download, Eye, FileCheck2, FolderOpen, Maximize2, Minimize2, Play, SkipBack, X } from "lucide-react"
 
 // 右侧 canvas 工作区面板：会话在左、内容在右（三栏第三栏）。
 // 内容体按来源分派：file=可变直读（重开即最新）、delivery=BFF 二元元数据、
@@ -192,11 +192,13 @@ export function CanvasPanel({
           className={styles.viewToggle}
           aria-label={t("canvas.viewAria")}
         >
-          <ToggleGroupItem value="preview" size="sm">
-            {t("canvas.previewTab")}
+          <ToggleGroupItem value="preview" size="sm" className={styles.viewItem} aria-label={t("canvas.previewTab")} title={t("canvas.previewTab")}>
+            <Eye className={styles.viewIcon} aria-hidden="true" />
+            <span className={styles.viewLabel}>{t("canvas.previewTab")}</span>
           </ToggleGroupItem>
-          <ToggleGroupItem value="list" size="sm">
-            {t("canvas.filesTab")}
+          <ToggleGroupItem value="list" size="sm" className={styles.viewItem} aria-label={t("canvas.filesTab")} title={t("canvas.filesTab")}>
+            <FolderOpen className={styles.viewIcon} aria-hidden="true" />
+            <span className={styles.viewLabel}>{t("canvas.filesTab")}</span>
           </ToggleGroupItem>
         </ToggleGroup> : null}
         <span className={styles.actions}>
@@ -344,6 +346,34 @@ export function CanvasPanel({
   )
 }
 
+type DeliveryListEntry =
+  | { kind: "delivery"; delivery: SessionDelivery }
+  | { kind: "directory"; path: string; deliveries: SessionDelivery[] }
+
+function groupDeliveries(deliveries: readonly SessionDelivery[]): DeliveryListEntry[] {
+  const entries: DeliveryListEntry[] = []
+  const directories = new Map<string, SessionDelivery[]>()
+  for (const delivery of deliveries) {
+    const path = delivery.displayPath
+    const separator = path?.lastIndexOf("/") ?? -1
+    // This is only display grouping, not a path lookup or a fallback for old metadata.
+    const directory = path?.startsWith("/") && !path.startsWith("//") && separator > 0 && separator < path.length - 1
+      ? path.slice(1, separator) : null
+    if (directory === null) {
+      entries.push({ kind: "delivery", delivery })
+      continue
+    }
+    const existing = directories.get(directory)
+    if (existing) existing.push(delivery)
+    else {
+      const group = [delivery]
+      directories.set(directory, group)
+      entries.push({ kind: "directory", path: directory, deliveries: group })
+    }
+  }
+  return entries
+}
+
 function WorkspaceList({
   selected,
   files,
@@ -362,6 +392,25 @@ function WorkspaceList({
   onSelectDelivery: (delivery: SessionDelivery) => void
 }) {
   const { t } = useLocale()
+  const isSelected = (delivery: SessionDelivery) => selected.kind === "delivery" &&
+    selected.delivery.conversationId === delivery.conversationId && selected.delivery.artifactId === delivery.artifactId
+  const deliveryRow = (delivery: SessionDelivery) => {
+    const current = isSelected(delivery)
+    return (
+      <li key={JSON.stringify([delivery.conversationId, delivery.artifactId])}>
+        <Button variant="ghost" type="button"
+          className={cn(styles.treeItem, current && styles.treeItemSelected)}
+          data-selected={current ? "true" : undefined} aria-pressed={current}
+          onClick={() => onSelectDelivery(delivery)}>
+          <span className={styles.treeName}>
+            <FileCheck2 className={styles.treeIcon} aria-hidden="true" />
+            {delivery.title}
+          </span>
+          <span className={styles.meta}>{formatBytes(delivery.size)} · {formatDeliveryTime(delivery.createdAt, locale)}</span>
+        </Button>
+      </li>
+    )
+  }
   return (
     <div className={styles.listing}>
       {/* 成果分组：冻结结论置顶——「拿走什么」优先于「过程文件」。 */}
@@ -372,29 +421,14 @@ function WorkspaceList({
         </Empty>
       ) : (
         <ul className={styles.tree}>
-          {deliveries.map((delivery) => {
-            const selectedDelivery = selected.kind === "delivery" && selected.delivery.conversationId === delivery.conversationId && selected.delivery.artifactId === delivery.artifactId
-            return (
-              <li key={JSON.stringify([delivery.conversationId, delivery.artifactId])}>
-                <Button
-                  variant="ghost"
-                  type="button"
-                  className={cn(styles.treeItem, selectedDelivery && styles.treeItemSelected)}
-                  data-selected={selectedDelivery ? "true" : undefined}
-                  aria-pressed={selectedDelivery}
-                  onClick={() => onSelectDelivery(delivery)}
-                >
-                  <span className={styles.treeName}>
-                    <FileCheck2 className={styles.treeIcon} />
-                    {delivery.title}
-                  </span>
-                  <span className={styles.meta}>
-                    {formatBytes(delivery.size)} · {formatDeliveryTime(delivery.createdAt, locale)}
-                  </span>
-                </Button>
-              </li>
-            )
-          })}
+          {groupDeliveries(deliveries).map(entry => entry.kind === "delivery" ? deliveryRow(entry.delivery) : (
+            <li key={`directory:${entry.path}`}>
+              <details open={entry.deliveries.some(isSelected)}>
+                <summary className={styles.directorySummary}><span>{entry.path}</span></summary>
+                <ul className={cn(styles.tree, styles.directoryEntries)}>{entry.deliveries.map(deliveryRow)}</ul>
+              </details>
+            </li>
+          ))}
         </ul>
       )}
       {deliveriesHasMore ? <Button variant="link" asChild><a href="/app/library?tab=artifacts">{t("delivery.viewAll")}</a></Button> : null}

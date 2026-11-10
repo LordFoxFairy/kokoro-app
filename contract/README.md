@@ -1,3 +1,10 @@
+## A‑10 — Public 28.30 private Artifact display paths
+
+The current full BFF snapshot is Public 28.30 at BFF `0c6be20abbf34a2d5b9bdf9db9d582f6cea064b1`,
+SHA-256 `2e459bd39f73686ac6d458011b777f08ea17b79a1467e563cdbb299e044a3cf9`.
+Only the private snapshot and existing AG-UI delivery value carry the optional display path.
+The independent Scheduled executions and anonymous Share inputs remain unchanged.
+
 ## A‑09 — Public 28.29 Artifact favorite and retirement
 
 The generated snapshot is the byte-exact BFF `9a0c45c` Git blob (SHA-256

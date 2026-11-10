@@ -14,7 +14,7 @@ describe("fixed personal knowledge contract consumption", () => {
   it("binds six operations and limits to the immutable producer blob", async () => {
     const bytes = await readFile("src/generated/bff-public-openapi.yaml");
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(
-      "be6473bfa58332dee9f0417a10f6b21c8320efa79802151fe5b13f93753d4504",
+      "2e459bd39f73686ac6d458011b777f08ea17b79a1467e563cdbb299e044a3cf9",
     );
     const spec = YAML.parse(bytes.toString("utf8"));
     for (const [path, method, name] of [

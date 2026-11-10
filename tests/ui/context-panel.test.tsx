@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 import { useMemo, useRef, useState } from "react"
 
@@ -581,6 +581,50 @@ it("unrelated storage and unchanged auth-index events do not revoke the still-cu
   expect(fetcher).toHaveBeenCalledTimes(2)
 })
 
+
+it("compact Canvas lists real delivery directories, retains same-path versions, and selects the exact delivery", async () => {
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 })
+  const older = { ...textDelivery, artifactId: "summary_old", runId: "run_old", title: "summary.md", displayPath: "/reports/weekly/summary.md" }
+  const newer = { ...older, artifactId: "summary_new", runId: "run_new", size: 2048 }
+  const metrics = { ...textDelivery, artifactId: "metrics", title: "metrics.csv", displayPath: "/data/metrics.csv" }
+  const legacy = { ...textDelivery, artifactId: "legacy", title: "Legacy delivery" }
+  const root = { ...textDelivery, artifactId: "root", title: "Root delivery", displayPath: "/root.md" }
+  const onSelectDelivery = vi.fn()
+  const onSelectFile = vi.fn()
+  render(<LocaleProvider><CanvasPanel sessionId="session_1" content={{ kind: "delivery", delivery: older }}
+    files={[]} deliveries={[older, newer, metrics, legacy, root]} deliveriesHasMore fullscreen={false}
+    onSelectFile={onSelectFile} onSelectDelivery={onSelectDelivery} onToggleFullscreen={vi.fn()} onClose={vi.fn()} /></LocaleProvider>)
+
+  const files = screen.getByRole("radio", { name: "Files" })
+  files.focus()
+  fireEvent.click(files)
+  expect(files).toHaveAttribute("aria-checked", "true")
+  expect(screen.getByRole("radio", { name: "Preview" })).toBeInTheDocument()
+
+  const reports = screen.getByText("reports/weekly").closest("details")!
+  const data = screen.getByText("data").closest("details")!
+  expect(reports).toHaveAttribute("open")
+  expect(data).not.toHaveAttribute("open")
+  const summary = within(data).getByText("data").closest("summary")!
+  summary.focus()
+  expect(summary).toHaveFocus()
+  fireEvent.click(summary)
+  expect(data).toHaveAttribute("open")
+  expect(within(data).getByRole("button", { name: /metrics.csv/ })).toBeInTheDocument()
+
+  for (const label of [/Legacy delivery/, /Root delivery/]) expect(screen.getByRole("button", { name: label }).closest("details")).toBeNull()
+  expect(screen.getByRole("link", { name: "View all creations" })).toHaveAttribute("href", "/app/library?tab=artifacts")
+  expect(screen.getByText("No files in the workspace yet.")).toBeVisible()
+
+  const versions = within(reports).getAllByRole("button", { name: /summary.md/ })
+  expect(versions).toHaveLength(2)
+  expect(versions[0]).toHaveAttribute("aria-pressed", "true")
+  expect(versions[1]).toHaveAttribute("aria-pressed", "false")
+  fireEvent.click(versions[1]!)
+  expect(onSelectDelivery).toHaveBeenCalledExactlyOnceWith(newer)
+  expect(onSelectFile).not.toHaveBeenCalled()
+  await waitFor(() => expect(screen.getByRole("heading", { name: older.title })).toHaveFocus())
+})
 
 it("current task progress footer retires with an empty active-plan projection without hiding preview content", () => {
   const callbacks = { onSelectFile: vi.fn(), onSelectDelivery: vi.fn(), onToggleFullscreen: vi.fn(), onClose: vi.fn() }

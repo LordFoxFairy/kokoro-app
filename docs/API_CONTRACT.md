@@ -1,3 +1,10 @@
+## A‑10 — Private delivered Artifact display paths
+
+Public 28.30 exposes optional `display_path` on `PrivateDelivery` and the existing
+`kokoro.delivery.created` CUSTOM value, not on anonymous Share `Delivery`.
+Live frames require this field to equal the attested source path. Snapshot and live
+both omit old unproven paths, and the read key remains the exact Conversation and Artifact.
+
 ## A‑09/A‑10 — Verified Library and Canvas preview
 
 No new endpoint or BFF wire. Personal Preview reuses the selected CLEAN list SHA

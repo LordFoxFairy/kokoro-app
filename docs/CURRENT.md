@@ -1,3 +1,12 @@
+## 2026-11-10 A‑10 delivered Artifact directories
+
+The current Product snapshot is byte-exact Public 28.30 from BFF `0c6be20`.
+The Canvas Files view groups attested virtual paths, keeps versions with the same
+path separate, and leaves old unproven deliveries flat. The same Files/Preview
+control works at narrow widths. The displayed path grants no content access;
+reads still use the existing exact Artifact identity. Undelivered workspace files
+remain a separate product gap. Root records authenticated browser evidence.
+
 ## 2026-11-10 A‑09 upload cancellation and A‑10 Canvas reopening
 
 Cancel clears an unsubmitted personal selection without POST. After dispatch it

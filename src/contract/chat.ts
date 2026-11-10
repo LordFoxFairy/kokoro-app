@@ -4,7 +4,7 @@ import { selectedCustomApiProfilesWireSchema, selectedResourceRefsWireSchema } f
 import { z } from "zod"
 import { eventCursorSchema, runProcessActivitySchema, runTodoSchema } from "./agui-events"
 import { resumeDecisionSchema, interactionStateSchema } from "./control"
-import { deliverySchema, workspaceFileSchema } from "./artifacts"
+import { deliverySchema, privateDeliverySchema, workspaceFileSchema } from "./artifacts"
 import { agentFailureProfileSchema } from "./agent-failure"
 import { BFF_PRIVATE_CANCELLED_STATUS } from "@/generated/bff-agent-failure"
 
@@ -197,7 +197,16 @@ export const selectedMcpConnectionIdsSchema = z
 
 export const selectedCustomApiProfilesSchema = selectedCustomApiProfilesWireSchema
 
-export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({ messages: z.array(chatMessageReadSchema).optional(), execution_process: runExecutionProcessSchema.nullable(), composer_selection: z.object({ source_message_id: z.string().min(1), selected_mcp_connection_ids: selectedMcpConnectionIdsSchema, selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional() }).strict().optional() }).strict()
+export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({
+  messages: z.array(chatMessageReadSchema).optional(),
+  deliveries: z.array(privateDeliverySchema),
+  execution_process: runExecutionProcessSchema.nullable(),
+  composer_selection: z.object({
+    source_message_id: z.string().min(1),
+    selected_mcp_connection_ids: selectedMcpConnectionIdsSchema,
+    selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional(),
+  }).strict().optional(),
+}).strict()
 export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>
 
 export function parseSessionSnapshot(input: unknown): SessionSnapshot {
