@@ -193,6 +193,37 @@ it("live Project cold start never advertises unknown capabilities and only resol
   }
 })
 
+it("live Project reads instruction history only when the instruction capability is enabled", async () => {
+  const alpha = projectReadFixtures[0]!
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "project-reader")
+  window.history.replaceState({}, "", `/app/project/${alpha.id}`)
+  pathname.value = window.location.pathname
+  const readInstructions = vi.fn(async () => Response.json({ data: { items: [] }, meta: { request_id: "req_project_instructions" } }))
+  stubBusinessFetch(async input => {
+    const path = new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname
+    if (path === "/api/hub/projects") return projectReadEnvelope()
+    if (path === `/api/hub/projects/${alpha.id}/instruction-revisions`) return readInstructions()
+    return Response.json({}, { status: 503 })
+  })
+  const frame = (flags?: React.ComponentProps<typeof AppFrame>["featureFlags"]) => (
+    <ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" projectWorkspace projectRef={alpha.id}
+      projectReadBoundary={{ admitted: true, subject: "project-reader", generation: 1 }} emptyState={KokoroProjectWorkspace}
+      {...(flags === undefined ? {} : { featureFlags: flags })} /></LocaleProvider></ThemeProvider>
+  )
+  const view = render(frame())
+  try {
+    await screen.findByRole("heading", { name: alpha.name })
+    expect(readInstructions).not.toHaveBeenCalled()
+    view.rerender(frame([{ key: "workspace.instructions", enabled: false }]))
+    expect(readInstructions).not.toHaveBeenCalled()
+    view.rerender(frame([{ key: "workspace.instructions", enabled: true }]))
+    await waitFor(() => expect(readInstructions).toHaveBeenCalledTimes(1))
+  } finally {
+    view.unmount()
+    window.history.replaceState({}, "", "/app")
+  }
+})
+
 it.each([
   { label: "direct chat", standaloneSurface: false, hideWorkspaceHeader: false, composer: true, header: true },
   { label: "standalone catalog", standaloneSurface: true, hideWorkspaceHeader: true, composer: false, header: false },

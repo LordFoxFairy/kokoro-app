@@ -489,11 +489,11 @@ function AppFrameRuntime({
         mcpTouched: current.mcpTouched, mcpSeededVersion: current.mcpSeededVersion, ...choice }
     })
   }
-  const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
+  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(featureFlags, workspaceCapabilities, { preview })
+  const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace && projectedWorkspaceCapabilities.instructions === true)
   const projectPins = useProjectPins({ preview, boundary: projectReadBoundary,
     visibleIds: projectReads.list.status === "ready" ? projectReads.list.data.map(item=>item.id) : null,
     onUnavailable: projectReads.retireProject })
-  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(featureFlags, workspaceCapabilities, { preview })
   const recommendations = useProjectMcpRecommendations({
     projectId: projectReads.current.status === "ready" && projectReads.current.data.id === projectRef ? projectReads.current.data.id : null,
     boundary: projectReadBoundary,
