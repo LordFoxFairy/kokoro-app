@@ -230,6 +230,7 @@ describe("Web governance boundary", () => {
       "pnpm contract:check:bff-account-sessions",
       "pnpm contract:check:bff-team",
       "pnpm contract:check:bff-agent-failure",
+      "pnpm contract:check:bff-agent-connections",
       "pnpm contract:check:bff-connector-command-errors",
       "pnpm contract:check:bff-public-skill-list",
       "pnpm contract:check:bff-mcp-project-publication",

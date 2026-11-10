@@ -1,3 +1,11 @@
+## A‑13 — Telegram connection in Agents
+
+The existing same-origin setup path now relays the canonical Public 28.32
+GET/POST envelope. Opening reads only. An explicit versioned command starts,
+cancels, confirms, or disconnects; an unknown result or 412 is followed by GET,
+never by automatic write replay. Telegram callbacks and credentials belong to
+BFF. LINE and Slack do not produce a fake setup ticket.
+
 ## A‑06 — Project website references
 
 The existing same-origin Project adapter reads or conditionally replaces the

@@ -231,28 +231,13 @@
 .qrCode > svg { display: block; width: 8.75rem; height: 8.75rem; }
 .qrLoadingState { width: 8.75rem; height: 8.75rem; }
 .qrLoading { display: block; width: 100%; height: 100%; border-radius: 0.375rem; background: var(--secondary); }
-.qrError {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border: 0;
-  border-radius: 0.375rem;
-  text-align: center;
-}
-.qrError > svg { width: 1rem; height: 1rem; flex: 0 0 auto; }
-.qrError :global([data-slot="alert-description"]) { display: block; font-size: 0.75rem; line-height: 1rem; }
-.qrLogo { position: absolute; inset: 50% auto auto 50%; display: grid; width: 1.75rem; height: 1.75rem; place-items: center; transform: translate(-50%, -50%); border: 0.2rem solid var(--card); border-radius: 0.45rem; background: var(--foreground); color: var(--primary-foreground); }
-.qrLogo svg { width: 0.9rem; height: 0.9rem; }
-.qrLogo span { font-size: 0.4rem; font-weight: 800; }
 .dialogCopy { width: 100%; margin-top: 1.5rem; text-align: center; }
 .dialogTitle { margin: 0; font-size: 1.25rem; font-weight: 600; line-height: 1.625rem; }
 .dialogCopy p { margin: 0.25rem 0 0; color: #737373; font-size: 0.875rem; line-height: 1.25rem; }
-.continueButton { width: 22rem; height: 2.5rem; margin-top: 2rem; border-radius: 0.625rem; }
+.setupNotice { max-width: 100%; margin: 0.625rem 0 0; text-align: center; }
+.setupCommands { display: grid; width: min(22rem, 100%); gap: 0.5rem; margin-top: 0.75rem; }
+.setupCommands > .setupCommands { width: 100%; margin: 0; }
+.proofLabel { display: grid; gap: 0.375rem; font-size: 0.875rem; }
 
 .connectionStatus {
   display: inline-flex;
@@ -305,7 +290,6 @@
   .platformTabs { padding-bottom: 1.5rem; flex: 0 0 auto; }
   .platformPanel { min-height: 0; }
   .qrCode { flex: 0 0 10rem; }
-  .continueButton { width: min(22rem, calc(100% - 2rem)); min-height: 2.5rem; flex-shrink: 0; }
 }
 
 @keyframes word-in {

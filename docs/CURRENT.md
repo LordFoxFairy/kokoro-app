@@ -1,10 +1,14 @@
+## 2026-11-10 · Telegram connection lifecycle (Public 28.32)
+
+The existing Agents dialog consumes the exact BFF owner. Open reads only;
+explicit start shows the owner link, a private code confirms, and the owner
+state remains after reload until explicit disconnect. Unknown writes are only
+read back. Synthetic Agent connection tickets have been removed. The native
+browser journey and real provider acceptance are tracked in Root.
+
 ## 2026-11-10 A‑06 Project website references
 
-## 2026-11-10 · Agent setup local lifecycle
-
-The existing provider dialog aborts its same-origin request when closed, switched, retried or unmounted and ignores late responses. Only active unfinished tickets keep a QR and continue link; a local deadline removes them without a network request. A connected status is not expired by a setup ticket, and disconnected remains distinct. The client accepts the existing owner UTC-offset datetime format. Focused component, client and adapter coverage passed. This does not establish a live external provider, callback, binding or disconnect.
-
-The current Product snapshot is byte-exact Public 28.31 from BFF `7f10938`.
+This Project slice was delivered on byte-exact Public 28.31 from BFF `7f10938`.
 Project website references are an owned list with a versioned save. The existing
 Project dialog searches the list and stages additions or removals; Cancel never
 writes. There is no synthetic site catalog, external fetch, or publishing action.

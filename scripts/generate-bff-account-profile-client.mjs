@@ -20,7 +20,7 @@ const sourcePath = join(root, "src/generated/bff-public-openapi.yaml");
 const outputPath = join(root, "src/generated/bff-account-profile");
 const configPath = join(root, "openapi-ts.bff-account-profile.config.ts");
 const expectedDigest =
-  "9fea8041e3eac479e5ea008e120729fb37637636bb6bf3ad8b94ac161ac8a88c";
+  "e12a8078f5ecaa741c255a3bcec032d398d35309d845d3cf736dc764a0287d33";
 const operations = [["GET", "/v1/account/profile"], ["PATCH", "/v1/account/profile"]];
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");

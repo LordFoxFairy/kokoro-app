@@ -6,30 +6,35 @@ import type { ComponentProps } from "react"
 
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroAgentsSurface } from "@/features/app/kokoro-agents-surface"
-import type { AgentClient, AgentConnectionSetup, AgentPlatform } from "@/agents/client"
+import { AgentClientError, type AgentClient, type AgentConnectionSetup } from "@/agents/client"
+
+const subject = "telegram-test-actor"
+const boundary = { admitted: true, subject, tenant: "fixture", generation: 1 }
+const setupId = "a".repeat(32)
+const expires = "2099-08-30T06:30:00.000Z"
+const link = `https://t.me/KokoroFixtureBot?start=${setupId}`
+const telegram = { platform: "telegram" } as const
+const disconnected = { ...telegram, status: "disconnected", state_version: "1" } as const
+const awaiting = { ...telegram, status: "awaiting_telegram", state_version: "2", setup_id: setupId, expires_at: expires, continue_url: link } as const
+const proofRequested = { ...telegram, status: "awaiting_confirmation", state_version: "3", setup_id: setupId, expires_at: expires } as const
+const connected = { ...telegram, status: "connected", state_version: "4", connected_at: "2026-08-30T06:30:00.000Z" } as const
 
 beforeEach(() => {
   window.localStorage.setItem("kokoro.locale", "zh")
+  window.localStorage.setItem("kokoro.web.auth-index-subject", subject)
 })
-
-afterEach(cleanup)
-
-function setup(platform: AgentPlatform, overrides: Partial<AgentConnectionSetup> = {}): AgentConnectionSetup {
-  return {
-    platform,
-    status: "disconnected",
-    qr_value: `https://agents.fixture.test/connect?platform=${platform}&ticket=retry`,
-    continue_url: `https://agents.fixture.test/continue?platform=${platform}&ticket=retry`,
-    expires_at: "2099-08-30T06:30:00.000Z",
-    ...overrides,
-  }
-}
+afterEach(() => { cleanup(); window.localStorage.removeItem("kokoro.web.auth-index-subject") })
 
 function renderAgents(options: { client?: AgentClient; preview?: boolean } = {}) {
-  const props: ComponentProps<typeof KokoroAgentsSurface> = {}
+  const props: ComponentProps<typeof KokoroAgentsSurface> = { projectReadBoundary: boundary }
   if (options.client !== undefined) props.client = options.client
   if (options.preview !== undefined) props.preview = options.preview
   return render(<LocaleProvider><KokoroAgentsSurface {...props} /></LocaleProvider>)
+}
+
+function openSetup() {
+  fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
+  return within(screen.getByRole("dialog"))
 }
 
 it("Agent 首页呈现 Hero、四项能力和即将上线平台", () => {
@@ -81,35 +86,18 @@ it("从能力卡打开设置后关闭时把焦点交还给实际触发卡", asyn
   await waitFor(() => expect(identityCard).toHaveFocus())
 })
 
-it("开始体验打开连接弹窗，并可切换 Telegram、LINE 与 Slack", async () => {
-  renderAgents({ preview: true })
-  const opener = screen.getByRole("button", { name: "开始体验" })
-  expect(opener).toHaveAttribute("aria-expanded", "false")
-  fireEvent.click(opener)
-
-  const dialog = screen.getByRole("dialog")
-  expect(opener).toHaveAttribute("aria-expanded", "true")
-  expect(within(dialog).getByRole("heading", { name: "在 Telegram 中继续设置" })).toBeInTheDocument()
-  await waitFor(() => expect(within(dialog).getByRole("tab", { name: /Telegram/ })).toHaveFocus())
-  const telegramQr = await within(dialog).findByRole("img", { name: "Telegram 连接二维码" })
-  expect(telegramQr).toBeInTheDocument()
-  await waitFor(() => expect(within(dialog).getByRole("img", { name: "Telegram 连接二维码" }).tagName).toBe("svg"))
-  expect(within(dialog).getByRole("img", { name: "Telegram 连接二维码" })).toHaveAttribute("width", "140")
-
-  const slackTab = within(dialog).getByRole("tab", { name: /Slack/ })
-  fireEvent.focus(slackTab)
-  await waitFor(() => expect(within(dialog).getByRole("heading", { name: "在 Slack 中继续设置" })).toBeInTheDocument())
-  expect(within(dialog).getByText("在 Slack 中批准此连接。")).toBeInTheDocument()
-  await waitFor(() => expect(within(dialog).getByRole("link", { name: /在 Slack 继续/ })).toHaveAttribute("href", expect.stringContaining("platform=slack")))
-  expect(within(dialog).getByRole("link", { name: /在 Slack 继续/ })).toHaveAttribute("target", "_blank")
-
-  const lineTab = within(dialog).getByRole("tab", { name: /LINE/ })
-  fireEvent.focus(lineTab)
-  await waitFor(() => expect(within(dialog).getByRole("heading", { name: "在 LINE 中继续设置" })).toBeInTheDocument())
-  await waitFor(() => expect(within(dialog).getByRole("img", { name: "LINE 连接二维码" })).toBeInTheDocument())
-
-  fireEvent.click(within(dialog).getByRole("button", { name: "关闭 Agent 设置" }))
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+it("预览和未接入的平台不展示合成链接或发请求", async () => {
+  const client = { connectionSetup: vi.fn(), changeConnection: vi.fn() }
+  renderAgents({ preview: true, client })
+  const dialog = openSetup()
+  expect(dialog.getByRole("status")).toHaveTextContent("Telegram 连接暂不可用")
+  for (const label of ["LINE", "Slack"]) {
+    fireEvent.focus(dialog.getByRole("tab", { name: label }))
+    await waitFor(() => expect(dialog.getByRole("status")).toHaveTextContent(`${label} 连接暂不可用`))
+    expect(dialog.queryByRole("link")).not.toBeInTheDocument()
+  }
+  expect(client.connectionSetup).not.toHaveBeenCalled()
+  expect(client.changeConnection).not.toHaveBeenCalled()
 })
 
 it("平台 Tab 保持 Radix 键盘焦点顺序并随箭头键切换内容", async () => {
@@ -135,122 +123,78 @@ it("平台 Tab 保持 Radix 键盘焦点顺序并随箭头键切换内容", asyn
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
 })
 
-it("loading 保留稳定的二维码槽和禁用的继续入口", async () => {
-  let resolveSetup!: (value: AgentConnectionSetup) => void
-  const client: AgentClient = {
-    connectionSetup: vi.fn(() => new Promise<AgentConnectionSetup>((resolve) => { resolveSetup = resolve })),
-  }
+it("Telegram opens read-only; a setup starts only from its explicit owner-versioned command", async () => {
+  const connectionSetup = vi.fn<AgentClient["connectionSetup"]>()
+    .mockResolvedValueOnce(disconnected).mockResolvedValueOnce(proofRequested).mockResolvedValueOnce(connected)
+  const changeConnection = vi.fn<AgentClient["changeConnection"]>()
+    .mockResolvedValueOnce(awaiting).mockResolvedValueOnce(connected).mockResolvedValueOnce({ ...disconnected, state_version: "5" })
+  const client = { connectionSetup, changeConnection }
+  const first = renderAgents({ client })
+  let dialog = openSetup()
+  expect(dialog.getByRole("status", { name: "正在检查 Telegram 连接…" })).toBeInTheDocument()
+  const start = await dialog.findByRole("button", { name: "开始连接 Telegram" })
+  expect(connectionSetup).toHaveBeenCalledTimes(1)
+  expect(changeConnection).not.toHaveBeenCalled()
+  fireEvent.click(start)
+  expect(changeConnection).toHaveBeenNthCalledWith(1, "telegram", { action: "start", expected_state_version: "1" }, expect.any(AbortSignal))
+  expect(await dialog.findByRole("link", { name: "在 Telegram 继续" })).toHaveAttribute("href", link)
+  expect(dialog.getByRole("img", { name: "Telegram 连接二维码" })).toHaveAttribute("width", "140")
+  expect(dialog.queryByLabelText("Telegram 确认码")).not.toBeInTheDocument()
+
+  fireEvent.click(dialog.getByRole("button", { name: "查看 Telegram 状态" }))
+  const proof = "p".repeat(22)
+  fireEvent.change(await dialog.findByLabelText("Telegram 确认码"), { target: { value: proof } })
+  fireEvent.click(dialog.getByRole("button", { name: "确认连接" }))
+  expect(changeConnection).toHaveBeenNthCalledWith(2, "telegram", { action: "confirm", expected_state_version: "3", setup_id: setupId, proof }, expect.any(AbortSignal))
+  expect(await dialog.findByRole("status", { name: "已连接" })).toBeInTheDocument()
+  expect(dialog.queryByLabelText("Telegram 确认码")).not.toBeInTheDocument()
+  expect(dialog.queryByRole("link")).not.toBeInTheDocument()
+
+  first.unmount()
   renderAgents({ client })
-  fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
-
-  const dialog = screen.getByRole("dialog")
-  expect(dialog).toHaveAttribute("data-dialog-state", "loading")
-  expect(within(dialog).getByRole("status", { name: "Telegram 连接二维码" })).toBeInTheDocument()
-  expect(within(dialog).getByRole("status", { name: "Telegram 连接二维码" }).parentElement).toHaveAttribute("aria-busy", "true")
-  expect(within(dialog).getByRole("button", { name: "在 Telegram 继续" })).toBeDisabled()
-
-  resolveSetup(setup("telegram"))
-  await waitFor(() => expect(within(dialog).getByRole("link", { name: /在 Telegram 继续/ })).toBeInTheDocument())
-  expect(dialog).toHaveAttribute("data-dialog-state", "ready")
-
-  fireEvent.click(within(dialog).getByRole("button", { name: "关闭 Agent 设置" }))
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+  dialog = openSetup()
+  await dialog.findByRole("status", { name: "已连接" })
+  expect(connectionSetup).toHaveBeenCalledTimes(3)
+  fireEvent.click(dialog.getByRole("button", { name: "断开 Telegram" }))
+  expect(changeConnection).toHaveBeenNthCalledWith(3, "telegram", { action: "disconnect", expected_state_version: "4" }, expect.any(AbortSignal))
+  expect(await dialog.findByRole("status", { name: "未连接" })).toBeInTheDocument()
 })
 
-it("setup 失败时显示可重试错误且不渲染假链接", async () => {
-  const connectionSetup = vi.fn()
-    .mockRejectedValueOnce(new Error("setup unavailable"))
-    .mockResolvedValueOnce(setup("telegram"))
-  renderAgents({ client: { connectionSetup } })
-  fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
-
-  const dialog = screen.getByRole("dialog")
-  expect(await within(dialog).findByRole("alert")).toHaveTextContent("实时配置暂时不可用")
-  expect(dialog).toHaveAttribute("data-dialog-state", "error")
-  expect(within(dialog).queryByRole("link", { name: /在 Telegram 继续/ })).toBeNull()
-  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
-  await waitFor(() => expect(within(dialog).getByRole("link", { name: /在 Telegram 继续/ })).toBeInTheDocument())
-  expect(connectionSetup).toHaveBeenCalledTimes(2)
-
-  fireEvent.click(within(dialog).getByRole("button", { name: "关闭 Agent 设置" }))
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+it("过期修订只重新 GET，已切走的 setup 回执不覆盖面板", async () => {
+  let finish!: (value: AgentConnectionSetup) => void
+  const connectionSetup = vi.fn<AgentClient["connectionSetup"]>().mockResolvedValueOnce(disconnected)
+    .mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const changeConnection = vi.fn<AgentClient["changeConnection"]>().mockRejectedValueOnce(new AgentClientError(412, "agent_connection_precondition_failed"))
+  renderAgents({ client: { connectionSetup, changeConnection } })
+  const dialog = openSetup()
+  fireEvent.click(await dialog.findByRole("button", { name: "开始连接 Telegram" }))
+  await waitFor(() => expect(connectionSetup).toHaveBeenCalledTimes(2))
+  const readback = connectionSetup.mock.calls[1]?.[1]
+  fireEvent.focus(dialog.getByRole("tab", { name: "LINE" }))
+  expect(readback?.aborted).toBe(true)
+  await act(async () => { finish(awaiting) })
+  expect(dialog.getByRole("status")).toHaveTextContent("LINE 连接暂不可用")
+  expect(dialog.queryByRole("link")).not.toBeInTheDocument()
+  expect(changeConnection).toHaveBeenCalledTimes(1)
 })
 
-it.each([
-  ["connected", setup("telegram", { status: "connected", expires_at: "2020-08-30T06:30:00.000Z" })],
-  ["pending", setup("telegram", { status: "pending" })],
-  ["disconnected", setup("telegram")],
-  ["expired", setup("telegram", { status: "expired" })],
-] as const)("依据 status 和 expires_at 渲染 %s 连接状态", async (expectedStatus, response) => {
-  const client: AgentClient = { connectionSetup: vi.fn().mockResolvedValue(response) }
-  renderAgents({ client })
-  fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
-
-  const dialog = screen.getByRole("dialog")
-  const status = await within(dialog).findByTestId("agent-connection-status")
-  expect(status).toHaveAttribute("data-status", expectedStatus)
-  expect(status).toHaveAccessibleName({ connected: "已连接", expired: "邀请已过期。", pending: "待接受的邀请", disconnected: "未连接" }[expectedStatus])
-  if (expectedStatus === "expired" || expectedStatus === "connected") {
-    expect(within(dialog).queryByRole("img", { name: "Telegram 连接二维码" })).not.toBeInTheDocument()
-    expect(within(dialog).queryByRole("link", { name: "在 Telegram 继续" })).not.toBeInTheDocument()
-  }
-  if (expectedStatus === "expired") expect(within(dialog).getByRole("button", { name: "重试" })).toBeInTheDocument()
-
-  fireEvent.click(within(dialog).getByRole("button", { name: "关闭 Agent 设置" }))
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
-})
-
-it("未完成 setup 到期即撤下票据，零自动请求，显式重试替换请求代次", async () => {
+it("打开的未完成票据到期即撤下，等待显式回读，不自动发请求", async () => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date("2026-08-30T06:30:00.000Z"))
-  const connectionSetup = vi.fn<AgentClient["connectionSetup"]>()
-    .mockResolvedValueOnce(setup("telegram", { status: "pending", expires_at: "2026-08-30T06:30:01.000Z" }))
-    .mockResolvedValueOnce(setup("telegram", { status: "pending" }))
+  const connectionSetup = vi.fn<AgentClient["connectionSetup"]>().mockResolvedValue({ ...awaiting, expires_at: "2026-08-30T06:30:01.000Z" })
+  const changeConnection = vi.fn<AgentClient["changeConnection"]>()
   try {
-    renderAgents({ client: { connectionSetup } })
+    renderAgents({ client: { connectionSetup, changeConnection } })
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "开始体验" })) })
     const dialog = within(screen.getByRole("dialog"))
     expect(dialog.getByRole("img", { name: "Telegram 连接二维码" })).toBeInTheDocument()
-    expect(dialog.getByRole("link", { name: "在 Telegram 继续" })).toBeInTheDocument()
     await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
-    expect(dialog.getByTestId("agent-connection-status")).toHaveAttribute("data-status", "expired")
+    expect(dialog.getByRole("status", { name: "连接设置已过期。" })).toBeInTheDocument()
     expect(dialog.queryByRole("img", { name: "Telegram 连接二维码" })).not.toBeInTheDocument()
-    expect(dialog.queryByRole("link", { name: "在 Telegram 继续" })).not.toBeInTheDocument()
-    expect(dialog.queryByRole("button", { name: "在 Telegram 继续" })).not.toBeInTheDocument()
+    expect(dialog.queryByRole("link")).not.toBeInTheDocument()
     expect(connectionSetup).toHaveBeenCalledTimes(1)
-    await act(async () => { fireEvent.click(dialog.getByRole("button", { name: "重试" })) })
-    expect(connectionSetup).toHaveBeenCalledTimes(2)
-    expect(connectionSetup.mock.calls[0]?.[1]?.aborted).toBe(true)
-    expect(dialog.getByTestId("agent-connection-status")).toHaveAttribute("data-status", "pending")
-    expect(dialog.getByRole("link", { name: "在 Telegram 继续" })).toBeInTheDocument()
+    expect(changeConnection).not.toHaveBeenCalled()
   } finally { cleanup(); vi.useRealTimers() }
-})
-
-it("换平台、关闭和卸载均取消 setup，非合作迟到响应不会覆盖当前面板", async () => {
-  const attempts: { platform: AgentPlatform; signal: AbortSignal | undefined; resolve: (value: AgentConnectionSetup) => void }[] = []
-  const connectionSetup = vi.fn<AgentClient["connectionSetup"]>().mockImplementation((platform, signal) =>
-    new Promise(resolve => { attempts.push({ platform, signal, resolve }) }))
-  const view = renderAgents({ client: { connectionSetup } })
-  fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
-  const dialog = within(screen.getByRole("dialog"))
-  const telegram = attempts[0]!
-  fireEvent.focus(dialog.getByRole("tab", { name: "LINE" }))
-  const line = attempts[1]!
-  expect(telegram.signal?.aborted).toBe(true)
-  expect(line.platform).toBe("line")
-  await act(async () => { telegram.resolve(setup("telegram")) })
-  expect(dialog.getByRole("heading", { name: "在 LINE 中继续设置" })).toBeInTheDocument()
-  expect(dialog.queryByRole("link")).not.toBeInTheDocument()
-
-  fireEvent.click(dialog.getByRole("button", { name: "关闭 Agent 设置" }))
-  expect(line.signal?.aborted).toBe(true)
-  await act(async () => { line.resolve(setup("line")) })
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
-
-  fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
-  const reopened = attempts[2]!
-  view.unmount()
-  expect(reopened.signal?.aborted).toBe(true)
 })
 
 it("桌面能力卡布局由 agents-surface 容器宽度决定，而不是 pointer 条件", () => {

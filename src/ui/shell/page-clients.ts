@@ -24,7 +24,6 @@ import { createPricingClient, type PricingClient } from "@/billing/pricing"
 import { createHubClient, type HubClient } from "@/hub/client"
 import { createTeamClient, type TeamClient } from "@/team/client"
 import { createAgentClient, type AgentClient } from "@/agents/client"
-import { createPreviewAgentClient } from "@/agents/preview-client"
 import {
   createPreviewBillingClient,
   createPreviewHubClient,
@@ -165,12 +164,7 @@ export function browserTeamClient(options: { preview?: boolean } = {}): TeamClie
 }
 
 let pageAgentClient: AgentClient | null = null
-let pagePreviewAgentClient: AgentClient | null = null
-export function browserAgentClient(options: { preview?: boolean } = {}): AgentClient {
-  if (options.preview === true) {
-    if (!pagePreviewAgentClient) pagePreviewAgentClient = createPreviewAgentClient()
-    return pagePreviewAgentClient
-  }
+export function browserAgentClient(): AgentClient {
   if (!pageAgentClient) pageAgentClient = createAgentClient()
   return pageAgentClient
 }

@@ -1,3 +1,10 @@
+## A‑13 — Public 28.32 external connection lifecycle
+
+The current snapshot is the exact BFF `3000256cf6c8d2b481b93253631f623f4d38a134`
+Git blob, SHA-256 `e12a8078f5ecaa741c255a3bcec032d398d35309d845d3cf736dc764a0287d33`.
+The Agents generator projects only the browser setup GET/POST schemas; the provider
+webhook remains BFF-only. The independent Scheduled executions pin is unchanged.
+
 ## A‑06 — Public 28.31 Project website references
 
 The current complete snapshot is the exact BFF `7f109384651741ee9df2e4931ef7a566053cea81`

@@ -7,11 +7,12 @@ import YAML from "yaml"
 import { BFF_TOOL_DISPLAY_CODES, BFF_TOOL_DISPLAY_PROVENANCE, selectedResourceRefsWireSchema } from "@/generated/bff-tool-display"
 import { restorePublic27ToolDisplayContract, restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 import { restorePublic282FileToolDisplayContract } from "./bff-file-tool-display-parent"
-import { restorePublic2824FinalAnswerResourceContract, restorePublic2825LibraryFileDeletionContract, restorePublic2826LibraryFileSearchContract, restorePublic2827LibraryArtifactSourceContract, restorePublic2828LibraryArtifactCommandsContract, restorePublic2829DeliveryDisplayContract, restorePublic2830ProjectWebsitesContract } from "./bff-message-resource-parent"
+import { restorePublic2824FinalAnswerResourceContract, restorePublic2825LibraryFileDeletionContract, restorePublic2826LibraryFileSearchContract, restorePublic2827LibraryArtifactSourceContract, restorePublic2828LibraryArtifactCommandsContract, restorePublic2829DeliveryDisplayContract, restorePublic2830ProjectWebsitesContract, restorePublic2831AgentConnectionContract } from "./bff-message-resource-parent"
 
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex")
 it("pins the whole Public28.24 parent and accepts only an opaque final-answer resource intent", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
+  expect(hash(restorePublic2831AgentConnectionContract(raw))).toBe("9fea8041e3eac479e5ea008e120729fb37637636bb6bf3ad8b94ac161ac8a88c")
   expect(hash(restorePublic2830ProjectWebsitesContract(raw))).toBe("2e459bd39f73686ac6d458011b777f08ea17b79a1467e563cdbb299e044a3cf9")
   expect(hash(restorePublic2829DeliveryDisplayContract(raw))).toBe("be6473bfa58332dee9f0417a10f6b21c8320efa79802151fe5b13f93753d4504")
   expect(hash(restorePublic2828LibraryArtifactCommandsContract(raw))).toBe("495afa65989a1308194910b0b5ece62b4f9db0c84f8dc34e7e0f3b00f7c5294f")
@@ -27,10 +28,10 @@ it("pins the whole Public28.24 parent and accepts only an opaque final-answer re
 })
 it("consumes the complete formal BFF28 once and restores the original whole Public27 and Public26", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
-  expect(hash(raw)).toBe("9fea8041e3eac479e5ea008e120729fb37637636bb6bf3ad8b94ac161ac8a88c")
+  expect(hash(raw)).toBe("e12a8078f5ecaa741c255a3bcec032d398d35309d845d3cf736dc764a0287d33")
   const spec = YAML.parse(raw)
-  expect(spec.info.version).toBe("28.31.0")
-  expect(BFF_TOOL_DISPLAY_PROVENANCE).toEqual({ ownerCommit: "7f109384651741ee9df2e4931ef7a566053cea81", sourceSha256: hash(raw), openapiVersion: "28.31.0" })
+  expect(spec.info.version).toBe("28.32.0")
+  expect(BFF_TOOL_DISPLAY_PROVENANCE).toEqual({ ownerCommit: "3000256cf6c8d2b481b93253631f623f4d38a134", sourceSha256: hash(raw), openapiVersion: "28.32.0" })
   expect(BFF_TOOL_DISPLAY_CODES).toEqual(["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"])
   expect(spec.components.schemas.RunToolActivity.properties.display_code.enum).toEqual(BFF_TOOL_DISPLAY_CODES)
   expect(hash(restorePublic282FileToolDisplayContract(raw))).toBe("e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53")
