@@ -4,7 +4,7 @@ import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { DEFAULT_BRAND } from "@/config/brand"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
-import { DirectWelcomeContent } from "./kokoro-welcome-content"
+import { DirectWelcomeContent, readWebsiteDraftOption } from "./kokoro-welcome-content"
 import coreStyles from "./kokoro-welcome-direct-core.module.css"
 import responsiveStyles from "./kokoro-welcome-direct-responsive.module.css"
 
@@ -42,7 +42,6 @@ export function KokoroDirectChatWelcome({
   onCreateProject,
   preview = false,
 }: DirectChatWelcomeProps = {}) {
-  const [selectedCreationType, setSelectedCreationType] = useState<string | null>(null)
   const [creationTypesScrolled, setCreationTypesScrolled] = useState(false)
   const [referenceStatus, setReferenceStatus] = useState<string | null>(null)
   const promptSelectedRef = useRef(false)
@@ -51,6 +50,8 @@ export function KokoroDirectChatWelcome({
   const surfaceRef = useRef<HTMLElement>(null)
   const hasDraft = draft.trim().length > 0
   const websiteCreation = creationIntent === "website"
+  const websiteOption = websiteCreation ? readWebsiteDraftOption(draft) : undefined
+  const selectedCreationType = websiteOption?.option
   const appCreation = creationIntent === "app"
   // The project-context rail belongs to the explicit website creation
   // workflow, including its empty placeholder state. Manus keeps this rail
@@ -113,7 +114,7 @@ export function KokoroDirectChatWelcome({
       data-creation-type-selected={selectedCreationType ? "true" : undefined}
       aria-labelledby="kokoro-direct-chat-heading"
     >
-      <DirectWelcomeContent brandName={brandName} composer={composer} draft={draft} selectedCreationType={selectedCreationType} setSelectedCreationType={setSelectedCreationType} creationTypesScrolled={creationTypesScrolled} setCreationTypesScrolled={setCreationTypesScrolled} referenceStatus={referenceStatus} setReferenceStatus={setReferenceStatus} {...(onPrompt === undefined ? {} : { onPrompt })} {...(onCreationIntentSelect === undefined ? {} : { onCreationIntentSelect })} {...(onOpenSettings === undefined ? {} : { onOpenSettings })} {...(onCreateProject !== undefined ? { onCreateProject } : preview && onOpenProject ? { onCreateProject: (input?: Readonly<{ name?: string; draft?: string }>) => onOpenProject(createPreviewProjectRef(), input?.draft) } : {})} preview={preview} websiteCreation={websiteCreation} appCreation={appCreation} showDraftProjectContext={showDraftProjectContext} showDirectPrompts={showDirectPrompts} showStarterCards={showStarterCards} creativeIntent={creativeIntent} promptSelectedRef={promptSelectedRef} creationTypesRef={creationTypesRef} referenceInputRef={referenceInputRef} />
+      <DirectWelcomeContent brandName={brandName} composer={composer} draft={draft} websiteOption={websiteOption} creationTypesScrolled={creationTypesScrolled} setCreationTypesScrolled={setCreationTypesScrolled} referenceStatus={referenceStatus} setReferenceStatus={setReferenceStatus} {...(onPrompt === undefined ? {} : { onPrompt })} {...(onCreationIntentSelect === undefined ? {} : { onCreationIntentSelect })} {...(onOpenSettings === undefined ? {} : { onOpenSettings })} {...(onCreateProject !== undefined ? { onCreateProject } : preview && onOpenProject ? { onCreateProject: (input?: Readonly<{ name?: string; draft?: string }>) => onOpenProject(createPreviewProjectRef(), input?.draft) } : {})} preview={preview} websiteCreation={websiteCreation} appCreation={appCreation} showDraftProjectContext={showDraftProjectContext} showDirectPrompts={showDirectPrompts} showStarterCards={showStarterCards} creativeIntent={creativeIntent} promptSelectedRef={promptSelectedRef} creationTypesRef={creationTypesRef} referenceInputRef={referenceInputRef} />
     </section>
   )
 }

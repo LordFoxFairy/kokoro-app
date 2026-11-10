@@ -5,6 +5,10 @@
 Canvas Delivery 核原会话、Asset、来源 Run 和元数据。正文不入持久缓存，不启旧工作区路径，
 超界留原下载。产品验收见 Root TODO。
 
+## 首页创建草稿（A‑11）
+
+简报范围和网站类别使用现 Composer 的可见约束行，刷新从同一草稿识别；只替换精确可识别的本场景行，正文/附件留在原草稿边界。模板或灵感显式预填仍替换正文，但保留已选约束。超过现输入上限不截断。网站添加项目只调用原 Project 操作，设计与游戏仍使用普通 Chat。
+
 ## 当前消息的资源客户端（A‑08）
 
 Composer 复用现 Library CLEAN 文件/FINAL artifact 和 Project resources 列表/上传，不建立第二 API 或文件缓存。`uploadProjectResource` 增加可选 AbortSignal，既有 Project 页面调用保持原义，Composer 退休上传时可终止网络并忽略迟到成功；未知结果仍保原 File/key 供显式重试。

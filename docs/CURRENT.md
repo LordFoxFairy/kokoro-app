@@ -1,3 +1,11 @@
+## 2026-11-10 A‑11 creation scene drafts
+
+An explicit presentation range or website category is part of the same visible,
+editable draft as the rest of the task. The existing template/idea controls retain
+that constraint, and the existing draft store, attachment identities and Chat send
+path are unchanged. A selection that would exceed the current limit leaves the
+draft intact. This is ordinary task creation, not website publication.
+
 ## 2026-11-10 A‑10 delivered Artifact directories
 
 The current Product snapshot is byte-exact Public 28.30 from BFF `0c6be20`.

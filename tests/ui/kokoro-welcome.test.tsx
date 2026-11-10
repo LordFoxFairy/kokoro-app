@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
+import { useState } from "react"
 
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroDirectChatWelcome } from "@/features/app/kokoro-welcome"
@@ -116,22 +117,34 @@ it("网站创建区默认直接进入内建整合，不插入灵感层级", () =
   expect(screen.getByText("强大的内建整合")).toBeInTheDocument()
 })
 
-it("网站分类点击只展开 Manus 式灵感层级，选中前不改写草稿", () => {
-  const onPrompt = vi.fn()
-  render(
-    <LocaleProvider>
-      <KokoroDirectChatWelcome preview draft="" creationIntent="website" onPrompt={onPrompt} />
-    </LocaleProvider>,
-  )
+it("网站分类进入可编辑草稿，切换只替换已知类别行，灵感与 Project 操作保留该行", () => {
+  const onPrompt = vi.fn(), onCreateProject = vi.fn()
+  function Harness() {
+    const [draft, setDraft] = useState("保留自己的产品描述。")
+    return <>
+      <textarea aria-label="可编辑草稿" value={draft} onChange={event => setDraft(event.target.value)} />
+      <KokoroDirectChatWelcome draft={draft} creationIntent="website" onCreateProject={onCreateProject}
+        onPrompt={(next, intent) => { onPrompt(next, intent); setDraft(next) }} />
+    </>
+  }
+  render(<LocaleProvider><Harness /></LocaleProvider>)
 
+  const input = screen.getByRole("textbox", { name: "可编辑草稿" })
   fireEvent.click(screen.getByRole("button", { name: "着陆页" }))
+  expect(input).toHaveValue("保留自己的产品描述。\n\n网站类别：着陆页")
   expect(screen.getByText("探索点子")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "构建候补名单着陆页" })).toBeInTheDocument()
-  expect(onPrompt).not.toHaveBeenCalled()
+  expect(screen.getByRole("button", { name: "着陆页" })).toHaveAttribute("aria-pressed", "true")
+  fireEvent.change(input, { target: { value: "改好的正文。\n\n网站类别：着陆页" } })
+  fireEvent.click(screen.getByRole("button", { name: "作品集" }))
+  expect(input).toHaveValue("改好的正文。\n\n网站类别：作品集")
 
   fireEvent.click(screen.getByRole("button", { name: "产品发布页" }))
-  expect(onPrompt).toHaveBeenCalledWith(expect.stringContaining("建立一个发布页"), "website")
+  expect(onPrompt).toHaveBeenLastCalledWith(expect.stringMatching(/^为新产品建立一个发布页[^\n]*\n\n网站类别：作品集$/), "website")
+  fireEvent.pointerDown(screen.getByRole("button", { name: "新增到项目" }))
+  fireEvent.click(screen.getByRole("menuitem", { name: "新建项目" }))
+  expect(onCreateProject).toHaveBeenCalledExactlyOnceWith({ draft: (input as HTMLTextAreaElement).value })
 })
+
 
 it("网站创建空态仍保留项目归档轨道并禁用空提交", () => {
   render(

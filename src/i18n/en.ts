@@ -306,6 +306,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "firstSite.keepProjectOrganizedHint": "Keep tasks, versions, and updates together in one place.",
   "firstSite.addToProject": "Add to project",
   "firstSite.whatToBuild": "What would you like to build?",
+  "firstSite.websiteCategoryLine": "Website category: {category}",
+  "firstSite.creationOptionTooLong": "This option would exceed {limit} characters. Shorten the draft and try again.",
   "firstSite.addWebsiteReference": "Add website reference",
   "firstSite.webResource": "Web",
   "firstSite.noMatchingResources": "No matching resources",

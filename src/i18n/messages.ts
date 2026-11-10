@@ -2381,6 +2381,8 @@ export const zh = {
     "将所有任务、版本和更新集中保存在一个地方。",
   "firstSite.addToProject": "新增到项目",
   "firstSite.whatToBuild": "您想建立什么？",
+  "firstSite.websiteCategoryLine": "网站类别：{category}",
+  "firstSite.creationOptionTooLong": "加上此选项会超过 {limit} 个字符，请缩短草稿后重试。",
   "firstSite.addWebsiteReference": "新增网站参考",
   "firstSite.importFromDesign": "从 Figma 汇入",
   "firstSite.buildCommerce": "电子商务",
