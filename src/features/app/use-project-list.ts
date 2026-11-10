@@ -113,9 +113,10 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     : collection?.key === key ? collection.state : { status: "loading" }
   const exact = detail?.key === detailKey ? detail.state : undefined
   const sameOwnerList = collection?.key.identityKey === identityKey && collection.state.status === "ready" ? collection.state : undefined
-  // A repaint can retain confirmed data while the new owner read is pending.
-  // Request eligibility below still uses the fresh key, never the retained UI.
-  const rail = rawList.status === "loading" && exact?.status !== "loading" ? sameOwnerList ?? rawList : rawList
+  // Keep confirmed rows during a reread, not an old "no projects" result.
+  // Request eligibility still uses the fresh key, never the retained UI.
+  const rail = rawList.status === "loading" && exact?.status !== "loading"
+    && sameOwnerList?.data.some((item) => !retiredIds?.has(item.id)) ? sameOwnerList : rawList
   const list: ProjectReadState<Project[]> = rail.status === "ready" && retiredIds?.size
     ? { status: "ready", data: rail.data.filter((item) => !retiredIds.has(item.id)) }
     : rail

@@ -81,6 +81,7 @@ async function proxySetup(request: Request, context: { params: Promise<{ path: s
   if (!config) return fail(503, "agent_connection_unavailable")
   if (post && (request.headers.get("origin") !== config.session.webOrigin || !sameOriginOk(request))) return fail(403, "forbidden_origin")
   const native = nativeSessionBffHeaders(request, config, requestId)
+  if (native.state === "invalid") return fail(400, "invalid_browser_cookie")
   if (native.state !== "valid") return fail(401, "session_authentication_required")
 
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(AGENT_CONNECTION_DEADLINE_MS)])

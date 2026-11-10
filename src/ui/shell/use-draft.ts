@@ -190,9 +190,11 @@ export function useDraft(activeId: string | null, mounted: boolean, projectRef?:
   const owner = boundary?.admitted && verifiedDraftOwner?.subject === boundary.subject &&
     verifiedDraftOwner.tenant === boundary.tenant ? verifiedDraftOwner : null
   const generation = boundary?.generation
+  const authInvalidationHint = boundary?.authInvalidationHint
   const admitted = boundary?.admitted !== false
-  const access = useMemo(() => ({ owner, generation, admitted }), [owner, generation, admitted])
-  const scope = useMemo(() => ({ key: draftKey, access, enabled }), [draftKey, access, enabled])
+  const access = useMemo(() => ({ owner, generation, admitted, authInvalidationHint }), [owner, generation, admitted, authInvalidationHint])
+  const slot = useMemo(() => ({ key: draftKey, projectRef }), [draftKey, projectRef])
+  const scope = useMemo(() => ({ key: slot.key, slot, access, enabled }), [slot, access, enabled])
   type Scope = typeof scope
   type Access = typeof access
   type Edit = { scope: Scope; value: Draft }
@@ -241,11 +243,22 @@ export function useDraft(activeId: string | null, mounted: boolean, projectRef?:
   }, [access, owner, flushPendingWrite])
 
   const visible = actorAtRender.current
-  const stored = visible && draftEdit?.scope !== scope ? draftStore.read()?.[draftKey] ?? "" : ""
+  // Keep the edit, not the old write lease. Only a continuous verified owner
+  // and route can adopt it; explicit invalidation replaces the owner binding.
+  const recoveredEdit = visible && owner !== null && draftEdit?.scope.access !== access &&
+    draftEdit?.scope.slot === slot && draftEdit.scope.access.owner === owner &&
+    draftEdit.scope.access.authInvalidationHint === authInvalidationHint ? draftEdit : null
+  const localEdit = draftEdit?.scope === scope ? draftEdit : recoveredEdit
+  useLayoutEffect(() => {
+    if (!recoveredEdit) return
+    if (pendingWriteRef.current?.scope === recoveredEdit.scope) takePendingWrite()
+    writePending({ scope, value: recoveredEdit.value, replaces: null })
+  }, [recoveredEdit, scope, takePendingWrite, writePending])
+  const stored = visible && localEdit === null ? draftStore.read()?.[draftKey] ?? "" : ""
   // A new edit may claim this slot from a different tenant's hidden record,
   // but its later timer cannot overwrite a different owner who wrote meanwhile.
   const foreign = typeof stored !== "string" && !ownedBy(stored, owner) ? stored : null
-  const value = !visible ? "" : draftEdit?.scope === scope ? draftEdit.value : foreign === null ? stored : ""
+  const value = !visible ? "" : localEdit?.value ?? (foreign === null ? stored : "")
   const isCurrent = useCallback(() => scope.enabled && committed.current?.scope === scope && committed.current.mounted &&
     accessIsCurrent(scope.access) && actor.commit(actorAtRender.marker), [accessIsCurrent, actor, actorAtRender.marker, scope])
   const latestValue = useCallback(() => latestEdit.current?.scope === scope ? latestEdit.current.value : value, [scope, value])

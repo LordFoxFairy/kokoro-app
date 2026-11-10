@@ -43,6 +43,48 @@ describe("useDraft persistence", () => {
     expect(persisted()).toMatchObject({ text: "ordinary typing without attachments", refs: [] })
   })
 
+  it("recovers a pending edit only after the same owner is readmitted", () => {
+    vi.useFakeTimers()
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    const { result, rerender } = renderHook(({ boundary }) => useDraft("conversation-a", true, "project-a", boundary), {
+      initialProps: { boundary: owner },
+    })
+    const old = result.current
+    act(() => old.updateDraft("last keystroke before recovery"))
+    expect(window.localStorage.getItem(DRAFTS_KEY)).toBeNull()
+    rerender({ boundary: { ...owner, admitted: false, generation: 2 } })
+    expect(result.current.draft).toBe("")
+    expect(result.current.readCurrentDraft()).toBeNull()
+    act(() => {
+      old.updateDraft("retired callback")
+      vi.advanceTimersByTime(200)
+    })
+    expect(window.localStorage.getItem(DRAFTS_KEY)).toBeNull()
+    rerender({ boundary: { ...owner, generation: 3 } })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "last keystroke before recovery", refs: [] })
+    const remount = renderHook(() => useDraft("conversation-a", true, "project-a", { ...owner, generation: 3 }))
+    expect(remount.result.current.draft).toBe("last keystroke before recovery")
+  })
+
+  it.each(["route", "tenant"] as const)("does not recover a retired unpersisted edit after a %s change", change => {
+    vi.useFakeTimers()
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    const { result, rerender } = renderHook(({ id, boundary }) => useDraft(id, true, "project-a", boundary), {
+      initialProps: { id: "conversation-a", boundary: owner },
+    })
+    act(() => result.current.updateDraft("old context only"))
+    rerender({ id: "conversation-a", boundary: { ...owner, admitted: false, generation: 2 } })
+    if (change === "tenant") expect(admitBrowserAuthSessionIndexes(owner.subject, owner.subject, "tenant-b")).toBe(true)
+    rerender({ id: change === "route" ? "conversation-b" : "conversation-a",
+      boundary: { ...owner, tenant: change === "tenant" ? "tenant-b" : owner.tenant, generation: 3 } })
+    expect(result.current.draft).toBe("")
+    if (change === "tenant") expect(admitBrowserAuthSessionIndexes(owner.subject, owner.subject, owner.tenant)).toBe(true)
+    rerender({ id: "conversation-a", boundary: { ...owner, generation: 4 } })
+    act(() => vi.advanceTimersByTime(200))
+    expect(result.current.draft).toBe("")
+    expect(window.localStorage.getItem(DRAFTS_KEY)).toBeNull()
+  })
+
   it("flushes a pending draft before an earlier pagehide auth listener commits retirement", () => {
     vi.useFakeTimers()
     expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)

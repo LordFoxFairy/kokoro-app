@@ -184,7 +184,8 @@ it("live Project cold start never advertises unknown capabilities and only resol
     view.rerender(frame(undefined))
     expectUnadvertised()
     view.rerender(frame(undefined, true))
-    expect(screen.getByText("网站", { exact: true })).toBeInTheDocument()
+    // The live Project websites owner has no synthetic preview card.
+    expect(screen.queryByText("网站", { exact: true })).not.toBeInTheDocument()
     expect(screen.getByText("定时任务", { exact: true })).toBeInTheDocument()
     expect(screen.getByRole("region", { name: "连接器" })).toBeInTheDocument()
   } finally {
