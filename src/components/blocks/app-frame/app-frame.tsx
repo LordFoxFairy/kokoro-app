@@ -1,6 +1,5 @@
 "use client"
 
-import type { SelectedResourceRef } from "@/contract/chat"
 import type { CustomApiSelection } from "@/engine/custom-api-selection"
 
 import { useAnswerActionScope } from "@/ui/thread/answer-action-scope"
@@ -413,7 +412,8 @@ function AppFrameRuntime({
 
   const draftRoute = typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`
   const draftSelectionMatches = !projectWorkspace || routedConversationId === null || routedConversationId === activeId
-  const draftController = useDraft(projectWorkspace ? routedConversationId : activeId, mounted && draftSelectionMatches, projectRef)
+  const draftController = useDraft(projectWorkspace ? routedConversationId : activeId, mounted && draftSelectionMatches, projectRef,
+    preview ? undefined : projectReadBoundary)
   const draftRouteIsCurrent = useCallback(() => {
     if (!projectWorkspace) return true
     if (!draftSelectionMatches || typeof window === "undefined" ||
@@ -421,13 +421,14 @@ function AppFrameRuntime({
     return !projectWorkspace || routedConversationId === null ||
       engine?.getSnapshot().store?.activeId === routedConversationId
   }, [draftRoute, draftSelectionMatches, engine, projectWorkspace, routedConversationId])
-  const { draft, updateDraft: updateScopedDraft, clearDraft: clearScopedDraft, restoreDraft } = draftController
+  const { draft, readCurrentDraft, updateDraft: updateScopedDraft, clearDraft: clearScopedDraft, restoreDraft, updateResourceRefs } = draftController
   const updateDraft = useCallback((value: string) => {
     if (draftRouteIsCurrent()) updateScopedDraft(value)
   }, [updateScopedDraft, draftRouteIsCurrent])
-  const clearDraft = useCallback(() => {
-    if (draftRouteIsCurrent()) clearScopedDraft()
+  const clearDraft = useCallback((keepResources?: boolean) => {
+    if (draftRouteIsCurrent()) clearScopedDraft(keepResources)
   }, [clearScopedDraft, draftRouteIsCurrent])
+  const clearDraftText = useCallback(() => clearDraft(true), [clearDraft])
   // An overview is a new task draft, not the retained engine's active task.
   // Keep its choices local until accepted Send allocates a fresh conversation.
   const [projectDraftEpoch, setProjectDraftEpoch] = useState(0)
@@ -437,14 +438,12 @@ function AppFrameRuntime({
     mode: "fast" as AgentMode, model: readChatModel(),
     mcpConnectionIds: [] as readonly string[],
     customApiProfiles: [] as readonly CustomApiSelection[],
-    resourceRefs: [] as readonly SelectedResourceRef[],
     mcpTouched: false, mcpSeededVersion: null as string | null,
   }), [engine, projectRef, draftRoute, moveActor, projectDraftEpoch, railReadIdentity, railReadAdmitted])
   const [projectDraftSelection, setProjectDraftSelection] = useState(() => ({
     context: projectDraftContext, mode: projectDraftContext.mode, model: projectDraftContext.model,
     mcpConnectionIds: projectDraftContext.mcpConnectionIds,
     customApiProfiles: projectDraftContext.customApiProfiles,
-    resourceRefs: projectDraftContext.resourceRefs,
     mcpTouched: false, mcpSeededVersion: null as string | null,
   }))
   const projectDraft = projectDraftSelection.context === projectDraftContext ? projectDraftSelection : projectDraftContext
@@ -478,11 +477,11 @@ function AppFrameRuntime({
         && window.localStorage.getItem("kokoro.web.auth-index-subject") === projectDraftContext.actor
     } catch { return false }
   }, [railReadAdmitted, projectDraftContext, preview, projectReadBoundary])
-  const updateProjectDraft = (choice: Partial<{ mode: AgentMode; model: string | null; resourceRefs: readonly SelectedResourceRef[] }>) => {
+  const updateProjectDraft = (choice: Partial<{ mode: AgentMode; model: string | null }>) => {
     if (!projectDraftIsCurrent()) return
     setProjectDraftSelection(previous => {
       const current = previous.context === projectDraftContext ? previous : projectDraftContext
-      return { context: projectDraftContext, mode: current.mode, model: current.model, mcpConnectionIds: current.mcpConnectionIds, customApiProfiles: current.customApiProfiles, resourceRefs: current.resourceRefs,
+      return { context: projectDraftContext, mode: current.mode, model: current.model, mcpConnectionIds: current.mcpConnectionIds, customApiProfiles: current.customApiProfiles,
         mcpTouched: current.mcpTouched, mcpSeededVersion: current.mcpSeededVersion, ...choice }
     })
   }
@@ -522,7 +521,7 @@ function AppFrameRuntime({
           if (!projectDraftIsCurrent()) return previous
           const current = previous.context === projectDraftContext ? previous : projectDraftContext
           return { context: projectDraftContext, mode: current.mode, model: current.model,
-            mcpConnectionIds: change(current.mcpConnectionIds), customApiProfiles: current.customApiProfiles, resourceRefs: current.resourceRefs, mcpTouched: true, mcpSeededVersion: current.mcpSeededVersion }
+            mcpConnectionIds: change(current.mcpConnectionIds), customApiProfiles: current.customApiProfiles, mcpTouched: true, mcpSeededVersion: current.mcpSeededVersion }
         })
       },
     } } : {}),
@@ -537,7 +536,7 @@ function AppFrameRuntime({
       const current = previous.context === projectDraftContext ? previous : projectDraftContext
       if (current.mcpTouched || current.mcpSeededVersion === facts.state_version) return previous
       return { context: projectDraftContext, mode: current.mode, model: current.model,
-        mcpConnectionIds: ids, customApiProfiles: current.customApiProfiles, resourceRefs: current.resourceRefs, mcpTouched: false, mcpSeededVersion: facts.state_version }
+        mcpConnectionIds: ids, customApiProfiles: current.customApiProfiles, mcpTouched: false, mcpSeededVersion: facts.state_version }
     })
   }
   const refreshProjects = projectReads.refresh
@@ -554,7 +553,7 @@ function AppFrameRuntime({
     mounted,
     draft,
     updateDraft,
-    clearDraft,
+    clearDraft: clearDraftText,
     onOpenProject: handleProjectOpen,
     onProjectCreated: refreshProjects,
     projectDetail: projectReads.current,
@@ -578,12 +577,12 @@ function AppFrameRuntime({
     ...(projectRef === undefined ? {} : { projectRef }),
     routedConversationId,
     ...(projectOverview ? { projectComposerDraft: { mode: projectDraft.mode, model: projectDraft.model,
-      selectedMcpConnectionIds: projectDraft.mcpConnectionIds, selectedCustomApiProfiles: projectDraft.customApiProfiles, selectedResourceRefs: projectDraft.resourceRefs, isCurrent: projectDraftIsCurrent },
+      selectedMcpConnectionIds: projectDraft.mcpConnectionIds, selectedCustomApiProfiles: projectDraft.customApiProfiles, isCurrent: projectDraftIsCurrent },
       onProjectDraftAccepted: () => selectors.setSelectedModel(projectDraft.model) } : {}),
     standaloneSurface,
     chatHref,
     activeId,
-    draft,
+    readDraft: readCurrentDraft,
     clearDraft,
     updateDraft,
     setDeploymentIntent: navigationState.setDeploymentIntent,
@@ -893,9 +892,11 @@ function AppFrameRuntime({
     resources: {
       boundary: composerSkillBoundary, scopeKey: composerSkillScope,
       ...(projectWorkspace && projectRef ? { projectRef } : {}),
-      selectable: !preview && canSubmitMessage && !hydrating && actions.activeDelivery !== "steer" && !skillSelectionSnapshot?.hasPendingSubmission && !skillSelectionSnapshot?.canRetryPendingSubmission,
-      selected: projectOverview ? projectDraft.resourceRefs : skillSelectionSnapshot?.selectedResourceRefs ?? [],
-      onChange: refs => { if (projectOverview) updateProjectDraft({ resourceRefs: refs }); else engine?.setSelectedResourceRefs?.(refs) },
+      selectable: draftController.resourcesAvailable && !preview && canSubmitMessage && !hydrating && actions.activeDelivery !== "steer" && !skillSelectionSnapshot?.hasPendingSubmission && !skillSelectionSnapshot?.canRetryPendingSubmission,
+      selected: draftController.resourceRefs,
+      onChange: refs => {
+        if (draftRouteIsCurrent() && (!projectOverview || projectDraftIsCurrent())) updateResourceRefs(refs)
+      },
       recentTasks: conversations.map(item => ({ id: item.id, title: item.title })),
     },
     skills: { client: composerSkillClient, boundary: composerSkillBoundary, scopeKey: composerSkillScope, selectable: canSubmitMessage && !hydrating && !skillSelectionSnapshot?.hasPendingSubmission && !skillSelectionSnapshot?.canRetryPendingSubmission, onSelect: actions.selectSkillForCurrentDraft },

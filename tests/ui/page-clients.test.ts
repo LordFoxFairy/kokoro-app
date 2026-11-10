@@ -169,6 +169,14 @@ describe("explicit same-tab landing prompt admission", () => {
     expect(admitBrowserAuthSessionIndexes("subject-A", "subject-A")).toBe(true)
     expect(JSON.parse(window.localStorage.getItem(DRAFTS) ?? "{}").__pending__).toBe("edited after admission")
   })
+  it("keeps a scoped conversation selection and does not attach the old pending selection to a landing prompt", () => {
+    const scoped = { subject: "subject-A", tenant: "tenant-A", text: "draft with refs", refs: [{ kind: "asset", resource_id: "exact" }] }
+    window.localStorage.setItem(SUBJECT_MARKER, "subject-A")
+    window.localStorage.setItem(DRAFTS, JSON.stringify({ conversationA: scoped, __pending__: scoped }))
+    window.sessionStorage.setItem(handoff, JSON.stringify([1, Date.now(), "explicit new prompt"]))
+    expect(admitBrowserAuthSessionIndexes("subject-A", "subject-A", "tenant-A")).toBe(true)
+    expect(JSON.parse(window.localStorage.getItem(DRAFTS) ?? "{}")).toEqual({ conversationA: scoped, __pending__: "explicit new prompt" })
+  })
 })
 
 

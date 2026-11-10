@@ -8,6 +8,8 @@ import { makeSnapshot } from "../core/fixtures"
 import { LocaleProvider } from "@/i18n/context"
 import { createFakeClient, createMemoryStorage, makeReceipt, settle } from "../engine/fakes"
 
+const noDraftRefs = [] as const
+
 beforeEach(() => {
   window.localStorage.setItem("kokoro.web.auth-index-subject", "navigation-reader")
   window.history.replaceState(null, "", "/app")
@@ -25,7 +27,7 @@ function setup(explicitRoute = false, createDraft = true) {
   const syncConversationUrl = vi.fn(), setConversationRouteId = vi.fn()
   const view = renderHook(() => useAppFrameActions({
     engine, activeId: original, projectWorkspace: false, standaloneSurface: false, chatHref: "/app",
-    draft: "original direct draft", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
+    readDraft: () => ({ text: "original direct draft", refs: noDraftRefs }), clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
     syncConversationUrl, setConversationRouteId, focusComposer: vi.fn(),
     closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }), { wrapper: LocaleProvider })
@@ -132,7 +134,7 @@ it("an owner-restored direct conversation retains its exact ID on the next Send"
     expect(engine.getSnapshot().hydrating).toBe(false)
     const view = renderHook(() => useAppFrameActions({
       engine, activeId: id, projectWorkspace: false, standaloneSurface: false, chatHref: "/app",
-      draft: "continue restored task", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
+      readDraft: () => ({ text: "continue restored task", refs: noDraftRefs }), clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
       syncConversationUrl: vi.fn(), setConversationRouteId: vi.fn(), focusComposer: vi.fn(),
       closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
     }), { wrapper: LocaleProvider })
@@ -154,7 +156,7 @@ function actionTimeNewTask(standaloneSurface: boolean) {
   const view = renderHook(() => useAppFrameActions({
     engine, activeId: engine.getSnapshot().store?.activeId ?? null, projectWorkspace: false, standaloneSurface, chatHref: "/app",
     readBoundary: { admitted: true, subject: "navigation-reader", generation: 1 },
-    draft: "preserved unsent text", clearDraft, updateDraft, setDeploymentIntent,
+    readDraft: () => ({ text: "preserved unsent text", refs: noDraftRefs }), clearDraft, updateDraft, setDeploymentIntent,
     syncConversationUrl: vi.fn(), setConversationRouteId: vi.fn(), focusComposer,
     closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }), { wrapper: LocaleProvider })
@@ -240,7 +242,7 @@ it("a bare homepage cannot append a draft to a hidden remembered owner conversat
   await settle()
   const clearDraft = vi.fn(), syncConversationUrl = vi.fn(), setConversationRouteId = vi.fn()
   const view = renderHook(() => useAppFrameActions({ engine, activeId: "owner-old", projectWorkspace: false, standaloneSurface: false, chatHref: "/app",
-    draft: "new homepage requirement", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(), syncConversationUrl, setConversationRouteId,
+    readDraft: () => ({ text: "new homepage requirement", refs: noDraftRefs }), clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(), syncConversationUrl, setConversationRouteId,
     focusComposer: vi.fn(), closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null } }), { wrapper: LocaleProvider })
   try {
     act(() => view.result.current.submitDraft())

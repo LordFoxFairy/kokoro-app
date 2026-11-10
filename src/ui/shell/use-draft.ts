@@ -1,33 +1,66 @@
 "use client"
 
-// 未发送草稿 controller：按会话持久化（切会话/刷新都保留，in-memory useState 会丢）。空串=无草稿。
+// 未发送草稿 controller：按原会话、待创建或项目槽位持久化文本与 opaque refs。
 // 与会话 store 分键：逐键改动不惊动引擎、也不跨 tab 抢占（草稿是本地正在编辑态）。
 // 键控派生（非 effect 同步 setState）：mounted 门控保证 SSR/水合首帧一致（服务端无 localStorage）。
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { z } from "zod"
 
+import { selectedResourceRefsSchema, type SelectedResourceRef } from "@/contract/chat"
 import { createPersistedStore } from "@/lib/persisted-store"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 
 // 无活跃会话（新建未落库）时的草稿键。
 const DRAFT_PENDING_KEY = "__pending__"
 const DRAFT_WRITE_DEBOUNCE_MS = 200
-const DRAFTS_STORAGE_KEY = "kokoro.web.drafts"
-const draftSchema = z.record(z.string(), z.string())
+export const DRAFTS_STORAGE_KEY = "kokoro.web.drafts"
+const SUBJECT_KEY = "kokoro.web.auth-index-subject"
+const scopedDraftSchema = z.object({
+  subject: z.string().min(1), tenant: z.string().min(1),
+  text: z.string(), refs: selectedResourceRefsSchema,
+}).strict()
+const draftSchema = z.record(z.string(), z.union([z.string(), scopedDraftSchema]))
+type ScopedDraft = z.infer<typeof scopedDraftSchema>
+type DraftOwner = Pick<ScopedDraft, "subject" | "tenant">
+type Draft = string | ScopedDraft
+const EMPTY_REFS: readonly SelectedResourceRef[] = Object.freeze([])
+let verifiedDraftOwner: DraftOwner | null = null
+
+/** Bound only by the existing native session admission; never inferred from disk. */
+export function bindVerifiedDraftOwner(subject: string | null, tenant?: string): void {
+  if (!subject || !tenant) verifiedDraftOwner = null
+  else if (verifiedDraftOwner?.subject !== subject || verifiedDraftOwner.tenant !== tenant) verifiedDraftOwner = { subject, tenant }
+}
+
+function ownedBy(value: ScopedDraft, owner: DraftOwner | null): boolean {
+  return owner?.subject === value.subject && owner.tenant === value.tenant
+}
+
+const textOf = (value: Draft) => typeof value === "string" ? value : value.text
+const refsOf = (value: Draft): readonly SelectedResourceRef[] => typeof value === "string" ? EMPTY_REFS : value.refs
+const withText = (value: Draft, text: string): Draft => typeof value === "string" ? text : { ...value, text }
+const isEmpty = (value: Draft) => textOf(value) === "" && refsOf(value).length === 0
+const sameRefs = (left: readonly SelectedResourceRef[], right: readonly SelectedResourceRef[]) =>
+  JSON.stringify(left) === JSON.stringify(right)
 
 const draftStore = createPersistedStore({
   key: DRAFTS_STORAGE_KEY,
   schema: draftSchema,
 })
 
-function readDraft(key: string): string {
-  return draftStore.read()?.[key] ?? ""
+function readDraft(key: string, owner: DraftOwner | null): Draft {
+  const value = draftStore.read()?.[key] ?? ""
+  return typeof value === "string" || ownedBy(value, owner) ? value : ""
 }
 
-function writeDraft(key: string, value: string): void {
+function writeDraft(key: string, value: Draft, owner: DraftOwner | null, replaces: DraftOwner | null = null): void {
   const all = draftStore.read() ?? {}
-  if (value === "") {
-    if (!(key in all)) return
+  const existing = all[key]
+  if (existing !== undefined && typeof existing !== "string" &&
+    !ownedBy(existing, owner) && (owner === null || isEmpty(value) || !ownedBy(existing, replaces))) return
+  if (isEmpty(value)) {
+    if (existing === undefined) return
     const next = { ...all }
     delete next[key]
     draftStore.write(next)
@@ -36,10 +69,29 @@ function writeDraft(key: string, value: string): void {
   }
 }
 
+function handoffOwner(): DraftOwner | null {
+  try {
+    return window.localStorage.getItem(SUBJECT_KEY) === verifiedDraftOwner?.subject ? verifiedDraftOwner : null
+  } catch { return null }
+}
+
+function stashText(key: string, value: string): void {
+  const owner = handoffOwner()
+  const existing = draftStore.read()?.[key]
+  writeDraft(key, value.trim(), owner, typeof existing === "object" ? existing : null)
+}
+
 // Mounted Skills prompt handoff reuses the current actor’s pending composer.
 // Anonymous landing input uses the separate one-shot handoff below.
 export function stashPendingDraft(value: string): void {
-  writeDraft(DRAFT_PENDING_KEY, value.trim())
+  stashText(DRAFT_PENDING_KEY, value)
+}
+
+/** Explicit native-admission handoff: storage errors must remain observable. */
+export function writeLandingPendingDraft(prompt: string): void {
+  const raw = window.localStorage.getItem(DRAFTS_STORAGE_KEY)
+  const drafts = raw === null ? {} : draftSchema.parse(JSON.parse(raw))
+  window.localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify({ ...drafts, [DRAFT_PENDING_KEY]: prompt }))
 }
 
 // Explicit landing input is not part of an unknown actor's private draft map.
@@ -73,19 +125,24 @@ export function consumeLandingPrompt(): string | null {
 
 /** Clear the route-neutral draft slot before a mounted surface handoff. */
 export function clearPendingDraft(): void {
-  writeDraft(DRAFT_PENDING_KEY, "")
+  const owner = handoffOwner()
+  writeDraft(DRAFT_PENDING_KEY, withText(readDraft(DRAFT_PENDING_KEY, owner), ""), owner)
 }
 
 /** Seed a draft after the shell has synchronously allocated a new session id. */
 export function stashConversationDraft(id: string, value: string): void {
-  writeDraft(id, value.trim())
+  stashText(id, value)
 }
 
 export type DraftController = {
   draft: string
+  resourceRefs: readonly SelectedResourceRef[]
+  resourcesAvailable: boolean
+  readCurrentDraft: () => { text: string; refs: readonly SelectedResourceRef[] } | null
   updateDraft: (value: string) => void
-  clearDraft: () => void
-  restoreDraft: (value: string) => boolean
+  updateResourceRefs: (refs: readonly SelectedResourceRef[]) => void
+  clearDraft: (keepResources?: boolean) => void
+  restoreDraft: (value: string, refs?: readonly SelectedResourceRef[]) => boolean
 }
 
 // A hook-local write capability over the existing cache marker, not identity.
@@ -95,7 +152,7 @@ function createDraftActorFence() {
   let captured = false
   let retired = false
   const readMarker = () => {
-    try { return window.localStorage.getItem("kokoro.web.auth-index-subject") }
+    try { return window.localStorage.getItem(SUBJECT_KEY) }
     catch { retired = true; return null }
   }
   const current = () => {
@@ -125,100 +182,146 @@ function createDraftActorFence() {
   }
 }
 
-export function useDraft(activeId: string | null, mounted: boolean, projectRef?: string): DraftController {
-  // A project without a conversation is still a distinct composer. Reusing
-  // __pending__ here would overwrite a newer direct-chat draft during an
-  // asynchronous project-create handoff.
+export function useDraft(activeId: string | null, mounted: boolean, projectRef?: string, boundary?: ProjectReadBoundary): DraftController {
   const draftKey = activeId ?? (projectRef ? `__project__:${encodeURIComponent(projectRef)}` : DRAFT_PENDING_KEY)
   const [actor] = useState(createDraftActorFence)
-  const actorAtRender = actor.observe(mounted)
-  const [draftEdit, setDraftEdit] = useState<{ key: string; value: string } | null>(null)
-  const pendingWriteRef = useRef<{
-    key: string
-    value: string
-    timer: ReturnType<typeof setTimeout>
-  } | null>(null)
+  const enabled = mounted && boundary?.admitted !== false
+  const actorAtRender = actor.observe(enabled)
+  const owner = boundary?.admitted && verifiedDraftOwner?.subject === boundary.subject &&
+    verifiedDraftOwner.tenant === boundary.tenant ? verifiedDraftOwner : null
+  const generation = boundary?.generation
+  const admitted = boundary?.admitted !== false
+  const access = useMemo(() => ({ owner, generation, admitted }), [owner, generation, admitted])
+  const scope = useMemo(() => ({ key: draftKey, access, enabled }), [draftKey, access, enabled])
+  type Scope = typeof scope
+  type Access = typeof access
+  type Edit = { scope: Scope; value: Draft }
+  type PendingWrite = Edit & { replaces: DraftOwner | null; timer: ReturnType<typeof setTimeout> }
+  const committed = useRef<{ scope: Scope; mounted: boolean; retired: boolean } | null>(null)
+  const [draftEdit, setDraftEdit] = useState<Edit | null>(null)
+  const latestEdit = useRef<Edit | null>(null)
+  const pendingWriteRef = useRef<PendingWrite | null>(null)
 
-  const flushPendingWrite = useCallback(() => {
+  useLayoutEffect(() => {
+    const previous = committed.current
+    const lease = { scope, mounted: true, retired: previous?.scope.access === scope.access && previous.retired }
+    committed.current = lease
+    return () => { lease.mounted = false }
+  }, [scope])
+
+  const accessIsCurrent = useCallback((candidate: Access) =>
+    committed.current?.scope.access === candidate && !committed.current.retired &&
+    candidate.admitted && (candidate.owner === null || candidate.owner === verifiedDraftOwner), [])
+
+  const takePendingWrite = useCallback(() => {
     const pending = pendingWriteRef.current
-    if (pending === null) return
-    clearTimeout(pending.timer)
+    if (pending !== null) clearTimeout(pending.timer)
     pendingWriteRef.current = null
-    if (actor.current()) writeDraft(pending.key, pending.value)
-  }, [actor])
+    return pending
+  }, [])
+  const writePending = useCallback((pending: PendingWrite | null) => {
+    if (pending !== null && accessIsCurrent(pending.scope.access) && actor.current())
+      writeDraft(pending.scope.key, pending.value, pending.scope.access.owner, pending.replaces)
+  }, [accessIsCurrent, actor])
+  const flushPendingWrite = useCallback(() => writePending(takePendingWrite()), [takePendingWrite, writePending])
 
-  const scheduleDraftWrite = useCallback((key: string, value: string) => {
-    if (!actor.current()) return
-    const previous = pendingWriteRef.current
-    if (previous !== null) {
-      clearTimeout(previous.timer)
-      if (previous.key !== key) {
-        writeDraft(previous.key, previous.value)
-      }
-    }
-    const timer = setTimeout(() => {
-      if (pendingWriteRef.current?.timer !== timer) return
-      pendingWriteRef.current = null
-      if (actor.current()) writeDraft(key, value)
-    }, DRAFT_WRITE_DEBOUNCE_MS)
-    pendingWriteRef.current = { key, value, timer }
-  }, [actor])
-
-  // Flush before switching to another scoped composer and when the shell
-  // unmounts. This keeps navigation/refresh lossless while removing the
-  // synchronous localStorage read/clone/stringify from every keystroke.
+  // A scope transition saves the departing draft, but an admission transition
+  // never lets a debounced edit run under the replacement generation.
   useEffect(() => () => flushPendingWrite(), [draftKey, flushPendingWrite])
+  useLayoutEffect(() => {
+    const onPageHide = () => {
+      flushPendingWrite()
+      if (owner !== null && committed.current?.scope.access === access) committed.current.retired = true
+    }
+    window.addEventListener("pagehide", onPageHide)
+    return () => window.removeEventListener("pagehide", onPageHide)
+  }, [access, owner, flushPendingWrite])
 
-  // A document navigation can discard the React tree before passive-effect
-  // cleanup runs. pagehide is the browser-owned last chance to persist the
-  // already captured exact key/value without extending the debounce window.
-  useEffect(() => {
-    const flushOnPageHide = () => flushPendingWrite()
-    window.addEventListener("pagehide", flushOnPageHide)
-    return () => window.removeEventListener("pagehide", flushOnPageHide)
-  }, [flushPendingWrite])
+  const visible = actorAtRender.current
+  const stored = visible && draftEdit?.scope !== scope ? draftStore.read()?.[draftKey] ?? "" : ""
+  // A new edit may claim this slot from a different tenant's hidden record,
+  // but its later timer cannot overwrite a different owner who wrote meanwhile.
+  const foreign = typeof stored !== "string" && !ownedBy(stored, owner) ? stored : null
+  const value = !visible ? "" : draftEdit?.scope === scope ? draftEdit.value : foreign === null ? stored : ""
+  const isCurrent = useCallback(() => scope.enabled && committed.current?.scope === scope && committed.current.mounted &&
+    accessIsCurrent(scope.access) && actor.commit(actorAtRender.marker), [accessIsCurrent, actor, actorAtRender.marker, scope])
+  const latestValue = useCallback(() => latestEdit.current?.scope === scope ? latestEdit.current.value : value, [scope, value])
+  const readCurrentDraft = useCallback(() => {
+    if (!isCurrent()) return null
+    const current = latestValue()
+    return { text: textOf(current), refs: refsOf(current) }
+  }, [isCurrent, latestValue])
 
-  const draft = !actorAtRender.current
-    ? ""
-    : draftEdit !== null && draftEdit.key === draftKey
-      ? draftEdit.value
-      : readDraft(draftKey)
+  const publish = useCallback((next: Draft) => {
+    const edit = { scope, value: next }
+    latestEdit.current = edit
+    setDraftEdit(edit)
+    return edit
+  }, [scope])
+  const update = useCallback((next: Draft) => {
+    const edit = publish(next)
+    const previous = takePendingWrite()
+    if (previous?.scope.key !== scope.key) writePending(previous)
+    const timer = setTimeout(() => {
+      if (pendingWriteRef.current?.timer === timer) flushPendingWrite()
+    }, DRAFT_WRITE_DEBOUNCE_MS)
+    const replaces = previous?.scope === scope ? previous.replaces
+      : foreign === null ? null : { subject: foreign.subject, tenant: foreign.tenant }
+    pendingWriteRef.current = { ...edit, replaces, timer }
+  }, [flushPendingWrite, foreign, publish, scope, takePendingWrite, writePending])
+  const updateDraft = useCallback((text: string) => {
+    if (isCurrent()) update(withText(latestValue(), text))
+  }, [isCurrent, latestValue, update])
+  const updateResourceRefs = useCallback((refs: readonly SelectedResourceRef[]) => {
+    if (!owner || !isCurrent()) return
+    const next = selectedResourceRefsSchema.safeParse(refs)
+    const current = latestValue()
+    if (next.success && !sameRefs(refsOf(current), next.data)) update({ ...owner, text: textOf(current), refs: next.data })
+  }, [isCurrent, latestValue, owner, update])
+  const clearDraft = useCallback((keepResources = false) => {
+    if (!isCurrent()) return
+    const next = keepResources ? withText(latestValue(), "") : ""
+    const pending = takePendingWrite()
+    if (pending?.scope.key !== scope.key) writePending(pending)
+    publish(next)
+    writeDraft(scope.key, next, owner)
+  }, [isCurrent, latestValue, owner, publish, scope, takePendingWrite, writePending])
 
-  const updateDraft = useCallback(
-    (value: string) => {
-      if (!mounted || !actor.commit(actorAtRender.marker)) return
-      setDraftEdit({ key: draftKey, value })
-      scheduleDraftWrite(draftKey, value)
-    },
-    [draftKey, mounted, actorAtRender.marker, actor, scheduleDraftWrite],
-  )
-
-  const clearDraft = useCallback(() => {
-    if (!mounted || !actor.commit(actorAtRender.marker)) return
-    setDraftEdit({ key: draftKey, value: "" })
-    flushPendingWrite()
-    writeDraft(draftKey, "")
-  }, [draftKey, mounted, actorAtRender.marker, actor, flushPendingWrite])
-
-  const restoreDraft = useCallback((value: string): boolean => {
-    if (!mounted || !actor.commit(actorAtRender.marker)) return false
-    const pending = pendingWriteRef.current?.key === draftKey ? pendingWriteRef.current : null
-    if ((draft && draft !== value) || (pending?.value && pending.value !== value)) return false
-    // Ordinary drafts may fall back to memory; retiring a request requires disk confirmation.
+  const restoreDraft = useCallback((text: string, refs?: readonly SelectedResourceRef[]): boolean => {
+    if (!isCurrent()) return false
+    const parsed = refs === undefined ? undefined : selectedResourceRefsSchema.safeParse(refs)
+    if (parsed?.success === false || (parsed?.data.length && owner === null)) return false
+    const originalRefs = parsed?.data
+    const conflicts = (existing: Draft) => !isEmpty(existing) &&
+      ((textOf(existing) !== "" && textOf(existing) !== text) ||
+        (originalRefs !== undefined && !sameRefs(refsOf(existing), originalRefs)))
+    const local = latestValue()
+    if (conflicts(local)) return false
+    let next: Draft
+    // Retiring a rejected command requires confirmed durable restoration of the
+    // exact intent. Steer has no refs; preserve any current, unsent selection.
     try {
       const raw = window.localStorage.getItem(DRAFTS_STORAGE_KEY)
       const all = raw === null ? {} : draftSchema.parse(JSON.parse(raw))
-      if (all[draftKey] && all[draftKey] !== value) return false
-      if (all[draftKey] !== value) {
-        const next = JSON.stringify({ ...all, [draftKey]: value })
-        window.localStorage.setItem(DRAFTS_STORAGE_KEY, next)
-        if (window.localStorage.getItem(DRAFTS_STORAGE_KEY) !== next) return false
+      const disk = all[scope.key] ?? ""
+      if ((typeof disk !== "string" && !ownedBy(disk, owner)) || conflicts(disk)) return false
+      const hasLocalWrite = pendingWriteRef.current?.scope === scope
+      if (originalRefs === undefined && !isEmpty(disk) && (hasLocalWrite || !isEmpty(local)) &&
+        !sameRefs(refsOf(local), refsOf(disk))) return false
+      next = owner !== null && originalRefs?.length
+        ? { ...owner, text, refs: originalRefs }
+        : withText(!hasLocalWrite && isEmpty(local) ? disk : local, text)
+      if (JSON.stringify(disk) !== JSON.stringify(next)) {
+        const replacement = JSON.stringify({ ...all, [scope.key]: next })
+        window.localStorage.setItem(DRAFTS_STORAGE_KEY, replacement)
+        if (window.localStorage.getItem(DRAFTS_STORAGE_KEY) !== replacement) return false
       }
     } catch { return false }
-    if (pending !== null) { clearTimeout(pending.timer); pendingWriteRef.current = null }
-    setDraftEdit({ key: draftKey, value })
+    if (pendingWriteRef.current?.scope.key === scope.key) takePendingWrite()
+    publish(next)
     return true
-  }, [actor, actorAtRender.marker, draft, draftKey, mounted])
+  }, [isCurrent, latestValue, owner, publish, scope, takePendingWrite])
 
-  return { draft, updateDraft, clearDraft, restoreDraft }
+  return { draft: textOf(value), resourceRefs: refsOf(value), resourcesAvailable: visible && owner !== null,
+    readCurrentDraft, updateDraft, updateResourceRefs, clearDraft, restoreDraft }
 }

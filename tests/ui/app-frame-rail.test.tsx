@@ -1308,7 +1308,7 @@ it("global New task leaves the project untouched and resets only the admitted di
   const view = renderHook(() => useAppFrameActions({
     engine: project, projectWorkspace: true, projectRef,
     readBoundary: { admitted: true, subject: "global-new-reader", generation: 1 },
-    standaloneSurface: false, chatHref: "/app", activeId: null, draft: "project draft", clearDraft,
+    standaloneSurface: false, chatHref: "/app", activeId: null, readDraft: () => ({ text: "project draft", refs: noDraftRefs }), clearDraft,
     updateDraft: vi.fn(), setDeploymentIntent: vi.fn(), syncConversationUrl: vi.fn(),
     setConversationRouteId: vi.fn(), focusComposer: vi.fn(), closeSettings: vi.fn(),
     brandName: "Kokoro", commandNewChatTimerRef: { current: null },
@@ -1487,6 +1487,8 @@ it("an explicit project overview submission creates a fresh target instead of po
 })
 
 
+const noDraftRefs = [] as const
+
 function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: string, conversation: string | null = null, projectWorkspace = true) {
   const clearDraft = vi.fn()
   const syncConversationUrl = vi.fn()
@@ -1494,7 +1496,7 @@ function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: st
   const options = {
     engine: projectEngine, projectWorkspace, projectRef, routedConversationId: conversation,
     standaloneSurface: false, chatHref: "/app", activeId: projectEngine.getSnapshot().store?.activeId ?? null,
-    draft: "new root intent", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
+    readDraft: () => ({ text: "new root intent", refs: noDraftRefs }), clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
     syncConversationUrl, setConversationRouteId,
     focusComposer: vi.fn(), closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }
@@ -2070,7 +2072,7 @@ function trialActions(trialEngine = engine, preview = false, projectRef?: string
     engine: trialEngine, preview, readBoundary: { admitted, subject: "trial-actor", generation },
     projectWorkspace: projectRef !== undefined, ...(projectRef === undefined ? {} : { projectRef }),
     standaloneSurface: !projectRef && window.location.pathname === "/app/skills", chatHref: "/app",
-    activeId: trialEngine.getSnapshot().store?.activeId ?? null, draft: "", clearDraft: vi.fn(), updateDraft,
+    activeId: trialEngine.getSnapshot().store?.activeId ?? null, readDraft: () => ({ text: "", refs: noDraftRefs }), clearDraft: vi.fn(), updateDraft,
     setDeploymentIntent: vi.fn(), syncConversationUrl, setConversationRouteId: vi.fn(), focusComposer: vi.fn(),
     closeSettings, brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }), { wrapper: strict ? ({ children }) => <StrictMode><LocaleProvider>{children}</LocaleProvider></StrictMode> : LocaleProvider, initialProps: { admitted: true, generation: 1 } })
@@ -2241,7 +2243,7 @@ it("project trial survives the actual URL handoff and Composer submit action", a
     return useAppFrameActions({
       engine: projectEngine, preview: false, readBoundary: { admitted: true, subject: "trial-actor", generation: 1 },
       projectWorkspace: true, projectRef, routedConversationId, standaloneSurface: false, chatHref: "/app",
-      activeId: projectEngine.getSnapshot().store?.activeId ?? null, draft: "edited project example", clearDraft: vi.fn(), updateDraft: vi.fn(),
+      activeId: projectEngine.getSnapshot().store?.activeId ?? null, readDraft: () => ({ text: "edited project example", refs: noDraftRefs }), clearDraft: vi.fn(), updateDraft: vi.fn(),
       setDeploymentIntent: vi.fn(), setConversationRouteId, focusComposer: vi.fn(), closeSettings: vi.fn(),
       syncConversationUrl: id => window.history.replaceState({}, "", `/app/project/${projectRef}?conversation=${encodeURIComponent(id!)}`),
       brandName: "Kokoro", commandNewChatTimerRef: { current: null },
@@ -5291,7 +5293,7 @@ function currentSkillDraftActions(draft = "original editable text", trialEngine 
     engine: currentEngine, readBoundary: { admitted, subject, generation },
     projectWorkspace: projectRef !== undefined, ...(projectRef === undefined ? {} : { projectRef }),
     routedConversationId: null, standaloneSurface: false, chatHref: "/app",
-    activeId: currentEngine.getSnapshot().store?.activeId ?? null, draft, clearDraft, updateDraft,
+    activeId: currentEngine.getSnapshot().store?.activeId ?? null, readDraft: () => ({ text: draft, refs: noDraftRefs }), clearDraft, updateDraft,
     setDeploymentIntent: vi.fn(), syncConversationUrl: vi.fn(), setConversationRouteId: vi.fn(), focusComposer: vi.fn(),
     closeSettings, brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }), { wrapper: LocaleProvider, initialProps: { currentEngine: trialEngine, admitted: true, subject: "draft-actor", generation: 1 } })

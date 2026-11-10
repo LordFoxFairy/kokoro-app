@@ -33,13 +33,13 @@ export type AppFrameActionsOptions = {
   projectWorkspace: boolean
   projectRef?: string
   routedConversationId?: string | null
-  projectComposerDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; selectedCustomApiProfiles?: readonly CustomApiSelection[]; selectedResourceRefs?: readonly SelectedResourceRef[]; isCurrent: () => boolean }
+  projectComposerDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; selectedCustomApiProfiles?: readonly CustomApiSelection[]; isCurrent: () => boolean }
   onProjectDraftAccepted?: () => void
   standaloneSurface: boolean
   chatHref: string
   activeId: string | null
-  draft: string
-  clearDraft: () => void
+  readDraft: () => { text: string; refs: readonly SelectedResourceRef[] } | null
+  clearDraft: (keepResources?: boolean) => void
   updateDraft: (value: string) => void
   setDeploymentIntent: (intent: CreationIntent | null) => void
   syncConversationUrl: (id: string | null, mode: "push" | "replace") => void
@@ -63,7 +63,7 @@ export function useAppFrameActions({
   standaloneSurface,
   chatHref,
   activeId,
-  draft,
+  readDraft,
   clearDraft,
   updateDraft,
   setDeploymentIntent,
@@ -99,7 +99,9 @@ export function useAppFrameActions({
   catch { actorAtRender = undefined }
 
   const submitDraft = useCallback(() => {
-    const content = draft.trim()
+    const intent = readDraft()
+    if (intent === null) return
+    const content = intent.text.trim()
     if (!engine || !content || content.length > MAX_INPUT_LENGTH) {
       return
     }
@@ -152,7 +154,12 @@ export function useAppFrameActions({
       if (target !== deliveryTargetAtRender) { focusComposer(); return }
       if (target !== null) delivery = deliveryPreference === "interrupt" ? { interruptRunId: target } : { steerRunId: target }
     }
-    const accepted = submitCurrentDraft(content, allocate, projectComposerDraft, delivery)
+    const steer = delivery?.steerRunId !== undefined
+    const accepted = submitCurrentDraft(content, allocate, projectComposerDraft, delivery, steer ? [] : intent.refs,
+      () => {
+        const current = readDraft()
+        return current?.text === intent.text && current.refs === intent.refs
+      })
     if (!accepted) {
       // A synchronous guard (for example, a create receipt still in flight)
       // leaves the user's draft and creation/route intent untouched.
@@ -160,7 +167,8 @@ export function useAppFrameActions({
       return
     }
     if (projectWorkspace && routedConversationId == null) onProjectDraftAccepted?.()
-    clearDraft()
+    if (steer) clearDraft(true)
+    else clearDraft()
     if (projectWorkspace || conversationAtRender === null) {
       // Publish only this synchronously accepted Send, never a restored cache
       // entry. Both first-message surfaces must leave their own overview now.
@@ -175,7 +183,7 @@ export function useAppFrameActions({
     // blank conversation cannot inherit a stale Website/App capsule.
     setDeploymentIntent(null)
     focusComposer()
-  }, [actorAtRender, projectComposerDraft, onProjectDraftAccepted, chatHref, conversationAtRender, directSelectionAtRender, deliveryPreference, deliveryTargetAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, submitCurrentDraft, syncConversationUrl])
+  }, [actorAtRender, projectComposerDraft, onProjectDraftAccepted, chatHref, conversationAtRender, directSelectionAtRender, deliveryPreference, deliveryTargetAtRender, routeAtRender, clearDraft, readDraft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, submitCurrentDraft, syncConversationUrl])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

@@ -168,8 +168,8 @@ export function useAppFrameSkillTrial({ engine, preview, boundary }: {
   /** The shell has already checked its route and Send admission. Allocation
    * stays synchronous so no old choice can be rebound by a later callback. */
   const submitCurrentDraft = useCallback((content: string, allocateProjectConversation = false,
-    projectDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; selectedCustomApiProfiles?: readonly CustomApiSelection[]; selectedResourceRefs?: readonly SelectedResourceRef[]; isCurrent: () => boolean },
-    delivery?: Parameters<SessionEngine["submit"]>[1]): boolean => {
+    projectDraft?: { mode: AgentMode; model: string | null; selectedMcpConnectionIds: readonly string[]; selectedCustomApiProfiles?: readonly CustomApiSelection[]; isCurrent: () => boolean },
+    delivery?: Parameters<SessionEngine["submit"]>[1], resourceRefs?: readonly SelectedResourceRef[], draftIsCurrent?: () => boolean): boolean => {
     const owner = ownerRef.current
     if (!engine || !owner || owner.context !== lifetime || owner.engine !== engine) return false
     const current = selectionRef.current
@@ -189,11 +189,12 @@ export function useAppFrameSkillTrial({ engine, preview, boundary }: {
           engine.setModel(projectDraft.model)
           engine.setSelectedMcpConnectionIds([...projectDraft.selectedMcpConnectionIds])
           engine.setSelectedCustomApiProfiles?.(projectDraft.selectedCustomApiProfiles ?? [])
-          engine.setSelectedResourceRefs?.(projectDraft.selectedResourceRefs ?? [])
         }
         if (transfer && (selectionRef.current !== transfer.selection || !transfer.selection.active || !actionIsCurrent())) return false
       }
-      return delivery === undefined ? engine.submit(content) : engine.submit(content, delivery)
+      if (draftIsCurrent && !draftIsCurrent()) return false
+      return resourceRefs?.length ? engine.submit(content, delivery, resourceRefs)
+        : delivery === undefined ? engine.submit(content) : engine.submit(content, delivery)
     } finally {
       if (draftSubmissionRef.current === transfer) draftSubmissionRef.current = null
     }

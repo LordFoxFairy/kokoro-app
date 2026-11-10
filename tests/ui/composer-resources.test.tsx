@@ -11,6 +11,9 @@ import { listProjectResources } from "@/features/app/project-resource-list"
 import { createSessionEngine } from "@/engine/machine"
 import type { ConversationStore } from "@/core/conversations"
 import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
+import { AppFrame } from "@/components/blocks/app-frame/app-frame"
+import { ThemeProvider } from "@/ui/theme/theme-context"
+import { admitBrowserAuthSessionIndexes } from "@/ui/shell/page-clients"
 import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
 
 vi.mock("@/features/app/kokoro-library-file-client", () => ({ listLibraryFiles: vi.fn() }))
@@ -111,6 +114,51 @@ it("shows answer-only recent tasks honestly while selecting only delivered artif
   expect(await screen.findByRole("button", { name: "result.txt" })).toBeVisible()
 })
 
+it.each([false, true])("restores the unsent composer selection in a new AppFrame and sends it once (Project=%s)", async project => {
+  const projectRef = "project-draft-refs"
+  const path = project ? `/app/project/${projectRef}` : "/app"
+  const key = project ? `__project__:${projectRef}` : "__pending__"
+  history.replaceState(null, "", path)
+  const admission = { ...boundary, tenant: "resource-tenant" }
+  expect(admitBrowserAuthSessionIndexes(admission.subject, admission.subject, admission.tenant)).toBe(true)
+  const client = createFakeClient()
+  const storage = createMemoryStorage<ConversationStore>()
+  const mount = () => {
+    const engine = createSessionEngine({ client, storage, ...(project ? { scope: { kind: "project", projectRef } } : {}) })
+    const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app"
+      projectReadBoundary={admission} {...(project ? { projectWorkspace: true, projectRef } : {})}
+      workspaceCapabilities={{ instructions: false, connectors: false, resources: true, skills: false, projectConversations: false }}
+    /></LocaleProvider></ThemeProvider>)
+    return () => { view.unmount(); engine.dispose() }
+  }
+  let close = mount()
+  const input = () => screen.getByRole("textbox", { name: "Chat input" })
+  const prompt = "Read this file after refresh"
+  try {
+    fireEvent.change(input(), { target: { value: prompt } })
+    fireEvent.click(screen.getByRole("button", { name: "Files and resources" }))
+    fireEvent.click(screen.getByRole("button", { name: /^Library$/u }))
+    fireEvent.click(await screen.findByRole("button", { name: "notes.txt" }))
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" })[0]!)
+    expect(screen.getByRole("button", { name: "Remove notes.txt" })).toBeVisible()
+    act(() => window.dispatchEvent(new PageTransitionEvent("pagehide")))
+    expect(window.localStorage.getItem("kokoro.web.drafts")).not.toContain("notes.txt")
+    close()
+    close = mount()
+    expect(input()).toHaveValue(prompt)
+    expect(screen.getByRole("list", { name: "Selected attachments" })).toBeVisible()
+    expect(client.createCalls).toHaveLength(0)
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }))
+    await waitFor(() => expect(client.createCalls).toHaveLength(1))
+    expect(client.createCalls[0]?.body).toMatchObject({
+      content: prompt,
+      selected_resource_refs: [{ kind: "asset", resource_id: project ? "project-asset" : "asset-clean" }],
+    })
+    expect(screen.queryByRole("list", { name: "Selected attachments" })).toBeNull()
+    expect(JSON.parse(window.localStorage.getItem("kokoro.web.drafts") ?? "{}")[key]).toBeUndefined()
+  } finally { close() }
+})
+
 it("transfers the Project draft refs after allocation and preserves the exact unknown retry", async () => {
   history.replaceState(null, "", "/app/project/project-refs")
   const client = createFakeClient()
@@ -119,22 +167,23 @@ it("transfers the Project draft refs after allocation and preserves the exact un
   engine.newConversation()
   const hiddenId = engine.getSnapshot().store!.activeId
   const refs: SelectedResourceRef[] = [{ kind: "asset", resource_id: "project-asset" }]
+  let currentRefs = refs
   const view = renderHook(() => useAppFrameActions({
     engine, preview: false, readBoundary: boundary, projectWorkspace: true, standaloneSurface: false,
     projectRef: "project-refs", routedConversationId: null, chatHref: "/app", activeId: hiddenId,
-    draft: "Read the attached file", clearDraft: vi.fn(), updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
+    clearDraft: vi.fn(), updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
+    readDraft: () => ({ text: "Read the attached file", refs: currentRefs }),
     syncConversationUrl: vi.fn(), setConversationRouteId: vi.fn(), focusComposer: vi.fn(), closeSettings: vi.fn(),
     brandName: "Kokoro", commandNewChatTimerRef: { current: null },
-    projectComposerDraft: { mode: "fast", model: null, selectedMcpConnectionIds: [], selectedResourceRefs: refs, isCurrent: () => true },
+    projectComposerDraft: { mode: "fast", model: null, selectedMcpConnectionIds: [], isCurrent: () => true },
   }), { wrapper: LocaleProvider })
   try {
-    expect(engine.getSnapshot().selectedResourceRefs).toEqual([])
     await act(async () => { view.result.current.submitDraft(); await settle() })
     const original = structuredClone(client.createCalls[0])
     expect(original?.sessionId).not.toBe(hiddenId)
     expect(original?.body.selected_resource_refs).toEqual(refs)
     expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
-    act(() => { engine.setSelectedResourceRefs?.([]) })
+    currentRefs = []
     await act(async () => { engine.retry(); await settle() })
     expect(client.createCalls).toEqual([original, original])
   } finally { view.unmount(); engine.dispose() }

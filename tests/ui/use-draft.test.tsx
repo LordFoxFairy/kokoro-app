@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { admitBrowserAuthSessionIndexes } from "@/ui/shell/page-clients"
 import { consumeLandingPrompt, stashLandingPrompt, stashPendingDraft, useDraft } from "@/ui/shell/use-draft"
+import type { SelectedResourceRef } from "@/contract/chat"
 
 const DRAFTS_KEY = "kokoro.web.drafts"
 
@@ -18,6 +19,67 @@ afterEach(() => {
 })
 
 describe("useDraft persistence", () => {
+  const owner = { admitted: true, subject: "draft-owner", tenant: "tenant-a", generation: 1 }
+  const refs: SelectedResourceRef[] = [{ kind: "asset", resource_id: "selected-asset" }]
+
+  it("flushes text and opaque refs together on navigation or pagehide and fences the retired tenant", () => {
+    vi.useFakeTimers()
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    const { result, rerender } = renderHook(({ activeId, boundary }) => useDraft(activeId, true, undefined, boundary), {
+      initialProps: { activeId: "a", boundary: owner },
+    })
+    act(() => {
+      result.current.updateDraft("text and refs in the same edit")
+      result.current.updateResourceRefs(refs)
+    })
+    rerender({ activeId: "b", boundary: owner })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "", refs: [] })
+    rerender({ activeId: "a", boundary: owner })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "text and refs in the same edit", refs })
+    const old = result.current
+    act(() => result.current.updateDraft("flush this on pagehide"))
+    act(() => window.dispatchEvent(new PageTransitionEvent("pagehide")))
+    act(() => old.updateResourceRefs([]))
+    expect(old.readCurrentDraft()).toBeNull()
+    rerender({ activeId: "a", boundary: { ...owner, generation: 2 } })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "flush this on pagehide", refs })
+    const afterPageShow = result.current
+    act(() => result.current.updateDraft("old pending edit"))
+    expect(admitBrowserAuthSessionIndexes(owner.subject, owner.subject, "tenant-b")).toBe(true)
+    act(() => vi.advanceTimersByTime(200))
+    rerender({ activeId: "a", boundary: { ...owner, tenant: "tenant-b", generation: 3 } })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "", refs: [] })
+    expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}").a).toMatchObject({ text: "flush this on pagehide", refs })
+    act(() => {
+      result.current.updateDraft("new tenant text")
+      result.current.updateResourceRefs([{ kind: "artifact", resource_id: "tenant-b-ref" }])
+      afterPageShow.clearDraft()
+      vi.advanceTimersByTime(200)
+    })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "new tenant text", refs: [{ kind: "artifact", resource_id: "tenant-b-ref" }] })
+    const otherTab = { subject: owner.subject, tenant: owner.tenant, text: "newer other-tenant edit", refs }
+    act(() => {
+      result.current.updateDraft("waiting on debounce")
+      window.localStorage.setItem(DRAFTS_KEY, JSON.stringify({ a: otherTab }))
+      vi.advanceTimersByTime(200)
+    })
+    expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}").a).toEqual(otherTab)
+  })
+
+  it("will not replace a newer refs-only draft when restoring a rejected message", () => {
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    const { result, unmount } = renderHook(() => useDraft("rejected", true, undefined, owner))
+    const newer: SelectedResourceRef[] = [{ kind: "artifact", resource_id: "newer-artifact" }]
+    act(() => result.current.updateResourceRefs(newer))
+    act(() => expect(result.current.restoreDraft("rejected message", refs)).toBe(false))
+    expect(result.current.readCurrentDraft()).toEqual({ text: "", refs: newer })
+    act(() => result.current.clearDraft())
+    act(() => expect(result.current.restoreDraft("rejected message", refs)).toBe(true))
+    unmount()
+    const restored = renderHook(() => useDraft("rejected", true, undefined, owner))
+    expect(restored.result.current.readCurrentDraft()).toEqual({ text: "rejected message", refs })
+  })
+
   it("restores a rejected message synchronously without overwriting a newer draft", () => {
     const { result } = renderHook(() => useDraft("conversation-restore", true))
     act(() => result.current.updateDraft("newer text"))

@@ -3,6 +3,7 @@ import { createSessionEngine } from "@/engine/machine"
 import type { PendingSubmission } from "@/engine/submission-recovery"
 import { addConversation, type ConversationStore } from "@/core/conversations"
 import { SessionClientError } from "@/engine/client"
+import type { SelectedResourceRef } from "@/contract/chat"
 import { makeEvent, makeSnapshot } from "../core/fixtures"
 import { createFakeClient, createMemoryStorage, makeReceipt, settle } from "./fakes"
 
@@ -154,10 +155,11 @@ it("freezes an exact started Run and restores the draft only after a definitive 
     expect(engine.submit("original interrupt", { interruptRunId: "different_run" })).toBe(false)
 
     client.nextCreate = () => Promise.reject(new SessionClientError("network", "lost ACK"))
-    expect(engine.submit("original interrupt", { interruptRunId: runId })).toBe(true)
+    const refs: SelectedResourceRef[] = [{ kind: "asset", resource_id: "original-asset" }]
+    expect(engine.submit("original interrupt", { interruptRunId: runId }, refs)).toBe(true)
     await settle()
     const original = client.createCalls[1]!
-    expect(original.body.interrupt_run_id).toBe(runId)
+    expect(original.body).toMatchObject({ interrupt_run_id: runId, selected_resource_refs: refs })
     expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
     expect(engine.restoreRejectedDelivery?.(() => true)).toBe(false)
 
@@ -168,9 +170,9 @@ it("freezes an exact started Run and restores the draft only after a definitive 
     expect(engine.getSnapshot()).toMatchObject({ canRetryPendingSubmission: false, canRestoreRejectedDelivery: true })
     expect(engine.restoreRejectedDelivery?.(() => false)).toBe(false)
     expect(recovery.read()?.submission.content).toBe("original interrupt")
-    const drafts: string[] = []
-    expect(engine.restoreRejectedDelivery?.((draft) => { drafts.push(draft); return true })).toBe(true)
-    expect(drafts).toEqual(["original interrupt"])
+    const save = vi.fn(() => true)
+    expect(engine.restoreRejectedDelivery?.(save)).toBe(true)
+    expect(save).toHaveBeenCalledWith("original interrupt", refs)
     expect(recovery.read()).toBeNull()
     expect(engine.getSnapshot().thread.messages.some(row => row.content === "original interrupt")).toBe(false)
     expect(engine.getSnapshot().machine.runId).toBe(runId)

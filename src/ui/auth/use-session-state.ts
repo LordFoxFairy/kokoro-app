@@ -16,6 +16,7 @@ import {
   browserConversationMoveCoordinator,
   readBrowserAuthIndexSubject,
 } from "@/ui/shell/page-clients"
+import { bindVerifiedDraftOwner } from "@/ui/shell/use-draft"
 
 /** Local read lifecycle only; BFF still authorizes every Project request. */
 export type ProjectReadBoundary = {
@@ -336,7 +337,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
             // Recheck bootstrap eligibility before touching indexes; real GETs retain their own start marker.
             const indexAtAdmission = serverObservation === undefined ? resolved.subjectAtProbeStart : bootstrapIndex
             if (indexAtAdmission === undefined ||
-              !admitBrowserAuthSessionIndexes(resolved.subject, indexAtAdmission)) {
+              !admitBrowserAuthSessionIndexes(resolved.subject, indexAtAdmission, resolved.tenant)) {
               admissionRef.current = { ...admissionRef.current, admitted: false }
               setProbe((current) => current.mode === "authenticated"
                 ? { ...current, unavailable: true, requestPending: false, retry,
@@ -423,6 +424,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
         // that event, not the fresh check already started by another listener.
         if (lastIdentityStorageEvent !== event) {
           lastIdentityStorageEvent = event
+          bindVerifiedDraftOwner(null)
           if (sessionProbeInflight !== null) sessionProbeInflight.observation.retired = true
         }
         browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
@@ -433,7 +435,10 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean;
       }
       if (retireChangedSubject() !== admittedSubject || changed) onVisible()
     }
-    const onPageHide = (): void => {
+    const onPageHide = (event: Event): void => {
+      // Ordinary pagehide must still let the draft controller flush its
+      // already captured owner/key. Explicit identity invalidation cannot.
+      if (event.type === "kokoro:auth-invalidated") bindVerifiedDraftOwner(null)
       retireReadRecovery()
       documentSuspended = true
       admissionRef.current = { ...admissionRef.current, admitted: false }

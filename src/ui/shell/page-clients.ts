@@ -35,7 +35,7 @@ import {
 import type { SubmissionRecovery } from "@/engine/submission-recovery"
 import { createBrowserSubmissionRecovery, SUBMISSION_RECOVERY_PREFIX } from "./browser-submission-recovery"
 
-import { consumeLandingPrompt } from "./use-draft"
+import { bindVerifiedDraftOwner, consumeLandingPrompt, DRAFTS_STORAGE_KEY, writeLandingPendingDraft } from "./use-draft"
 
 const STORAGE_KEY = "kokoro.web.conversations"
 export const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
@@ -53,6 +53,7 @@ export function bindBrowserMessagePartsReadRecheck(capture: NonNullable<typeof c
 export function invalidateBrowserAuthSessionIndexes(): void {
   if (typeof window === "undefined") return
   admittedBrowserSubject = null
+  bindVerifiedDraftOwner(null)
   for (const [key, entry] of pageEngines) {
     if (key.startsWith("live:")) {
       entry.invalidated = true
@@ -82,13 +83,13 @@ export function readBrowserAuthIndexSubject(): string | null {
 }
 
 /** Invalidate browser-owned indexes only when a verified subject changes. */
-export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeStart: string | null): boolean {
+export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeStart: string | null, tenant?: string): boolean {
   const currentSubject = readBrowserAuthIndexSubject()
   if (currentSubject !== subjectAtProbeStart && currentSubject !== subject) return false
   if (currentSubject !== subject) {
     invalidateBrowserAuthSessionIndexes()
     // Never retain unknown/previous-actor data as an anonymous prompt.
-    window.localStorage.removeItem("kokoro.web.drafts")
+    window.localStorage.removeItem(DRAFTS_STORAGE_KEY)
     const projectDraftKeys: string[] = []
     for (let index = 0; index < window.sessionStorage.length; index += 1) {
       const key = window.sessionStorage.key(index)
@@ -98,16 +99,10 @@ export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeSt
     window.sessionStorage.removeItem("kokoro.web.pending-creation-intent")
   }
   const prompt = consumeLandingPrompt()
-  if (prompt !== null) {
-    const raw = window.localStorage.getItem("kokoro.web.drafts")
-    const drafts: unknown = raw === null ? {} : JSON.parse(raw)
-    if (typeof drafts !== "object" || drafts === null || Array.isArray(drafts) ||
-      Object.values(drafts).some((value) => typeof value !== "string")) throw new Error("invalid browser draft map")
-    // Do not use persisted-store.write: it intentionally swallows storage errors.
-    window.localStorage.setItem("kokoro.web.drafts", JSON.stringify({ ...drafts, __pending__: prompt }))
-  }
+  if (prompt !== null) writeLandingPendingDraft(prompt)
   if (currentSubject !== subject) window.localStorage.setItem(AUTH_INDEX_SUBJECT_KEY, subject)
   admittedBrowserSubject = subject
+  bindVerifiedDraftOwner(subject, tenant)
   return true
 }
 
