@@ -1,3 +1,4 @@
+import { hasHubNoStoreDirective } from "@/hub/client"
 import {
   agentConnectionCommandSchema,
   agentConnectionErrorSchema,
@@ -65,7 +66,7 @@ export function createAgentClient(fetcher: typeof fetch = fetch): AgentClient {
       signal.throwIfAborted()
       const requestId = response.headers.get("x-request-id")
       const length = response.headers.get("content-length")
-      if (!requestId || response.headers.get("cache-control") !== "private, no-store" ||
+      if (!requestId || !hasHubNoStoreDirective(response.headers) ||
         !AGENT_CONNECTION_JSON.test(response.headers.get("content-type") ?? "") ||
         (length !== null && (!/^(0|[1-9][0-9]*)$/u.test(length) || Number(length) > AGENT_CONNECTION_RESPONSE_LIMIT)))
         throw new AgentClientError(502, "agent_connection_response_invalid")

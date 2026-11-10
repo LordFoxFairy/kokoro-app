@@ -5,7 +5,7 @@ const setupId = "a".repeat(32)
 const data = { platform: "telegram", status: "awaiting_telegram", state_version: "2", setup_id: setupId,
   continue_url: `https://t.me/KokoroFixtureBot?start=${setupId}`, expires_at: "2026-08-30T14:30:00+08:00" }
 const command = { action: "start", expected_state_version: "1" } as const
-const response = (raw: unknown, status = 200) => Response.json(raw, { status, headers: { "cache-control": "private, no-store", "x-request-id": "req_1" } })
+const response = (raw: unknown, status = 200) => Response.json(raw, { status, headers: { "cache-control": "private, no-store, max-age=0", "x-request-id": "req_1" } })
 
 it("Agent client 验证同源 POST 的正式 envelope、版本和 setup 链接", async () => {
   const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response({ data, meta: { request_id: "req_1" } }))
