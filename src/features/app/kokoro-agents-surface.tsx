@@ -28,8 +28,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { useT } from "@/i18n/context"
-import { AgentClientError, type AgentClient, type AgentConnectionCommand, type AgentConnectionSetup, type AgentPlatform } from "@/agents/client"
-import { agentConnectionCommandSchema } from "@/generated/bff-agent-connections"
+import { AgentClientError, type AgentClient, type AgentConnectionCommand, type AgentConnectionSetup, type AgentPlatform, type LineConnectionContinueRequest } from "@/agents/client"
+import { agentConnectionCommandSchema, lineConnectionContinueRequestSchema } from "@/generated/bff-agent-connections"
 import { readBrowserInvalidationHint, type ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { AUTH_INDEX_SUBJECT_KEY, browserAgentClient, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
 
@@ -38,15 +38,19 @@ import styles from "./kokoro-agents-surface.module.css"
 const PLATFORM_VALUES = ["telegram", "line", "slack"] as const satisfies readonly AgentPlatform[]
 type Platform = AgentPlatform
 type SetupNotice = "agents.telegramStateReloaded" | "agents.telegramOutcomeReloaded"
-type SetupError = "agents.telegramUnavailable" | "agents.telegramReadFailed" | "agents.telegramReadBeforeWrite"
+type SetupError = "agents.telegramUnavailable" | "agents.telegramReadFailed" | "agents.telegramReadBeforeWrite" |
+  "agents.lineUnavailable" | "agents.lineReadFailed"
+type SetupCommand = AgentConnectionCommand | LineConnectionContinueRequest
+type LineHandoff = Pick<LineConnectionContinueRequest, "setup_id" | "link_token"> & { identity: string }
 type ReadySetup = {
   kind: "ready"
   setup: AgentConnectionSetup
+  canContinueLine?: true
   notice?: SetupNotice | "agents.telegramProofRejected" | "agents.telegramCommandRejected"
 }
 type SetupState = ReadySetup | { kind: "loading" } | { kind: "elapsed" } | { kind: "error"; message: SetupError }
 type SetupAttempt = { controller: AbortController; busy: boolean }
-type SetupLease = { scope: object; active: boolean; attempt: SetupAttempt | null }
+type SetupLease = { scope: object; active: boolean; attempt: SetupAttempt | null; lineContinuation: { setup: AgentConnectionSetup; url: string } | null }
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 const CONNECTION_STATUS_LABEL_KEYS = {
   connected: "settings.connected",
@@ -54,11 +58,13 @@ const CONNECTION_STATUS_LABEL_KEYS = {
   expired: "agents.telegramExpired",
   awaiting_telegram: "agents.telegramAwaiting",
   awaiting_confirmation: "agents.telegramAwaitingProof",
+  awaiting_line: "agents.lineAwaiting",
+  awaiting_line_approval: "agents.lineAwaitingApproval",
+  awaiting_line_callback: "agents.lineAwaitingCallback",
 } as const
 
 function setupExpiry(setup: AgentConnectionSetup | undefined): number | null {
-  return setup?.status === "awaiting_telegram" || setup?.status === "awaiting_confirmation"
-    ? Date.parse(setup.expires_at) : null
+  return setup && "expires_at" in setup ? Date.parse(setup.expires_at) : null
 }
 
 const FEATURES = [
@@ -111,6 +117,7 @@ function SetupDialog({
   const [platform, setPlatform] = useState<Platform>("telegram")
   const [result, setResult] = useState<{ lease: SetupLease; view: SetupState } | null>(null)
   const [proof, setProof] = useState("")
+  const [lineHandoff, setLineHandoff] = useState<LineHandoff | null>(null)
   const leaseRef = useRef<SetupLease | null>(null)
   const tabRefs = useRef<Partial<Record<Platform, HTMLButtonElement | null>>>({})
   const subject = boundary?.subject ?? null
@@ -119,14 +126,18 @@ function SetupDialog({
   const admitted = boundary?.admitted === true
   const hint = boundary?.authInvalidationHint
   const route = typeof window === "undefined" ? "" : window.location.pathname
-  const allowed = open && client !== null && platform === "telegram" && admitted && Boolean(subject)
+  const identity = JSON.stringify([subject, tenant, generation, hint])
+  const allowed = open && client !== null && platform !== "slack" && admitted && Boolean(subject)
+  const line = platform === "line"
+  const providerUnavailable = line ? "agents.lineUnavailable" : "agents.telegramUnavailable"
+  const readFailed = line ? "agents.lineReadFailed" : "agents.telegramReadFailed"
   const browserScopeCurrent = useCallback(() => {
     if (!allowed || typeof window === "undefined" || window.location.pathname !== route) return false
     try {
       return readBrowserAuthIndexSubject() === subject && (hint === undefined || readBrowserInvalidationHint() === hint)
     } catch { return false }
   }, [allowed, subject, hint, route])
-  const scope = useMemo(() => ({ client, allowed, subject, tenant, generation, hint, route }), [client, allowed, subject, tenant, generation, hint, route])
+  const scope = useMemo(() => ({ client, allowed, platform, identity, route }), [client, allowed, platform, identity, route])
   const current = useCallback((lease: SetupLease) =>
     leaseRef.current === lease && lease.active && browserScopeCurrent(), [browserScopeCurrent])
   const retire = useCallback(() => {
@@ -134,32 +145,49 @@ function SetupDialog({
     if (!lease) return
     leaseRef.current = null
     lease.active = false
+    lease.lineContinuation = null
     lease.attempt?.controller.abort()
   }, [])
 
   const request = useCallback(async function perform(
-    lease: SetupLease, command?: AgentConnectionCommand, previous?: AgentConnectionSetup, notice?: SetupNotice,
+    lease: SetupLease, command?: SetupCommand, previous?: AgentConnectionSetup, notice?: SetupNotice,
   ): Promise<void> {
     if (!client || !current(lease) || lease.attempt?.busy) return
     lease.attempt?.controller.abort()
     const attempt = { controller: new AbortController(), busy: true }
     lease.attempt = attempt
+    lease.lineContinuation = null
     setProof("")
+    if (command) setLineHandoff(null)
     setResult({ lease, view: { kind: "loading" } })
     const owns = () => current(lease) && lease.attempt === attempt && !attempt.controller.signal.aborted
     try {
-      const setup = await (command ? client.changeConnection("telegram", command, attempt.controller.signal)
-        : client.connectionSetup("telegram", attempt.controller.signal))
+      const signal = attempt.controller.signal
+      let setup: AgentConnectionSetup
+      let lineContinuation: string | undefined
+      if (command && "link_token" in command) {
+        const { continue_url, ...currentSetup } = await client.continueLineConnection(command, signal)
+        setup = currentSetup
+        lineContinuation = continue_url
+      } else {
+        setup = await (command ? client.changeConnection(platform, command, signal) : client.connectionSetup(platform, signal))
+      }
       if (!owns()) return
+      if (setup.platform !== platform) throw new AgentClientError(502, "agent_connection_response_invalid")
+      if (line) setLineHandoff(handoff => handoff?.identity === identity &&
+        setup.status === "awaiting_line_approval" && handoff.setup_id === setup.setup_id ? handoff : null)
       const expiresAt = setupExpiry(setup)
-      setResult({ lease, view: expiresAt !== null && (!Number.isFinite(expiresAt) || expiresAt <= Date.now())
-        ? { kind: "elapsed" } : { kind: "ready", setup, ...(notice === undefined ? {} : { notice }) } })
+      const elapsed = expiresAt !== null && (!Number.isFinite(expiresAt) || expiresAt <= Date.now())
+      if (!elapsed && lineContinuation !== undefined) lease.lineContinuation = { setup, url: lineContinuation }
+      setResult({ lease, view: elapsed
+        ? { kind: "elapsed" } : { kind: "ready", setup, ...(notice === undefined ? {} : { notice }),
+          ...(lease.lineContinuation === null ? {} : { canContinueLine: true }) } })
     } catch (error) {
       if (!owns()) return
       const fault = error instanceof AgentClientError ? error : null
       const unavailable = fault?.code === "agent_connection_provider_unavailable"
       if (command && !unavailable) {
-        if (fault?.status === 409 && fault.code === "agent_connection_proof_invalid" && previous) {
+        if (!line && fault?.status === 409 && fault.code === "agent_connection_proof_invalid" && previous) {
           setResult({ lease, view: { kind: "ready", setup: previous, notice: "agents.telegramProofRejected" } })
           return
         }
@@ -177,19 +205,20 @@ function SetupDialog({
           return
         }
       }
-      setResult({ lease, view: { kind: "error", message: unavailable ? "agents.telegramUnavailable"
-        : command || notice ? "agents.telegramReadBeforeWrite" : "agents.telegramReadFailed" } })
+      setResult({ lease, view: { kind: "error", message: unavailable ? providerUnavailable
+        : command || notice ? "agents.telegramReadBeforeWrite" : readFailed } })
     } finally { attempt.busy = false }
-  }, [client, current])
+  }, [client, current, identity, line, platform, providerUnavailable, readFailed])
 
   useLayoutEffect(() => {
     if (!scope.allowed) return
-    const lease: SetupLease = { scope, active: true, attempt: null }
+    const lease: SetupLease = { scope, active: true, attempt: null, lineContinuation: null }
     leaseRef.current = lease
     const invalidate = () => {
       if (leaseRef.current !== lease) return
       retire()
       setProof("")
+      setLineHandoff(null)
       setResult(null)
       onOpenChange(false)
     }
@@ -214,12 +243,45 @@ function SetupDialog({
     }
   }, [scope, browserScopeCurrent, onOpenChange, request, retire])
 
+  useLayoutEffect(() => {
+    let live = true
+    const receive = () => {
+      if (!live || window.location.pathname !== "/app/agents") return
+      const fragment = window.location.hash.slice(1)
+      const params = new URLSearchParams(fragment)
+      if (!params.has("line_setup") && !params.has("link_token")) return
+      // Remove the secret before parsing or opening the dialog. It never enters a login return target.
+      try { window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`) }
+      catch { return }
+      setLineHandoff(null)
+      if (!client || !admitted || !subject) return
+      try {
+        if (readBrowserAuthIndexSubject() !== subject || (hint !== undefined && readBrowserInvalidationHint() !== hint)) return
+      } catch { return }
+      const setupId = params.get("line_setup")
+      const token = params.get("link_token")
+      const parsed = lineConnectionContinueRequestSchema.pick({ setup_id: true, link_token: true }).safeParse({ setup_id: setupId, link_token: token })
+      if (!parsed.success || fragment !== new URLSearchParams({ line_setup: parsed.data.setup_id, link_token: parsed.data.link_token }).toString()) return
+      if (!line) retire()
+      setLineHandoff({ setup_id: parsed.data.setup_id, link_token: parsed.data.link_token, identity })
+      setPlatform("line")
+      onOpenChange(true)
+      if (open && line && leaseRef.current) void request(leaseRef.current)
+    }
+    queueMicrotask(receive)
+    window.addEventListener("hashchange", receive)
+    return () => { live = false; window.removeEventListener("hashchange", receive) }
+  }, [admitted, client, hint, identity, line, onOpenChange, open, request, retire, subject])
+
   const view = result?.lease.scope === scope && allowed ? result.view : undefined
   const setup = view?.kind === "ready" ? view.setup : undefined
   const expiresAt = setupExpiry(setup)
   const expire = useCallback((target: AgentConnectionSetup) => {
+    const lease = leaseRef.current
+    if (lease?.lineContinuation?.setup === target) lease.lineContinuation = null
     setResult(old => old?.view.kind === "ready" && old.view.setup === target ? { lease: old.lease, view: { kind: "elapsed" } } : old)
     setProof("")
+    if ("setup_id" in target) setLineHandoff(handoff => handoff?.setup_id === target.setup_id ? null : handoff)
   }, [])
   useEffect(() => {
     if (!open || setup === undefined || expiresAt === null) return
@@ -244,7 +306,7 @@ function SetupDialog({
   }, [open, setup, expiresAt, expire])
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) { retire(); setProof(""); setResult(null) }
+    if (!nextOpen) { retire(); setProof(""); setLineHandoff(null); setResult(null) }
     onOpenChange(nextOpen)
   }
   const refresh = () => { if (leaseRef.current) void request(leaseRef.current) }
@@ -258,6 +320,25 @@ function SetupDialog({
       ...(action === "confirm" ? { proof } : {}),
     })
     if (parsed.success) void request(lease, parsed.data, setup)
+  }
+  const approveLine = () => {
+    const lease = leaseRef.current
+    if (!lease || !current(lease) || !line || setup?.status !== "awaiting_line_approval" ||
+      lineHandoff?.identity !== identity || lineHandoff.setup_id !== setup.setup_id) return
+    if (expiresAt === null || expiresAt <= Date.now()) { expire(setup); return }
+    const parsed = lineConnectionContinueRequestSchema.safeParse({
+      setup_id: setup.setup_id, expected_state_version: setup.state_version, link_token: lineHandoff.link_token,
+    })
+    if (parsed.success) void request(lease, parsed.data)
+  }
+  const openLine = () => {
+    const lease = leaseRef.current
+    if (!lease || !current(lease) || setup?.status !== "awaiting_line_callback" || lease.lineContinuation?.setup !== setup) return
+    if (expiresAt === null || expiresAt <= Date.now()) { expire(setup); return }
+    const { url } = lease.lineContinuation
+    lease.lineContinuation = null
+    setResult({ lease, view: { kind: "ready", setup } })
+    window.open(url, "_blank", "noopener,noreferrer")
   }
   const status = setup?.status ?? (view?.kind === "elapsed" ? "expired" : null)
 
@@ -286,7 +367,7 @@ function SetupDialog({
         <div className={styles.dialogScrollArea} data-testid="agent-setup-scroll">
           <Tabs value={platform} onValueChange={value => {
             if (value === platform || !PLATFORM_VALUES.includes(value as Platform)) return
-            retire(); setProof(""); setResult(null); setPlatform(value as Platform)
+            retire(); setProof(""); setLineHandoff(null); setResult(null); setPlatform(value as Platform)
           }} className={styles.platformTabs}>
             <TabsList className={styles.platformTabsList} aria-label={t("agents.platforms")}>
               {PLATFORM_VALUES.map(value => <TabsTrigger key={value} value={value} className={styles.platformTab}
@@ -295,14 +376,14 @@ function SetupDialog({
               </TabsTrigger>)}
             </TabsList>
             {PLATFORM_VALUES.map(value => {
-              const active = value === platform && value === "telegram" && allowed
+              const active = value === platform && allowed
               const label = t(`agents.platform.${value}`)
               const activeSetup = active ? setup : undefined
               const qrLabel = t("agents.qrCode", { platform: label })
               return (
                 <TabsContent key={value} value={value} className={styles.platformPanel}>
                   <div className={styles.dialogCopy}>
-                    <DialogTitle className={styles.dialogTitle}>{value === "telegram" ? t("agents.setupTitle", { platform: label }) : label}</DialogTitle>
+                    <DialogTitle className={styles.dialogTitle}>{value !== "slack" ? t("agents.setupTitle", { platform: label }) : label}</DialogTitle>
                   </div>
                   {!active ? <p role="status" className={styles.setupNotice}>{t("agents.connectionUnavailable", { platform: label })}</p> : <>
                     {status ? <div className={styles.connectionStatus} data-testid="agent-connection-status" data-status={status} role="status"
@@ -310,12 +391,12 @@ function SetupDialog({
                       <span className={styles.connectionStatusDot} aria-hidden="true" />{t(CONNECTION_STATUS_LABEL_KEYS[status])}
                     </div> : null}
                     {view === undefined || view.kind === "loading" ? <div className={styles.qrCode} aria-busy="true">
-                      <div className={styles.qrLoadingState} role="status" aria-label={t("agents.telegramLoading")}><Skeleton className={styles.qrLoading} aria-hidden="true" /></div>
+                      <div className={styles.qrLoadingState} role="status" aria-label={t(line ? "agents.lineLoading" : "agents.telegramLoading")}><Skeleton className={styles.qrLoading} aria-hidden="true" /></div>
                     </div> : null}
-                    {activeSetup?.status === "awaiting_telegram" ? <>
+                    {(activeSetup?.status === "awaiting_telegram" || activeSetup?.status === "awaiting_line") ? <>
                       <div className={styles.qrCode}><QRCodeSVG value={activeSetup.continue_url} size={140} bgColor="var(--card)"
                         fgColor="var(--foreground)" level="H" marginSize={0} role="img" aria-label={qrLabel} /></div>
-                      <p className={styles.setupNotice}>{t("agents.telegramScan")}</p>
+                      <p className={styles.setupNotice}>{t(line ? "agents.lineScan" : "agents.telegramScan")}</p>
                     </> : null}
                     {view?.kind === "error" ? <Alert variant="destructive" className={styles.setupNotice}>
                       <TriangleAlert aria-hidden="true" /><AlertDescription>{t(view.message)}</AlertDescription>
@@ -323,14 +404,14 @@ function SetupDialog({
                     {view?.kind === "ready" && view.notice ? <p role="status" className={styles.setupNotice}>{t(view.notice)}</p> : null}
                     <div className={styles.setupCommands}>
                       {activeSetup?.status === "disconnected" || activeSetup?.status === "expired"
-                        ? <Button type="button" onClick={() => write("start")}>{t("agents.telegramStart")}</Button> : null}
-                      {activeSetup?.status === "awaiting_telegram" ? <>
+                        ? <Button type="button" onClick={() => write("start")}>{t(line ? "agents.lineStart" : "agents.telegramStart")}</Button> : null}
+                      {(activeSetup?.status === "awaiting_telegram" || activeSetup?.status === "awaiting_line") ? <>
                         <Button asChild><a href={activeSetup.continue_url} target="_blank" rel="noreferrer" onClick={event => {
                           if (expiresAt === null || Date.now() < expiresAt) return
                           event.preventDefault()
                           expire(activeSetup)
                         }}>{t("agents.continueIn", { platform: label })}</a></Button>
-                        <Button type="button" variant="outline" onClick={refresh}>{t("agents.telegramCheck")}</Button>
+                        <Button type="button" variant="outline" onClick={refresh}>{t(line ? "agents.lineCheck" : "agents.telegramCheck")}</Button>
                       </> : null}
                       {activeSetup?.status === "awaiting_confirmation" ? <form className={styles.setupCommands} autoComplete="off" onSubmit={event => {
                         event.preventDefault()
@@ -341,12 +422,22 @@ function SetupDialog({
                         </label>
                         <Button type="submit" disabled={!/^[A-Za-z0-9_-]{22}$/u.test(proof)}>{t("agents.telegramConfirm")}</Button>
                       </form> : null}
-                      {activeSetup?.status === "awaiting_telegram" || activeSetup?.status === "awaiting_confirmation"
+                      {activeSetup?.status === "awaiting_line_approval" ? <>
+                        {lineHandoff?.identity === identity && lineHandoff.setup_id === activeSetup.setup_id
+                          ? <Button type="button" onClick={approveLine}>{t("agents.lineApprove")}</Button> : null}
+                        <Button type="button" variant="outline" onClick={refresh}>{t("agents.lineCheck")}</Button>
+                      </> : null}
+                      {activeSetup?.status === "awaiting_line_callback" ? <>
+                        {view?.kind === "ready" && view.canContinueLine
+                          ? <Button type="button" onClick={openLine}>{t("agents.continueIn", { platform: label })}</Button> : null}
+                        <Button type="button" variant="outline" onClick={refresh}>{t("agents.lineCheck")}</Button>
+                      </> : null}
+                      {activeSetup && "setup_id" in activeSetup
                         ? <Button type="button" variant="outline" onClick={() => write("cancel")}>{t("agents.telegramCancel")}</Button> : null}
                       {activeSetup?.status === "connected"
-                        ? <Button type="button" variant="outline" onClick={() => write("disconnect")}>{t("agents.telegramDisconnect")}</Button> : null}
+                        ? <Button type="button" variant="outline" onClick={() => write("disconnect")}>{t(line ? "agents.lineDisconnect" : "agents.telegramDisconnect")}</Button> : null}
                       {view?.kind === "elapsed" || view?.kind === "error"
-                        ? <Button type="button" variant="outline" onClick={refresh}>{t("agents.telegramCheck")}</Button> : null}
+                        ? <Button type="button" variant="outline" onClick={refresh}>{t(line ? "agents.lineCheck" : "agents.telegramCheck")}</Button> : null}
                     </div>
                   </>}
                 </TabsContent>

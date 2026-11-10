@@ -57,3 +57,36 @@ it("unknown query, foreign POST and browser webhook aliases never dispatch", asy
   expect((await POST(post, { params: Promise.resolve({ path: ["connections", "telegram", "webhook"] }) })).status).toBe(404)
   expect(requestWithDomain).not.toHaveBeenCalled()
 })
+
+it("LINE continuation only returns the official URL bound to the original setup and link token", async () => {
+  productBffConfig.mockReturnValue(config)
+  const line = "https://app.example/api/agents/connections/line/continue"
+  const route = { params: Promise.resolve({ path: ["connections", "line", "continue"] }) }
+  const setup_id = "a".repeat(32)
+  const token = "line-test-token"
+  const nonce = setup_id + "b".repeat(32)
+  const official = `https://access.line.me/dialog/bot/accountLink?${new URLSearchParams({ linkToken: token, nonce })}`
+  const command = JSON.stringify({ setup_id, expected_state_version: "3", link_token: token })
+  const request = (origin = config.session.webOrigin) => new Request(line, { method: "POST", body: command,
+    headers: { cookie, "content-type": "application/json", origin } })
+  let returnedUrl = official
+  requestWithDomain.mockImplementation(async (target: string, domain: string, init: { body: ArrayBuffer; headers: Headers }) => {
+    expect(target).toBe("https://bff.internal/v1/agents/connections/line/continue")
+    expect(domain).toBe(config.domain)
+    expect(new TextDecoder().decode(init.body)).toBe(command)
+    const id = init.headers.get("x-kokoro-request-id")!
+    return Response.json({ data: { platform: "line", status: "awaiting_line_callback", setup_id,
+      state_version: "4", expires_at: "2099-08-30T06:30:00.000Z", continue_url: returnedUrl }, meta: { request_id: id } },
+      { headers: { "cache-control": "no-store", "referrer-policy": "no-referrer", "x-request-id": id } })
+  })
+  expect((await POST(request("https://foreign.example"), route)).status).toBe(403)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+  const receipt = await POST(request(), route)
+  expect(receipt.status).toBe(200)
+  expect(receipt.headers.get("referrer-policy")).toBe("no-referrer")
+  expect((await receipt.json()).data.continue_url).toBe(official)
+  returnedUrl = official.replace(token, "wrong-token")
+  const wrong = await POST(request(), route)
+  expect(wrong.status).toBe(502)
+  expect(await wrong.text()).not.toContain("wrong-token")
+})

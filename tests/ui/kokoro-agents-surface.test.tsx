@@ -87,7 +87,7 @@ it("从能力卡打开设置后关闭时把焦点交还给实际触发卡", asyn
 })
 
 it("预览和未接入的平台不展示合成链接或发请求", async () => {
-  const client = { connectionSetup: vi.fn(), changeConnection: vi.fn() }
+  const client = { connectionSetup: vi.fn(), changeConnection: vi.fn(), continueLineConnection: vi.fn() }
   renderAgents({ preview: true, client })
   const dialog = openSetup()
   expect(dialog.getByRole("status")).toHaveTextContent("Telegram 连接暂不可用")
@@ -128,7 +128,7 @@ it("Telegram opens read-only; a setup starts only from its explicit owner-versio
     .mockResolvedValueOnce(disconnected).mockResolvedValueOnce(proofRequested).mockResolvedValueOnce(connected)
   const changeConnection = vi.fn<AgentClient["changeConnection"]>()
     .mockResolvedValueOnce(awaiting).mockResolvedValueOnce(connected).mockResolvedValueOnce({ ...disconnected, state_version: "5" })
-  const client = { connectionSetup, changeConnection }
+  const client = { connectionSetup, changeConnection, continueLineConnection: vi.fn() }
   const first = renderAgents({ client })
   let dialog = openSetup()
   expect(dialog.getByRole("status", { name: "正在检查 Telegram 连接…" })).toBeInTheDocument()
@@ -165,15 +165,15 @@ it("过期修订只重新 GET，已切走的 setup 回执不覆盖面板", async
   const connectionSetup = vi.fn<AgentClient["connectionSetup"]>().mockResolvedValueOnce(disconnected)
     .mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
   const changeConnection = vi.fn<AgentClient["changeConnection"]>().mockRejectedValueOnce(new AgentClientError(412, "agent_connection_precondition_failed"))
-  renderAgents({ client: { connectionSetup, changeConnection } })
+  renderAgents({ client: { connectionSetup, changeConnection, continueLineConnection: vi.fn() } })
   const dialog = openSetup()
   fireEvent.click(await dialog.findByRole("button", { name: "开始连接 Telegram" }))
   await waitFor(() => expect(connectionSetup).toHaveBeenCalledTimes(2))
   const readback = connectionSetup.mock.calls[1]?.[1]
-  fireEvent.focus(dialog.getByRole("tab", { name: "LINE" }))
+  fireEvent.focus(dialog.getByRole("tab", { name: "Slack" }))
   expect(readback?.aborted).toBe(true)
   await act(async () => { finish(awaiting) })
-  expect(dialog.getByRole("status")).toHaveTextContent("LINE 连接暂不可用")
+  expect(dialog.getByRole("status")).toHaveTextContent("Slack 连接暂不可用")
   expect(dialog.queryByRole("link")).not.toBeInTheDocument()
   expect(changeConnection).toHaveBeenCalledTimes(1)
 })
@@ -184,7 +184,7 @@ it("打开的未完成票据到期即撤下，等待显式回读，不自动发�
   const connectionSetup = vi.fn<AgentClient["connectionSetup"]>().mockResolvedValue({ ...awaiting, expires_at: "2026-08-30T06:30:01.000Z" })
   const changeConnection = vi.fn<AgentClient["changeConnection"]>()
   try {
-    renderAgents({ client: { connectionSetup, changeConnection } })
+    renderAgents({ client: { connectionSetup, changeConnection, continueLineConnection: vi.fn() } })
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "开始体验" })) })
     const dialog = within(screen.getByRole("dialog"))
     expect(dialog.getByRole("img", { name: "Telegram 连接二维码" })).toBeInTheDocument()
@@ -245,4 +245,37 @@ it("关闭按钮退出 Agent 设置弹窗并把焦点交还给开始入口", asy
   fireEvent.click(screen.getByRole("button", { name: "关闭 Agent 设置" }))
   expect(screen.queryByRole("dialog")).toBeNull()
   await waitFor(() => expect(opener).toHaveFocus())
+})
+
+it("LINE bot return clears the fragment, requires explicit approval and only then offers the official continuation", async () => {
+  const original = window.location.href
+  const token = "fixture-line-token"
+  const official = `https://access.line.me/dialog/bot/accountLink?linkToken=${token}&nonce=${setupId}${"b".repeat(32)}`
+  const setup = { platform: "line", status: "awaiting_line_approval", setup_id: setupId, expires_at: expires, state_version: "3" } as const
+  const connectionSetup = vi.fn().mockResolvedValueOnce(setup)
+    .mockResolvedValueOnce({ platform: "line", status: "connected", state_version: "5", connected_at: expires })
+  const changeConnection = vi.fn()
+  const continueLineConnection = vi.fn().mockResolvedValue({ ...setup, status: "awaiting_line_callback", state_version: "4", continue_url: official })
+  const open = vi.spyOn(window, "open").mockImplementation(() => null)
+  try {
+    window.history.replaceState(window.history.state, "", `/app/agents#${new URLSearchParams({ line_setup: setupId, link_token: token })}`)
+    renderAgents({ client: { connectionSetup, changeConnection, continueLineConnection } })
+    const dialog = within(await screen.findByRole("dialog"))
+    expect(window.location.hash).toBe("")
+    expect(connectionSetup).toHaveBeenCalledWith("line", expect.any(AbortSignal))
+    expect(continueLineConnection).not.toHaveBeenCalled()
+    expect(dialog.queryByRole("link", { name: "在 LINE 继续" })).toBeNull()
+    fireEvent.click(await dialog.findByRole("button", { name: "批准 LINE 连接" }))
+    expect(continueLineConnection).toHaveBeenCalledExactlyOnceWith({ setup_id: setupId, expected_state_version: "3", link_token: token }, expect.any(AbortSignal))
+    expect(open).not.toHaveBeenCalled()
+    expect(dialog.queryByRole("status", { name: "已连接" })).toBeNull()
+    fireEvent.click(await dialog.findByRole("button", { name: "在 LINE 继续" }))
+    expect(open).toHaveBeenCalledExactlyOnceWith(official, "_blank", "noopener,noreferrer")
+    fireEvent.click(dialog.getByRole("button", { name: "查看 LINE 状态" }))
+    expect(await dialog.findByRole("status", { name: "已连接" })).toBeInTheDocument()
+    expect(changeConnection).not.toHaveBeenCalled()
+  } finally {
+    open.mockRestore()
+    window.history.replaceState(window.history.state, "", original)
+  }
 })

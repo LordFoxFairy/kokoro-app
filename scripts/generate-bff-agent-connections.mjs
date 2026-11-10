@@ -7,14 +7,15 @@ import YAML from "yaml"
 const source = new URL("../src/generated/bff-public-openapi.yaml", import.meta.url)
 const target = new URL("../src/generated/bff-agent-connections.ts", import.meta.url)
 const provenance = {
-  ownerCommit: "5d5b409976713fc8b6d32fbbd426af82f19f6f62",
-  sourceSha256: "03d4add75d31c6c4dd22e7fcb3b4269556ad3ced87d29a5640976bc74f39810f",
-  openapiVersion: "28.33.0",
+  ownerCommit: "c535c16990eb6ea1100ceef5d88e3e3652f6d902",
+  sourceSha256: "ea0b6ff7b4ea4a0348a4dd579c2440dca32e58c5958b2374e8555e02b74382a6",
+  openapiVersion: "28.34.0",
 }
 
 function render(spec) {
   assert.equal(spec.info.version, provenance.openapiVersion)
   const operations = spec.paths["/v1/agents/connections/setup"]
+  const lineContinue = spec.paths["/v1/agents/connections/line/continue"].post
   const schemas = spec.components.schemas
   assert.equal(operations.get.operationId, "getAgentConnectionSetup")
   assert.equal(operations.post.operationId, "changeAgentConnection")
@@ -26,6 +27,10 @@ function render(spec) {
   assert.deepEqual(schemaOf(operations.post.responses[200].content), success)
   assert.deepEqual(schemaOf(operations.post.requestBody.content), { $ref: "#/components/schemas/AgentConnectionCommand" })
   assert.equal(operations.post.requestBody.required, true)
+  assert.equal(lineContinue.operationId, "continueLineConnection")
+  assert.equal(lineContinue.requestBody.required, true)
+  assert.deepEqual(schemaOf(lineContinue.requestBody.content), { $ref: "#/components/schemas/LineConnectionContinueRequest" })
+  assert.deepEqual(schemaOf(lineContinue.responses[200].content), { $ref: "#/components/schemas/LineConnectionContinueResponse" })
   const maxVersion = /between 1 and ([0-9]+)\)\.$/u.exec(schemas.AgentConnectionStateVersion.description)?.[1]
   assert.ok(maxVersion && Number.isSafeInteger(Number(maxVersion)))
 
@@ -77,17 +82,22 @@ import { z } from "zod"
 export const BFF_AGENT_CONNECTIONS_PROVENANCE = ${JSON.stringify(provenance, null, 2)} as const
 export const AGENT_CONNECTION_READ_ERRORS = ${errors(operations.get)} as readonly number[]
 export const AGENT_CONNECTION_WRITE_ERRORS = ${errors(operations.post)} as readonly number[]
+export const AGENT_LINE_CONNECTION_CONTINUE_ERRORS = ${errors(lineContinue)} as readonly number[]
 export const agentPlatformSchema = ${renderSchema(spec.components.parameters.Platform.schema)}
 export const agentConnectionVersionSchema = ${renderSchema(schemas.AgentConnectionStateVersion)}.refine(value => Number(value) <= ${maxVersion})
 export const agentConnectionSetupIdSchema = ${renderSchema(schemas.AgentConnectionSetupId)}
 export const agentConnectionCommandSchema = ${union("AgentConnectionCommand", "action")}
 export const agentConnectionSetupSchema = ${union("AgentConnectionSetup", "status")}
 export const agentConnectionResponseSchema = ${renderSchema(schemas.AgentConnectionSetupResponse)}
+export const lineConnectionContinueRequestSchema = ${renderSchema(schemas.LineConnectionContinueRequest)}
+export const lineConnectionContinueResponseSchema = ${renderSchema(schemas.LineConnectionContinueResponse)}
 export const agentConnectionErrorSchema = ${renderSchema(schemas.ErrorEnvelope)}
 
 export type AgentPlatform = z.infer<typeof agentPlatformSchema>
 export type AgentConnectionCommand = z.infer<typeof agentConnectionCommandSchema>
 export type AgentConnectionSetup = z.infer<typeof agentConnectionSetupSchema>
+export type LineConnectionContinueRequest = z.infer<typeof lineConnectionContinueRequestSchema>
+export type LineConnectionContinueResponse = z.infer<typeof lineConnectionContinueResponseSchema>
 `
 }
 

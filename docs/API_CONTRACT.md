@@ -1,3 +1,7 @@
+## A‑13 — LINE connection in Agents
+
+Setup GET/POST uses the same owner endpoint with `platform=line`. `POST /api/agents/connections/line/continue` uses existing native session admission, the exact current setup revision and a one-time bot token; only that private no-store/no-referrer response can return the official authorization URL. The page removes the fragment and does not persist or silently submit the token. Provider webhooks remain BFF-only.
+
 ## A‑13 — Telegram connection in Agents
 
 ## Private Run process files (BFF Public 28.33)

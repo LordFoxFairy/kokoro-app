@@ -1,3 +1,7 @@
+## A‑13 LINE account connection
+
+The existing Agents dialog accepts the private bot return only for its signed-in owner, removes the fragment, and requires an explicit approval. The one-time official continuation lives only in memory. Setup reads and disconnect still use the same owner route. BFF Public 28.34 is pinned; real Chromium pairing and provider acceptance are tracked by Root.
+
 ## A‑10 process files
 
 The private Process card opens the existing Canvas Files view. Rows select the original Run and immutable version, even if two outputs have the same path. Preview and download use the same-origin exact-version route; the unused by-path reader and fake file fallback are gone. Web pins BFF Public 28.33 (`5d5b409`). Component, contract and TypeScript checks passed; Root owns the authenticated Worker/Storage browser acceptance.

@@ -2,12 +2,13 @@
 import { z } from "zod"
 
 export const BFF_AGENT_CONNECTIONS_PROVENANCE = {
-  "ownerCommit": "5d5b409976713fc8b6d32fbbd426af82f19f6f62",
-  "sourceSha256": "03d4add75d31c6c4dd22e7fcb3b4269556ad3ced87d29a5640976bc74f39810f",
-  "openapiVersion": "28.33.0"
+  "ownerCommit": "c535c16990eb6ea1100ceef5d88e3e3652f6d902",
+  "sourceSha256": "ea0b6ff7b4ea4a0348a4dd579c2440dca32e58c5958b2374e8555e02b74382a6",
+  "openapiVersion": "28.34.0"
 } as const
 export const AGENT_CONNECTION_READ_ERRORS = [400,401,403,429,503] as readonly number[]
 export const AGENT_CONNECTION_WRITE_ERRORS = [400,401,403,409,412,429,503] as readonly number[]
+export const AGENT_LINE_CONNECTION_CONTINUE_ERRORS = [400,401,403,409,412,429,503] as readonly number[]
 export const agentPlatformSchema = z.enum(["telegram","line","slack"])
 export const agentConnectionVersionSchema = z.string().regex(new RegExp("^[1-9][0-9]{0,9}(?![\\s\\S])", "u")).refine(value => Number(value) <= 2147483647)
 export const agentConnectionSetupIdSchema = z.string().regex(new RegExp("^[A-Za-z0-9_-]{32}(?![\\s\\S])", "u"))
@@ -18,15 +19,22 @@ export const agentConnectionCommandSchema = z.discriminatedUnion("action", [
   z.object({ "action": z.literal("disconnect"), "expected_state_version": agentConnectionVersionSchema }).strict(),
 ])
 export const agentConnectionSetupSchema = z.discriminatedUnion("status", [
-  z.object({ "platform": z.literal("telegram"), "state_version": agentConnectionVersionSchema, "status": z.literal("disconnected") }).strict(),
+  z.object({ "platform": z.enum(["telegram","line"]), "state_version": agentConnectionVersionSchema, "status": z.literal("disconnected") }).strict(),
   z.object({ "platform": z.literal("telegram"), "state_version": agentConnectionVersionSchema, "status": z.literal("awaiting_telegram"), "setup_id": agentConnectionSetupIdSchema, "expires_at": z.string().datetime({ offset: true }).regex(/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)(?![\s\S])/u), "continue_url": z.string().regex(new RegExp("^https://t[.]me/", "u")).url() }).strict(),
   z.object({ "platform": z.literal("telegram"), "state_version": agentConnectionVersionSchema, "status": z.literal("awaiting_confirmation"), "setup_id": agentConnectionSetupIdSchema, "expires_at": z.string().datetime({ offset: true }).regex(/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)(?![\s\S])/u) }).strict(),
-  z.object({ "platform": z.literal("telegram"), "state_version": agentConnectionVersionSchema, "status": z.literal("expired") }).strict(),
-  z.object({ "platform": z.literal("telegram"), "state_version": agentConnectionVersionSchema, "status": z.literal("connected"), "connected_at": z.string().datetime({ offset: true }).regex(/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)(?![\s\S])/u) }).strict(),
+  z.object({ "platform": z.enum(["telegram","line"]), "state_version": agentConnectionVersionSchema, "status": z.literal("expired") }).strict(),
+  z.object({ "platform": z.enum(["telegram","line"]), "state_version": agentConnectionVersionSchema, "status": z.literal("connected"), "connected_at": z.string().datetime({ offset: true }).regex(/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)(?![\s\S])/u) }).strict(),
+  z.object({ "platform": z.literal("line"), "state_version": agentConnectionVersionSchema, "status": z.literal("awaiting_line"), "setup_id": agentConnectionSetupIdSchema, "expires_at": z.string().datetime({ offset: true }).regex(/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)(?![\s\S])/u), "continue_url": z.string().regex(new RegExp("^https://line[.]me/R/oaMessage/", "u")).url() }).strict(),
+  z.object({ "platform": z.literal("line"), "state_version": agentConnectionVersionSchema, "status": z.literal("awaiting_line_approval"), "setup_id": agentConnectionSetupIdSchema, "expires_at": z.string().datetime({ offset: true }).regex(/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)(?![\s\S])/u) }).strict(),
+  z.object({ "platform": z.literal("line"), "state_version": agentConnectionVersionSchema, "status": z.literal("awaiting_line_callback"), "setup_id": agentConnectionSetupIdSchema, "expires_at": z.string().datetime({ offset: true }).regex(/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)(?![\s\S])/u) }).strict(),
 ])
 export const agentConnectionResponseSchema = z.object({ "data": agentConnectionSetupSchema, "meta": z.object({ "request_id": z.string().min(1).max(256) }).strict() }).strict()
+export const lineConnectionContinueRequestSchema = z.object({ "setup_id": agentConnectionSetupIdSchema, "expected_state_version": agentConnectionVersionSchema, "link_token": z.string().regex(new RegExp("^[!-~]{1,512}(?![\\s\\S])", "u")) }).strict()
+export const lineConnectionContinueResponseSchema = z.object({ "data": z.object({ "platform": z.literal("line"), "status": z.literal("awaiting_line_callback"), "setup_id": agentConnectionSetupIdSchema, "state_version": agentConnectionVersionSchema, "expires_at": z.string().datetime({ offset: true }).regex(/T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)(?![\s\S])/u), "continue_url": z.string().regex(new RegExp("^https://access[.]line[.]me/dialog/bot/accountLink[?]", "u")).url() }).strict(), "meta": z.object({ "request_id": z.string().min(1).max(256) }).strict() }).strict()
 export const agentConnectionErrorSchema = z.object({ "error": z.object({ "code": z.string().min(1), "message": z.string().min(1) }).strict(), "meta": z.object({ "request_id": z.string().min(1).max(256) }).strict() }).strict()
 
 export type AgentPlatform = z.infer<typeof agentPlatformSchema>
 export type AgentConnectionCommand = z.infer<typeof agentConnectionCommandSchema>
 export type AgentConnectionSetup = z.infer<typeof agentConnectionSetupSchema>
+export type LineConnectionContinueRequest = z.infer<typeof lineConnectionContinueRequestSchema>
+export type LineConnectionContinueResponse = z.infer<typeof lineConnectionContinueResponseSchema>
