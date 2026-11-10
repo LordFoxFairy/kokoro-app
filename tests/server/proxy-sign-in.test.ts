@@ -283,6 +283,11 @@ describe("trusted actual product target projection", () => {
 })
 
 describe("native interaction privacy at the final Proxy boundary", () => {
+  it("keeps the exact LINE continuation response opaque to referrers", async () => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(new NextRequest(ORIGIN + "/api/agents/connections/line/continue", { method: "POST", headers: { origin: ORIGIN } }))
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+  })
   it.each(["/auth/select-tenant", "/iam/interactions/select-tenant"])("uses a proxy-owned nonce and restrictive document policy for %s", async (path) => {
     const { proxy } = await import("@/proxy")
     const response = await proxy(
