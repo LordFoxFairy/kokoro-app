@@ -1513,6 +1513,8 @@ export const zh = {
   "library.downloadStarted": "已发起下载，请在浏览器下载列表查看结果。",
   "library.downloadFailed": "下载失败，请重试。",
   "library.openSource": "查看来源会话",
+  "library.sourceUnavailable": "此作品的来源会话不可用。",
+  "library.sourceLoadError": "读取来源会话失败，请重试。",
   "library.filterAria": "筛选作品类型",
   "library.filterAll": "全部",
   "library.filterSlides": "幻灯片",

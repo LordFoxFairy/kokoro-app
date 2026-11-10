@@ -58,7 +58,7 @@ import { useProjectList } from "@/features/app/use-project-list"
 import { useProjectMcpRecommendations } from "@/features/app/use-project-mcp-recommendations"
 import { projectMcpDefaultSelection } from "@/features/app/project-mcp-default-selection"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
-import { sessionScopeKey } from "@/engine/session-scope"
+import { sessionScopeKey, type SessionScope } from "@/engine/session-scope"
 import archiveStyles from "@/ui/settings/settings-modal.module.css"
 import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context"
 import shellStyles from "./app-frame.module.css"
@@ -597,6 +597,17 @@ function AppFrameRuntime({
     setMoveSelectionGeneration((generation) => generation + 1)
     actions.selectConversationWithUrl(id)
   }, [actions])
+  const selectScopedConversationWithMoveFence = useCallback((scope: SessionScope, id: string) => {
+    if (sessionScopeKey(scope) === moveScopeKey) {
+      selectConversationWithMoveFence(id)
+      return
+    }
+    setMoveSelectionGeneration((generation) => generation + 1)
+    const conversation = encodeURIComponent(id)
+    navigateMountedSurface(scope.kind === "direct"
+      ? `/app?conversation=${conversation}`
+      : `/app/project/${encodeURIComponent(scope.projectRef)}?conversation=${conversation}`)
+  }, [moveScopeKey, selectConversationWithMoveFence])
   const startNewChatWithMoveFence = useCallback(() => {
     setMoveSelectionGeneration((generation) => generation + 1)
     actions.startNewChatAndFocus()
@@ -958,7 +969,7 @@ function AppFrameRuntime({
     projectConversations,
     activeProjectConversationId: activeId,
     onSelectProjectConversation: selectConversationWithMoveFence,
-    onOpenSession: selectConversationWithMoveFence,
+    onOpenSession: selectScopedConversationWithMoveFence,
     projectConversationsLoading: conversationsCtl?.loading ?? true,
     projectConversationsError: conversationsCtl?.error ?? false,
     onRetryProjectConversations: () => conversationsCtl?.refresh(),
@@ -1078,13 +1089,7 @@ function AppFrameRuntime({
       activeId: projectWorkspace ? routedConversationId : activeId, identity: railReadIdentity, admitted: railReadAdmitted,
       archiveBusy:archive.busy||archive.blocked, ...(!preview && projectReadBoundary?.admitted && projectReadBoundary.subject?{onArchive:(id:string)=>void archive.archive(id)}:{}),
       failedMoveScopeKey: moveFailureProjection?.identity === moveViewIdentity ? moveFailureProjection.scopeKey : null,
-      onSelect: (scope, id) => {
-        if (sessionScopeKey(scope) === moveScopeKey) selectConversationWithMoveFence(id)
-        else {
-          setMoveSelectionGeneration((generation) => generation + 1)
-          navigateMountedSurface(scope.kind === "direct" ? `/app?conversation=${encodeURIComponent(id)}` : `/app/project/${encodeURIComponent(scope.projectRef)}?conversation=${encodeURIComponent(id)}`)
-        }
-      },
+      onSelect: selectScopedConversationWithMoveFence,
       onNewChat: (scope) => {
         if (sessionScopeKey(scope) === moveScopeKey) startNewChatWithMoveFence()
       },

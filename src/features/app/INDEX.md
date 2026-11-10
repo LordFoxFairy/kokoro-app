@@ -8,6 +8,10 @@ Composer 复用现 Library CLEAN 文件/FINAL artifact 和 Project resources 列
 
 同一文件页保留 `file_q` / `file_type` URL，文字在校验原始 Unicode code points 后防抖派发；筛选、页窗与游标同代退休。列表只展示 owner 筛选结果，不再按已加载的页面猜命中。筛选遮住未知删除目标时仍可从同页恢复原删除命令；Composer 的无筛选列表调用不变。
 
+## 作品来源回跳（A‑09）
+
+列表不猜来源作用域：卡片快捷入口读取同源二元详情，并核同 Conversation / Artifact / Asset / source Run / digest；详情弹窗复用已读值。显式 `project_ref: null` 才回直聊，canonical Project ID 进入原 Project 的会话，省略表示来源不可用且仍可读取详情和下载。AppFrame 与侧栏复用同一个 scope-aware 导航和移动围栏，身份或路由退休取消迟到回跳。
+
 ## Project Overview 待办
 
 `project-todo-section.tsx` 只呈现当前准入 Project 的 owner 列表与手动 CRUD，不消费 Run Todo 或排程。写入前按当前 subject / Project 在标签页 sessionStorage 冻结原命令；未知只能显式重试，412 读回后须显式采用当前版本。切 Project 或准入代际会退役异步结果；正式 wire 与 ACK 校验归 BFF 生成消费者；`project-todo-client.ts` 只在本地 view model 与生成 wire 之间映射，经唯一 Hub adapter，不增加 SDK／HTTP 运行时副本。

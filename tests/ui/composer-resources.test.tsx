@@ -25,7 +25,7 @@ vi.mock("@/features/app/kokoro-library-file-upload-client", async importOriginal
 
 const boundary = { admitted: true, subject: "resource-actor", generation: 1 }
 const file = { assetId: "asset-clean", filename: "notes.txt", mimeType: "text/plain", sizeBytes: "8", createdAt: "2026-11-09T00:00:00Z" }
-const artifact = { conversationId: "task-with-file", artifactId: "artifact-final", assetId: "asset-final", artifactKind: "document" as const, title: "Final result", filename: "result.txt", mimeType: "text/plain", sizeBytes: "4", deliveredAt: "2026-11-09T00:00:00Z" }
+const artifact = { conversationId: "task-with-file", artifactId: "artifact-final", assetId: "asset-final", sourceRunId: "run-final", contentSha256: "a".repeat(64), artifactKind: "document" as const, title: "Final result", filename: "result.txt", mimeType: "text/plain", sizeBytes: "4", deliveredAt: "2026-11-09T00:00:00Z" }
 const ordered = (id: string, revision = "7", finalSegmentId?: string) => ({
   message_id: id, role: "assistant" as const, run_id: `run-${id}`, content: null,
   status: "completed" as const, created_at: "2026-11-09T00:00:00Z",

@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button"
 import { LibraryArtifactDetail } from "./kokoro-library-artifact-detail"
 import { LibraryHeader } from "./kokoro-library-header"
 import { downloadFetchedFile } from "@/engine/file-fetch"
+import { DIRECT_SESSION_SCOPE, type SessionScope } from "@/engine/session-scope"
 import { useMemo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useT } from "@/i18n/context"
 
 import { LibraryResults, LibraryToolbar } from "./kokoro-library-sections"
-import { beginLibraryArtifactDownload, getLibraryArtifact, listLibraryArtifacts, type LibraryArtifact, type LibraryArtifactClient } from "./kokoro-library-artifact-client"
+import { beginLibraryArtifactDownload, getLibraryArtifact, listLibraryArtifacts, matchesLibraryArtifact, type LibraryArtifact, type LibraryArtifactClient, type LibraryArtifactDetailView } from "./kokoro-library-artifact-client"
 import { KokoroLibraryFiles } from "./kokoro-library-files"
 import { useLibraryFileUpload } from "./kokoro-library-file-upload-state"
 import { DEFAULT_URL_STATE, FILTERS, artifactFilter, type LibraryFilter, type LibraryUrlState } from "./kokoro-library-model"
@@ -31,6 +32,11 @@ export type KokoroLibrarySurfaceProps = Pick<EmptyStateProps, "preview" | "onPro
 
 function artifactKey(artifact: LibraryArtifact): string {
   return JSON.stringify([artifact.conversationId, artifact.artifactId])
+}
+
+function artifactSessionScope(detail: LibraryArtifactDetailView): SessionScope | null {
+  if (detail.projectRef === undefined) return null
+  return detail.projectRef === null ? DIRECT_SESSION_SCOPE : { kind: "project", projectRef: detail.projectRef }
 }
 
 function readUrlState(): LibraryUrlState {
@@ -138,10 +144,19 @@ function KokoroArtifactLibrary({
     [fixtureArtifacts],
   )
   const admitted = preview || projectReadBoundary === undefined || (projectReadBoundary.admitted && projectReadBoundary.subject !== null)
-  const owner = useMemo(() => ({ admitted, subject: projectReadBoundary?.subject, generation: projectReadBoundary?.generation ?? 0 }),
-    [admitted, projectReadBoundary?.subject, projectReadBoundary?.generation])
+  const actor = useMemo(() => ({ subject: projectReadBoundary?.subject, tenant: projectReadBoundary?.tenant, invalidation: projectReadBoundary?.authInvalidationHint }),
+    [projectReadBoundary?.subject, projectReadBoundary?.tenant, projectReadBoundary?.authInvalidationHint])
+  const owner = useMemo(() => ({ ...actor, admitted, generation: projectReadBoundary?.generation ?? 0 }),
+    [actor, admitted, projectReadBoundary?.generation])
   const ownerRef = useRef<typeof owner | null>(owner)
-  const [selectedArtifact, setSelectedArtifact] = useState<LibraryArtifact | null>(null)
+  const [detailIntent, setSelectedDetail] = useState<{ artifact: LibraryArtifact; href: string; actor: typeof actor } | null>(null)
+  const selectedDetail = detailIntent?.actor === actor ? detailIntent : null
+  const sourceReadRef = useRef<{ key: string; controller: AbortController } | null>(null)
+  const [sourceResult, setSourceResult] = useState<{ owner: typeof owner; key: string; status: "loading" | "unavailable" | "error" } | null>(null)
+  const retireSourceRead = useCallback(() => {
+    sourceReadRef.current?.controller.abort()
+    sourceReadRef.current = null
+  }, [])
   const detailReturnFocusRef = useRef<HTMLElement | null>(null)
   const [downloadRecord, setDownloadRecord] = useState<{ owner: typeof owner; data: Record<string, "loading" | "error" | "started"> }>({ owner, data: {} })
   const downloadState = downloadRecord.owner === owner ? downloadRecord.data : {}
@@ -149,15 +164,56 @@ function KokoroArtifactLibrary({
   useLayoutEffect(() => {
     ownerRef.current = owner
     const downloads = downloadAbortRef.current
+    let href = window.location.href
+    const unsubscribe = subscribeUrlState(() => {
+      if (href === window.location.href) return
+      href = window.location.href
+      retireSourceRead()
+      setSourceResult(null)
+      setSelectedDetail(null)
+    })
     return () => {
+      unsubscribe()
+      retireSourceRead()
       if (ownerRef.current === owner) ownerRef.current = null
       for (const controller of downloads.values()) controller.abort()
       downloads.clear()
     }
-  }, [owner])
+  }, [owner, retireSourceRead])
   const client = useMemo<LibraryArtifactClient>(() => artifactClient ?? (useFixtureTransport
     ? { listArtifacts: async () => ({ items: [], nextCursor: null }) }
     : { listArtifacts: listLibraryArtifacts }), [artifactClient, useFixtureTransport])
+
+  const readDetail = client.getArtifact ?? getLibraryArtifact
+  const openSourceFromCard = async (artifact: LibraryArtifact) => {
+    if (!onOpenSession || !owner.admitted || ownerRef.current !== owner) return
+    const key = artifactKey(artifact)
+    if (sourceReadRef.current?.key === key) return
+    retireSourceRead()
+    const href = window.location.href
+    const controller = new AbortController()
+    const read = { key, controller }
+    sourceReadRef.current = read
+    const isCurrent = () => sourceReadRef.current === read && !controller.signal.aborted &&
+      ownerRef.current === owner && window.location.href === href
+    setSourceResult({ owner, key, status: "loading" })
+    try {
+      const detail = await readDetail(artifact.conversationId, artifact.artifactId, controller.signal)
+      if (!isCurrent()) return
+      if (!matchesLibraryArtifact(artifact, detail)) throw Error("library_artifacts_invalid_response")
+      const scope = artifactSessionScope(detail)
+      if (!scope) {
+        setSourceResult({ owner, key, status: "unavailable" })
+        return
+      }
+      setSourceResult(null)
+      onOpenSession(scope, detail.conversationId)
+    } catch {
+      if (isCurrent()) setSourceResult({ owner, key, status: "error" })
+    } finally {
+      if (sourceReadRef.current === read) sourceReadRef.current = null
+    }
+  }
 
   const normalizedQuery = query.trim().normalize("NFC").toLowerCase()
   // BFF validates the raw query length before normalization, which can expand Unicode.
@@ -223,7 +279,14 @@ function KokoroArtifactLibrary({
         downloadState={downloadState}
         toggleFavorite={toggleFavorite}
         download={download}
-        onOpenDetail={(artifact, trigger) => { if (!owner.admitted || ownerRef.current !== owner) return; detailReturnFocusRef.current = trigger; setSelectedArtifact(artifact) }}
+        onOpenDetail={(artifact, trigger) => {
+          if (!owner.admitted || ownerRef.current !== owner) return
+          retireSourceRead()
+          setSourceResult(null)
+          detailReturnFocusRef.current = trigger
+          setSelectedDetail({ artifact, href: window.location.href, actor })
+        }}
+        sourceState={sourceResult?.owner === owner ? sourceResult : null}
         showLoading={showLoading}
         showError={showError}
         queryPending={page.queryPending}
@@ -234,18 +297,24 @@ function KokoroArtifactLibrary({
         loadMore={loadMore}
         clearFilters={clearFilters}
         {...(onPrompt === undefined ? {} : { onPrompt })}
-        {...(onOpenSession === undefined ? {} : { onOpenSession })}
+        {...(onOpenSession === undefined ? {} : { onOpenSource: openSourceFromCard })}
       />
-      {selectedArtifact ? <LibraryArtifactDetail key={artifactKey(selectedArtifact)} artifact={selectedArtifact}
-        read={client.getArtifact ?? getLibraryArtifact} admitted={owner.admitted} generation={owner.generation} onClose={() => setSelectedArtifact(null)} onReturnFocus={() => {
+      {selectedDetail ? <LibraryArtifactDetail key={artifactKey(selectedDetail.artifact)} artifact={selectedDetail.artifact}
+        read={readDetail} admitted={owner.admitted} generation={owner.generation} onClose={() => setSelectedDetail(null)} onReturnFocus={() => {
           const buttons = document.querySelector('[data-testid="library-page"]')?.querySelectorAll<HTMLElement>("[data-library-artifact-key]")
-          const current = [...(buttons ?? [])].find(button => button.dataset.libraryArtifactKey === artifactKey(selectedArtifact))
+          const current = [...(buttons ?? [])].find(button => button.dataset.libraryArtifactKey === artifactKey(selectedDetail.artifact))
           const previous = detailReturnFocusRef.current
           const target = current ?? (previous?.isConnected ? previous : sourceFocusRef.current)
           target?.focus()
         }}
-        onDownload={download} downloadState={downloadState[artifactKey(selectedArtifact)]}
-        {...(onOpenSession ? { onOpenSession } : {})} /> : null}
+        onDownload={download} downloadState={downloadState[artifactKey(selectedDetail.artifact)]}
+        {...(onOpenSession ? { onOpenSource: (detail: LibraryArtifactDetailView) => {
+          if (!owner.admitted || ownerRef.current !== owner || selectedDetail.href !== window.location.href) return
+          const scope = artifactSessionScope(detail)
+          if (!scope) return
+          setSelectedDetail(null)
+          onOpenSession(scope, detail.conversationId)
+        } } : {})} /> : null}
     </>
   )
 }

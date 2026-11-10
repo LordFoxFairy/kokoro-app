@@ -8,11 +8,11 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { useLocale, useT } from "@/i18n/context"
 import { formatBytes } from "@/ui/thread/artifact-card"
 import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
-import { type LibraryArtifact, type getLibraryArtifact } from "./kokoro-library-artifact-client"
+import { matchesLibraryArtifact, type LibraryArtifact, type LibraryArtifactDetailView, type getLibraryArtifact } from "./kokoro-library-artifact-client"
 import styles from "./kokoro-library-surface.module.css"
 
 /** Exact metadata only: no content buffering, speculative thumbnails or rich preview. */
-export function LibraryArtifactDetail({ artifact, read, admitted, generation, onClose, onReturnFocus, onDownload, downloadState, onOpenSession }: {
+export function LibraryArtifactDetail({ artifact, read, admitted, generation, onClose, onReturnFocus, onDownload, downloadState, onOpenSource }: {
   artifact: LibraryArtifact
   read: typeof getLibraryArtifact
   admitted: boolean
@@ -21,24 +21,24 @@ export function LibraryArtifactDetail({ artifact, read, admitted, generation, on
   onReturnFocus: () => void
   onDownload: (artifact: LibraryArtifact) => Promise<void>
   downloadState: "loading" | "error" | "started" | undefined
-  onOpenSession?: (id: string) => void
+  onOpenSource?: (detail: LibraryArtifactDetailView) => void
 }) {
   const t = useT(), { locale } = useLocale()
   const [attempt, setAttempt] = useState(0)
   const scope = useMemo(() => ({ admitted, generation, read, attempt }), [admitted, generation, read, attempt])
-  const [result, setResult] = useState<{ scope: typeof scope; detail: LibraryArtifact | null; error: string | null } | null>(null)
+  const [result, setResult] = useState<{ scope: typeof scope; detail: LibraryArtifactDetailView | null; error: string | null } | null>(null)
   useEffect(() => {
     if (!admitted) return
     const controller = new AbortController()
     void read(artifact.conversationId, artifact.artifactId, controller.signal).then(detail => {
       if (controller.signal.aborted) return
-      if (detail.conversationId !== artifact.conversationId || detail.artifactId !== artifact.artifactId) throw Error("library_artifacts_invalid_response")
+      if (!matchesLibraryArtifact(artifact, detail)) throw Error("library_artifacts_invalid_response")
       setResult({ scope, detail, error: null })
     }).catch((error: unknown) => {
       if (!controller.signal.aborted) setResult({ scope, detail: null, error: error instanceof Error ? error.message : "unknown" })
     })
     return () => controller.abort()
-  }, [artifact.conversationId, artifact.artifactId, read, scope, admitted])
+  }, [artifact, read, scope, admitted])
   const visible = admitted && result?.scope === scope ? result : null
   const detail = visible?.detail
   const errorKey = visible?.error === "library_artifact_not_found" ? "library.fileNotFound"
@@ -61,9 +61,10 @@ export function LibraryArtifactDetail({ artifact, read, admitted, generation, on
           <div><dt>{t("library.detailDelivered")}</dt><dd><time dateTime={detail.deliveredAt}>{formatDeliveryTime(detail.deliveredAt, locale)}</time></dd></div>
         </dl>
         <div className={styles.artifactDetailActions}>
-          {onOpenSession ? <Button variant="outline" onClick={() => { onClose(); onOpenSession(detail.conversationId) }}>{t("library.openSource")}</Button> : null}
+          {onOpenSource && detail.projectRef !== undefined ? <Button variant="outline" onClick={() => onOpenSource(detail)}>{t("library.openSource")}</Button> : null}
           <Button disabled={downloadState === "loading"} aria-busy={downloadState === "loading"} onClick={() => void onDownload(detail)}><Download aria-hidden="true" />{t(downloadState === "error" ? "library.fileRetryDownload" : "library.fileDownload")}</Button>
         </div>
+        {onOpenSource && detail.projectRef === undefined ? <p role="status">{t("library.sourceUnavailable")}</p> : null}
         {downloadState ? <p role={downloadState === "error" ? "alert" : "status"}>{t(downloadState === "loading" ? "library.downloading" : downloadState === "error" ? "library.downloadFailed" : "library.downloadStarted")}</p> : null}
       </> : null}
     </DialogContent>

@@ -1,3 +1,10 @@
+## A‑09 — Public 28.28 Artifact source
+
+The current snapshot is byte-exact BFF `c9c0782` (SHA-256
+`495afa65989a1308194910b0b5ece62b4f9db0c84f8dc34e7e0f3b00f7c5294f`).
+Only Artifact detail may establish its source Project or an explicitly direct scope.
+The prior Public 28.27 inverse and independent pins remain fixed.
+
 ## A‑09 — Public 28.27 personal file filters
 
 The generated current snapshot is the byte-exact BFF `e52952d` artifact, SHA-256

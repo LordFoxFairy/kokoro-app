@@ -1,3 +1,12 @@
+## 2026-11-10 A‑09 Artifact source navigation
+
+Public 28.28 (`c9c0782`) can establish the current source Project on the exact
+Artifact detail. The list shortcut reads that detail; the detail dialog reuses
+its matched result. A canonical Project uses the same scoped navigation as the
+rail, while explicit null keeps the direct-chat route. An unconfirmed destination
+never falls back to direct, and retired actor/route reads do not navigate.
+Library list, binary download and favorites are otherwise unchanged.
+
 ## 2026-11-10 A‑09 personal Library server search
 
 Files use the existing URL filters and same-origin list endpoint with BFF Public 28.27

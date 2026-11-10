@@ -1,3 +1,10 @@
+## A‑09 — Artifact source destination
+
+The existing same-origin exact Artifact detail reads BFF Public 28.28.
+Only a current matching detail with a canonical `project_ref` or explicit null may
+navigate to Project or direct Chat, respectively. Absence does not authorize a
+direct fallback. List, content and query inputs are unchanged.
+
 ## A‑09 — Personal Library server search
 
 Files keep the visible `file_q` / `file_type` URL state. The existing same-origin

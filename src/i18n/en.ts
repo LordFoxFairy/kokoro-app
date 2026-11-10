@@ -1398,6 +1398,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "library.downloadStarted": "Download started. Check your browser downloads for the result.",
   "library.downloadFailed": "Download failed. Try again.",
   "library.openSource": "Open source session",
+  "library.sourceUnavailable": "The source session is unavailable for this artifact.",
+  "library.sourceLoadError": "Could not load the source session. Please try again.",
   "library.filterAria": "Filter artifact types",
   "library.filterAll": "All",
   "library.filterSlides": "Slides",

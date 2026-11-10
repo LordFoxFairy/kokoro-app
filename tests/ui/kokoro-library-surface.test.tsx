@@ -15,8 +15,8 @@ import { artifactFilter } from "@/features/app/kokoro-library-model"
 import type { LibraryArtifact, LibraryArtifactPage } from "@/features/app/kokoro-library-artifact-client"
 
 const artifacts: LibraryArtifact[] = [
-  { conversationId: "session-1", artifactId: "artifact-slide", assetId: "asset-slide", artifactKind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", sizeBytes: "1024", deliveredAt: "2026-08-30T12:00:00Z" },
-  { conversationId: "session-2", artifactId: "artifact-doc", assetId: "asset-doc", artifactKind: "document", title: "研究摘要.pdf", filename: "研究摘要.pdf", mimeType: "application/pdf", sizeBytes: "2048", deliveredAt: "2026-08-29T12:00:00Z" },
+  { conversationId: "session-1", artifactId: "artifact-slide", assetId: "asset-slide", sourceRunId: "run-slide", contentSha256: "a".repeat(64), artifactKind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", sizeBytes: "1024", deliveredAt: "2026-08-30T12:00:00Z" },
+  { conversationId: "session-2", artifactId: "artifact-doc", assetId: "asset-doc", sourceRunId: "run-doc", contentSha256: "b".repeat(64), artifactKind: "document", title: "研究摘要.pdf", filename: "研究摘要.pdf", mimeType: "application/pdf", sizeBytes: "2048", deliveredAt: "2026-08-29T12:00:00Z" },
 ]
 
 const fileOne = {
@@ -937,7 +937,8 @@ it("收藏卡片、打开来源和下载失败均保持明确的可恢复状态"
   const downloadArtifact = vi.fn(async () => { throw new Error("preflight failed") })
   const onFavoriteChange = vi.fn()
   const onOpenSession = vi.fn()
-  renderLibrary({ downloadArtifact, onFavoriteChange, onOpenSession })
+  const getArtifact = vi.fn().mockResolvedValue({ ...artifactAt(0), projectRef: null })
+  renderLibrary({ downloadArtifact, onFavoriteChange, onOpenSession, artifactClient: { listArtifacts: vi.fn(), getArtifact } })
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
   const card = listItemAt(0)
@@ -945,7 +946,7 @@ it("收藏卡片、打开来源和下载失败均保持明确的可恢复状态"
   expect(onFavoriteChange).toHaveBeenCalledWith(artifactAt(0), expect.any(Set))
   expect(within(card).getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" })).toHaveAttribute("aria-pressed", "true")
   fireEvent.click(within(card).getByRole("button", { name: "查看来源会话" }))
-  expect(onOpenSession).toHaveBeenCalledWith("session-1")
+  await waitFor(() => expect(onOpenSession).toHaveBeenCalledExactlyOnceWith({ kind: "direct" }, "session-1"))
 
   fireEvent.click(within(card).getByRole("button", { name: "下载 季度汇报.pptx" }))
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("下载失败"))
@@ -1127,9 +1128,91 @@ it("资料库按音频和视频独立筛选，网页归入文本而不单设网�
   expect(window.location.search).toBe("?type=audio")
 })
 
+it("opens a Project artifact source only after its exact detail, and the modal reuses the detail", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const artifact = artifactAt(0)
+  const projectRef = "project_12345678-1234-1234-1234-123456789abc"
+  const detail = { ...artifact, projectRef }
+  let finish!: (value: typeof detail) => void
+  const getArtifact = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finish = resolve })).mockResolvedValue(detail)
+  const source = vi.fn()
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={[artifact]} artifactClient={{ listArtifacts: vi.fn(), getArtifact }} onOpenSession={source} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "查看来源会话" }))
+  expect(source).not.toHaveBeenCalled()
+  expect(getArtifact).toHaveBeenCalledWith(artifact.conversationId, artifact.artifactId, expect.any(AbortSignal))
+  await act(async () => finish(detail))
+  expect(source).toHaveBeenCalledExactlyOnceWith({ kind: "project", projectRef }, artifact.conversationId)
+
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 季度汇报.pptx" }))
+  const modal = await screen.findByRole("dialog")
+  fireEvent.click(await within(modal).findByRole("button", { name: "查看来源会话" }))
+  expect(source).toHaveBeenCalledTimes(2)
+  expect(source).toHaveBeenLastCalledWith({ kind: "project", projectRef }, artifact.conversationId)
+  expect(getArtifact).toHaveBeenCalledTimes(2)
+})
+
+it("does not treat omitted or mismatched source facts as direct, while omitted metadata still permits download", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const artifact = artifactAt(0)
+  const getArtifact = vi.fn().mockResolvedValueOnce(artifact).mockResolvedValueOnce(artifact)
+    .mockResolvedValueOnce({ ...artifact, projectRef: null, contentSha256: "b".repeat(64) })
+  const source = vi.fn()
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={[artifact]} artifactClient={{ listArtifacts: vi.fn(), getArtifact }} onOpenSession={source} /></LocaleProvider>)
+  const sourceButton = () => screen.getByRole("button", { name: "查看来源会话" })
+  fireEvent.click(sourceButton())
+  expect(await screen.findByText("此作品的来源会话不可用。")).toBeVisible()
+  expect(source).not.toHaveBeenCalled()
+
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 季度汇报.pptx" }))
+  const modal = screen.getByRole("dialog")
+  expect(await within(modal).findByRole("button", { name: "下载" })).toBeEnabled()
+  expect(within(modal).getByRole("status")).toHaveTextContent("此作品的来源会话不可用。")
+  expect(within(modal).queryByRole("button", { name: "查看来源会话" })).not.toBeInTheDocument()
+  fireEvent.click(within(modal).getByRole("button", { name: "关闭" }))
+
+  fireEvent.click(sourceButton())
+  expect(await screen.findByRole("alert")).toHaveTextContent("读取来源会话失败，请重试。")
+  expect(source).not.toHaveBeenCalled()
+})
+
+it("retires pending card source reads on route and same-generation tenant changes", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const artifact = artifactAt(0)
+  const detail = { ...artifact, projectRef: "project_12345678-1234-1234-1234-123456789abc" }
+  const resolvers: Array<(value: typeof detail) => void> = []
+  const getArtifact = vi.fn().mockImplementation(() => new Promise(resolve => { resolvers.push(resolve) }))
+  const source = vi.fn()
+  const client = { listArtifacts: vi.fn(), getArtifact }
+  const renderFor = (tenant: string, authInvalidationHint = "first") => <LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={[artifact]} artifactClient={client} onOpenSession={source} projectReadBoundary={{ admitted: true, subject: "owner", tenant, generation: 1, authInvalidationHint }} /></LocaleProvider>
+  const view = render(renderFor("tenant-one"))
+  const open = () => fireEvent.click(screen.getByRole("button", { name: "查看来源会话" }))
+  open()
+  expect(getArtifact).toHaveBeenCalledTimes(1)
+
+  window.history.pushState(null, "", "/app/library?view=list")
+  act(() => window.dispatchEvent(new Event("kokoro:surface-navigation")))
+  expect((getArtifact.mock.calls[0]![2] as AbortSignal).aborted).toBe(true)
+  await act(async () => resolvers[0]!(detail))
+  expect(source).not.toHaveBeenCalled()
+
+  open()
+  expect(getArtifact).toHaveBeenCalledTimes(2)
+  view.rerender(renderFor("tenant-two"))
+  expect((getArtifact.mock.calls[1]![2] as AbortSignal).aborted).toBe(true)
+  await act(async () => resolvers[1]!(detail))
+  expect(source).not.toHaveBeenCalled()
+
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 季度汇报.pptx" }))
+  await act(async () => resolvers[2]!(detail))
+  expect(within(screen.getByRole("dialog")).getByRole("button", { name: "查看来源会话" })).toBeEnabled()
+  view.rerender(renderFor("tenant-two", "invalidated"))
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  expect(source).not.toHaveBeenCalled()
+})
+
 it("opens exact artifact metadata before download and returns keyboard focus to its original card", async () => {
   window.history.replaceState(null, "", "/app/library")
-  const detail = { ...artifacts[0]!, title: "Owner-confirmed title", filename: "owner-file.pptx" }
+  const detail = { ...artifacts[0]!, projectRef: null, title: "Owner-confirmed title", filename: "owner-file.pptx" }
   const getArtifact = vi.fn().mockResolvedValue(detail)
   const download = vi.fn().mockResolvedValue(undefined)
   const source = vi.fn()
@@ -1141,7 +1224,7 @@ it("opens exact artifact metadata before download and returns keyboard focus to 
   expect(getArtifact).toHaveBeenCalledWith("session-1", "artifact-slide", expect.any(AbortSignal))
   expect(download).not.toHaveBeenCalled()
   fireEvent.click(within(dialog).getByRole("button", { name: "查看来源会话" }))
-  expect(source).toHaveBeenCalledWith("session-1")
+  expect(source).toHaveBeenCalledExactlyOnceWith({ kind: "direct" }, "session-1")
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   await waitFor(() => expect(trigger).toHaveFocus())
 })

@@ -47,6 +47,25 @@ it("checks two-part detail and preflights before native attachment, without a br
   click.mockRestore()
 })
 
+it("distinguishes omitted, direct and canonical Project source scope on exact detail only", async () => {
+  const projectRef = "project_12345678-1234-1234-1234-123456789abc"
+  const ownerDetail = (data: typeof item & { project_ref?: string | null }) => Response.json({ data, meta: { request_id: "req-1" } })
+  const fetcher = vi.fn().mockResolvedValueOnce(ownerDetail(item))
+    .mockResolvedValueOnce(ownerDetail({ ...item, project_ref: null }))
+    .mockResolvedValueOnce(ownerDetail({ ...item, project_ref: projectRef }))
+    .mockResolvedValueOnce(ownerDetail({ ...item, project_ref: "legacy-project-alias" }))
+    .mockResolvedValueOnce(Response.json(page([item])))
+  vi.stubGlobal("fetch", fetcher)
+  const signal = new AbortController().signal
+  const read = () => getLibraryArtifact(item.conversation_id, item.artifact_id, signal)
+  await expect(read()).resolves.not.toHaveProperty("projectRef")
+  await expect(read()).resolves.toHaveProperty("projectRef", null)
+  await expect(read()).resolves.toMatchObject({ projectRef, sourceRunId: item.source_run_id, contentSha256: item.content_sha256 })
+  await expect(read()).rejects.toThrow("library_artifacts_invalid_response")
+  const list = await listLibraryArtifacts(null, signal, { query: "", type: "all" })
+  expect(list.items[0]).not.toHaveProperty("projectRef")
+})
+
 it("does not launch attachment after a 404 detail, abort or mismatched identity", async () => {
   const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
   vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 404 })))

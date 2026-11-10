@@ -2,9 +2,9 @@
 import { z } from "zod"
 
 export const BFF_LIBRARY_FILE_DELETE_PROVENANCE = {
-  "ownerCommit": "e52952ddbf35fb0239712f4ba81f188b0314e540",
-  "sourceSha256": "52b59b49be42bc3c1126b6fc94b1d88c440b7ac911c2631e8a0305f43f96bd08",
-  "openapiVersion": "28.27.0"
+  "ownerCommit": "c9c0782771022d75987a886761b263ab30ff8192",
+  "sourceSha256": "495afa65989a1308194910b0b5ece62b4f9db0c84f8dc34e7e0f3b00f7c5294f",
+  "openapiVersion": "28.28.0"
 } as const
 export const libraryFileAssetIdSchema = z.string().min(1).max(191).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\\s\\S])", "u"))
 export const libraryFileDeleteKeySchema = z.string().min(1).max(191).regex(new RegExp("^[\\x21-\\x2b\\x2d-\\x7e]{1,191}(?![\\s\\S])", "u"))

@@ -1,5 +1,5 @@
 import type { LibraryArtifactQuery } from "./kokoro-library-model"
-import { libraryArtifactDetailResponseSchema, libraryArtifactListResponseSchema, type LibraryArtifactWire } from "@/contract/library-artifact"
+import { libraryArtifactDetailResponseSchema, libraryArtifactListResponseSchema, type LibraryArtifactDetailWire, type LibraryArtifactWire } from "@/contract/library-artifact"
 
 export type LibraryArtifact = {
   conversationId: string
@@ -11,7 +11,11 @@ export type LibraryArtifact = {
   mimeType: string
   sizeBytes: string
   deliveredAt: string
+  sourceRunId: string
+  contentSha256: string
 }
+
+export type LibraryArtifactDetailView = LibraryArtifact & { projectRef?: string | null }
 
 export type LibraryArtifactClient = { getArtifact?: typeof getLibraryArtifact; listArtifacts: typeof listLibraryArtifacts }
 
@@ -29,7 +33,17 @@ function mapArtifact(item: LibraryArtifactWire): LibraryArtifact {
     mimeType: item.mime_type,
     sizeBytes: item.size_bytes,
     deliveredAt: item.delivered_at,
+    sourceRunId: item.source_run_id,
+    contentSha256: item.content_sha256,
   }
+}
+
+export function matchesLibraryArtifact(selected: LibraryArtifact, detail: LibraryArtifactDetailView): boolean {
+  return detail.conversationId === selected.conversationId &&
+    detail.artifactId === selected.artifactId &&
+    detail.assetId === selected.assetId &&
+    detail.sourceRunId === selected.sourceRunId &&
+    detail.contentSha256 === selected.contentSha256
 }
 
 function artifactPath(selector: LibraryArtifactSelector): string {
@@ -64,7 +78,7 @@ export async function listLibraryArtifacts(cursor: string | null, signal: AbortS
   return { items: parsed.data.data.items.map(mapArtifact), nextCursor: parsed.data.data.next_cursor }
 }
 
-async function readArtifactWire(selector: LibraryArtifactSelector, signal: AbortSignal): Promise<LibraryArtifactWire> {
+async function readArtifactWire(selector: LibraryArtifactSelector, signal: AbortSignal): Promise<LibraryArtifactDetailWire> {
   signal.throwIfAborted()
   const response = await fetch(artifactPath(selector), { cache: "no-store", signal })
   if (signal.aborted) void response.body?.cancel().catch(() => undefined)
@@ -73,11 +87,13 @@ async function readArtifactWire(selector: LibraryArtifactSelector, signal: Abort
   if (!parsed.success || parsed.data.data.conversation_id !== selector.conversationId || parsed.data.data.artifact_id !== selector.artifactId) {
     throw new Error("library_artifacts_invalid_response")
   }
+  signal.throwIfAborted()
   return parsed.data.data
 }
 
-export async function getLibraryArtifact(conversationId: string, artifactId: string, signal: AbortSignal): Promise<LibraryArtifact> {
-  return mapArtifact(await readArtifactWire({ conversationId, artifactId }, signal))
+export async function getLibraryArtifact(conversationId: string, artifactId: string, signal: AbortSignal): Promise<LibraryArtifactDetailView> {
+  const detail = await readArtifactWire({ conversationId, artifactId }, signal)
+  return { ...mapArtifact(detail), ...(detail.project_ref === undefined ? {} : { projectRef: detail.project_ref }) }
 }
 
 export const ARTIFACT_TEXT_PREVIEW_MAX_BYTES = 65_536
