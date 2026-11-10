@@ -405,12 +405,14 @@ function mountWebsiteHome() {
   const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(null) })
   engine.newConversation()
   let selectMode: EmptyStateProps["onCreationIntentSelect"]
+  let prefill: EmptyStateProps["onPrompt"]
   function Surface(props: EmptyStateProps) {
     selectMode = props.onCreationIntentSelect
+    prefill = props.onPrompt
     return <KokoroDirectChatWelcome {...props} />
   }
   const view = render(<ThemeProvider><LocaleProvider><AppFrame preview engine={engine} chatHref="/app" emptyState={Surface} emptyStateOwnsComposer /></LocaleProvider></ThemeProvider>)
-  return { client, engine, view, selectWebsite: () => selectMode?.("website") }
+  return { client, engine, view, selectWebsite: () => selectMode?.("website"), prefillWebsite: (text: string) => prefill?.(text, "website") }
 }
 
 it("真实首页 composer 从空稿点击建立网站后仍为空、只显示占位、发送保持禁用且零创建", async () => {
@@ -445,4 +447,34 @@ it("首页既有网站模式动作保已有草稿全文，关闭胶囊也不发�
     expect(input).toHaveValue(original)
     expect(context.client.createCalls).toEqual([])
   } finally { context.view.unmount(); context.engine.dispose(); window.localStorage.clear(); window.history.replaceState(null, "", "/app") }
+})
+
+it("首页创建场景选项和编辑立即保存，不依赖下一次计时器或 pagehide", () => {
+  vi.useFakeTimers()
+  const context = mountWebsiteHome()
+  try {
+    const input = screen.getByRole("textbox") as HTMLTextAreaElement
+    const id = context.engine.getSnapshot().store!.activeId
+    const storedDraft = () => JSON.parse(window.localStorage.getItem("kokoro.web.drafts") ?? "{}")[id]
+
+    fireEvent.change(input, { target: { value: "普通输入仍沿原防抖" } })
+    expect(storedDraft()).toBeUndefined()
+
+    // This starter sets the intent and updates the visible draft in one action.
+    act(() => context.prefillWebsite("可编辑的初始灵感"))
+    expect(input).toHaveValue("可编辑的初始灵感")
+    expect(storedDraft()).toBe(input.value)
+    fireEvent.click(screen.getByRole("button", { name: "着陆页" }))
+    expect(input).toHaveValue("可编辑的初始灵感\n\n网站类别：着陆页")
+    expect(storedDraft()).toBe(input.value)
+    fireEvent.click(screen.getByRole("button", { name: "作品集" }))
+    expect(input).toHaveValue("可编辑的初始灵感\n\n网站类别：作品集")
+    expect(storedDraft()).toBe(input.value)
+    fireEvent.change(input, { target: { value: "立即刷新前的最后修改 🦊\n\n网站类别：作品集" } })
+    expect(storedDraft()).toBe(input.value)
+    expect(context.client.createCalls).toEqual([])
+  } finally {
+    context.view.unmount(); context.engine.dispose(); window.localStorage.clear()
+    window.sessionStorage.clear(); window.history.replaceState(null, "", "/app"); vi.useRealTimers()
+  }
 })

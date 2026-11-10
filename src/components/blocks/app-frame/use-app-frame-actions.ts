@@ -40,7 +40,7 @@ export type AppFrameActionsOptions = {
   activeId: string | null
   readDraft: () => { text: string; refs: readonly SelectedResourceRef[] } | null
   clearDraft: (keepResources?: boolean) => void
-  updateDraft: (value: string) => void
+  updateDraft: (value: string, explicitCreation?: boolean) => void
   setDeploymentIntent: (intent: CreationIntent | null) => void
   syncConversationUrl: (id: string | null, mode: "push" | "replace") => void
   setConversationRouteId: (id: string | null) => void
@@ -200,7 +200,8 @@ export function useAppFrameActions({
 
   const handlePrompt = useCallback((prompt: string, intent?: CreationIntent) => {
     setDeploymentIntent(intent ?? null)
-    updateDraft(prompt)
+    // A starter can choose its scene and edit in one event, before the next render.
+    updateDraft(prompt, intent !== undefined)
     // Radix restores focus to the DropdownMenu trigger after its close
     // commit. One frame is too early in a real browser: the textarea receives
     // focus and is then immediately replaced by the trigger. Hand off after

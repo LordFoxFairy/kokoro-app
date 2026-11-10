@@ -422,9 +422,10 @@ function AppFrameRuntime({
       engine?.getSnapshot().store?.activeId === routedConversationId
   }, [draftRoute, draftSelectionMatches, engine, projectWorkspace, routedConversationId])
   const { draft, readCurrentDraft, updateDraft: updateScopedDraft, clearDraft: clearScopedDraft, restoreDraft, updateResourceRefs } = draftController
-  const updateDraft = useCallback((value: string) => {
-    if (draftRouteIsCurrent()) updateScopedDraft(value)
-  }, [updateScopedDraft, draftRouteIsCurrent])
+  const directHomeDraft = !standaloneSurface && !projectWorkspace && routedConversationId === null
+  const updateDraft = useCallback((value: string, explicitCreation = false) => {
+    if (draftRouteIsCurrent()) updateScopedDraft(value, directHomeDraft && explicitCreation)
+  }, [updateScopedDraft, draftRouteIsCurrent, directHomeDraft])
   const clearDraft = useCallback((keepResources?: boolean) => {
     if (draftRouteIsCurrent()) clearScopedDraft(keepResources)
   }, [clearScopedDraft, draftRouteIsCurrent])
@@ -799,6 +800,9 @@ function AppFrameRuntime({
     && !navigationState.conversationHydrating && !navigationState.conversationHydrationFailed
   const conversations = conversationsCtl?.conversations ?? []
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent
+  const updateComposerDraft = useCallback((value: string) => {
+    updateDraft(value, projectedCreationIntent !== null)
+  }, [updateDraft, projectedCreationIntent])
 
   const previousHasMessagesRef = useRef(hasMessages)
   useEffect(() => {
@@ -926,7 +930,7 @@ function AppFrameRuntime({
     onOpenMcpCatalog: overlays.openMcpCatalog,
     onOpenSettings: overlays.openSettings,
     draft,
-    onDraftChange: updateDraft,
+    onDraftChange: updateComposerDraft,
     selectedSkill: actions.selectedSkill,
     onRemoveSelectedSkill: actions.clearSelectedSkill,
     onKeyDown: actions.handleKeyDown,

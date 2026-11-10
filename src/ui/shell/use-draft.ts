@@ -1,7 +1,7 @@
 "use client"
 
 // 未发送草稿 controller：按原会话、待创建或项目槽位持久化文本与 opaque refs。
-// 与会话 store 分键：草稿编辑不惊动引擎；没有附件的输入沿原防抖写入。
+// 与会话 store 分键：草稿编辑不惊动引擎；普通输入沿原防抖写入。
 // 键控派生（非 effect 同步 setState）：mounted 门控保证 SSR/水合首帧一致（服务端无 localStorage）。
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
@@ -139,7 +139,7 @@ export type DraftController = {
   resourceRefs: readonly SelectedResourceRef[]
   resourcesAvailable: boolean
   readCurrentDraft: () => { text: string; refs: readonly SelectedResourceRef[] } | null
-  updateDraft: (value: string) => void
+  updateDraft: (value: string, immediately?: boolean) => void
   updateResourceRefs: (refs: readonly SelectedResourceRef[]) => void
   clearDraft: (keepResources?: boolean) => void
   restoreDraft: (value: string, refs?: readonly SelectedResourceRef[]) => boolean
@@ -268,7 +268,7 @@ export function useDraft(activeId: string | null, mounted: boolean, projectRef?:
     const replaces = previous?.scope === scope ? previous.replaces
       : foreign === null ? null : { subject: foreign.subject, tenant: foreign.tenant }
     const write = { ...edit, replaces }
-    // Confirmed user attachment edits must survive an immediate reload, even
+    // Explicit creation drafts and attachment edits survive an immediate reload, even
     // when the document gets neither a debounce turn nor a pagehide callback.
     if (immediately) { writePending(write); return }
     const timer = setTimeout(() => {
@@ -276,10 +276,10 @@ export function useDraft(activeId: string | null, mounted: boolean, projectRef?:
     }, DRAFT_WRITE_DEBOUNCE_MS)
     pendingWriteRef.current = { ...write, timer }
   }, [flushPendingWrite, foreign, publish, scope, takePendingWrite, writePending])
-  const updateDraft = useCallback((text: string) => {
+  const updateDraft = useCallback((text: string, immediately = false) => {
     if (!isCurrent()) return
     const current = latestValue()
-    update(withText(current, text), refsOf(current).length !== 0)
+    update(withText(current, text), immediately || refsOf(current).length !== 0)
   }, [isCurrent, latestValue, update])
   const updateResourceRefs = useCallback((refs: readonly SelectedResourceRef[]) => {
     if (!owner || !isCurrent()) return
