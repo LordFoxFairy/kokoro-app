@@ -27,3 +27,6 @@ export const libraryFileUploadResponseSchema = z.object({
   }).strict(),
   meta: z.object({ request_id: z.string().min(1) }).strict(),
 }).strict()
+
+export { isLibraryFileDeleteOwnerError, libraryFileAssetIdSchema, libraryFileDeleteErrorSchema,
+  libraryFileDeleteKeySchema, libraryFileDeleteResponseSchema } from "@/generated/bff-library-file-delete"

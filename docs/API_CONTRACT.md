@@ -1,3 +1,7 @@
+## A‑09 · 个人文件删除同源契约
+
+`DELETE /api/hub/library/files/{asset_id}` 只接精确 opaque Asset ID、单原幂等键与空请求，无 query、身份或 scope 参数。沿原生浏览器 Session 仅转发给 BFF 28.26 同一路径；BFF 负责本人范围，Storage 负责删除回执。只有本次 request ID、确切 Asset 与正规生成的 200 回执验证成功才确认删除；网络故障或未验证回执不确认，允许显式同键同 Asset 重试，无自动写入重试。失败不猜删除，不把逻辑 ACK 当物理清理。
+
 ## A‑12：Scheduled executions 同源读面（2026‑11‑08，固定正式 BFF 28.23）
 
 `GET /api/scheduled-tasks/executions` 只代理 BFF `GET /v1/scheduled-tasks/executions`，拒绝此保留集合的写入和额外尾段；延用当前原生 Session 信封、取消和 private/no-store，移除 BFF `data` 外壳后严格解码。query `task_id/project_id` 可选，`limit` 默认20、最大50，`cursor` 不透明；客户端不构造或解析 cursor。集合响应为 `{executions,next_cursor}`，项含 `execution_id/task_id/task_title/occurrence_at/state/conversation_id/project_id/run_id/assistant_message_id/completed_at`，nullable 字段和六种状态以 BFF owner 契约为准；不返回 Agent 内部载荷或凭据。

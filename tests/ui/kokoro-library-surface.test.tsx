@@ -100,6 +100,97 @@ it("个人文件深链从同源 BFF 读取 Asset，且不借用作品下载", as
   expect(screen.queryByTestId("library-artifacts")).not.toBeInTheDocument()
 })
 
+function fileDeletionReceipt(assetId: string, replayed = false) {
+  return Response.json({ data: { asset_id: assetId, deleted_at: "2026-11-10T00:00:00.000Z", replayed } }, {
+    headers: { "cache-control": "private, no-store", "x-request-id": "req_library_delete" },
+  })
+}
+
+it("文件删除取消零写，错误 ACK 不移除，显式重试同一空命令后只移除确认的文件", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  const neighbor = { ...fileOne, asset_id: "asset-neighbor", filename: "Other file.pdf" }
+  const later = { ...fileOne, asset_id: "asset-later", filename: "Later file.pdf" }
+  let finishOldPage!: (response: Response) => void
+  const oldPage = new Promise<Response>((resolve) => { finishOldPage = resolve })
+  const deletions: Array<{ path: string; key: string | null; body: BodyInit | null | undefined }> = []
+  vi.stubGlobal("fetch", vi.fn(async (target: string | Request, init?: RequestInit) => {
+    if (init?.method !== "DELETE") return requestUrl(target).includes("cursor=page-2") ? oldPage : Response.json(filePage([fileOne, neighbor], "page-2"))
+    deletions.push({ path: requestUrl(target), key: new Headers(init.headers).get("idempotency-key"), body: init.body })
+    return deletions.length === 1 ? fileDeletionReceipt(neighbor.asset_id) : fileDeletionReceipt(fileOne.asset_id, true)
+  }))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} projectReadBoundary={{ admitted: true, subject: "owner", generation: 1 }} /></LocaleProvider>)
+  const trigger = await screen.findByRole("button", { name: `Delete ${fileOne.filename}` })
+  fireEvent.click(trigger)
+  const dialog = () => screen.getByRole("alertdialog", { name: "Delete file" })
+  expect(deletions).toEqual([])
+  fireEvent.click(within(dialog()).getByRole("button", { name: "Cancel" }))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(deletions).toEqual([])
+  await waitFor(() => expect(trigger).toHaveFocus())
+
+  fireEvent.click(screen.getByRole("button", { name: "Load more files" }))
+  fireEvent.click(trigger)
+  fireEvent.click(within(dialog()).getByRole("button", { name: "Delete file" }))
+  const retry = await within(dialog()).findByRole("button", { name: "Retry deletion" })
+  expect(within(dialog()).getByRole("alert")).toBeInTheDocument()
+  expect(trigger).toBeInTheDocument()
+  expect(deletions).toHaveLength(1)
+  expect(deletions[0]).toEqual({ path: "/api/hub/library/files/asset-personal-1", key: expect.any(String), body: undefined })
+  fireEvent.click(retry)
+  await waitFor(() => expect(trigger).not.toBeInTheDocument())
+  expect(screen.getByText(neighbor.filename)).toBeInTheDocument()
+  expect(deletions).toEqual([deletions[0], deletions[0]])
+  finishOldPage(Response.json(filePage([fileOne, later])))
+  await screen.findByText(later.filename)
+  expect(screen.queryByText(fileOne.filename)).not.toBeInTheDocument()
+})
+
+it("会话失效后迟到的文件删除回执不污染新准入列表，也不自动重复提交", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  const fileNext = { ...fileOne, filename: "Replacement owner's file.pdf" }
+  let readCount = 0
+  let oldSignal: AbortSignal | null | undefined
+  let resolveDelete!: (response: Response) => void
+  const submitted = new Promise<Response>((resolve) => { resolveDelete = resolve })
+  const mutate = vi.fn((signal: AbortSignal | null | undefined) => { oldSignal = signal; return submitted })
+  vi.stubGlobal("fetch", vi.fn(async (_target: string | Request, init?: RequestInit) => init?.method === "DELETE"
+    ? mutate(init.signal)
+    : Response.json(filePage([++readCount === 1 ? fileOne : fileNext]))))
+  const view = (admitted: boolean, subject: string, generation: number) =>
+    <LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} projectReadBoundary={{ admitted, subject, generation }} /></LocaleProvider>
+  const { rerender } = render(view(true, "actor-a", 1))
+  fireEvent.click(await screen.findByRole("button", { name: `Delete ${fileOne.filename}` }))
+  fireEvent.click(within(screen.getByRole("alertdialog", { name: "Delete file" })).getByRole("button", { name: "Delete file" }))
+  expect(mutate).toHaveBeenCalledTimes(1)
+  rerender(view(false, "actor-a", 2))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(screen.queryByText(fileOne.filename)).not.toBeInTheDocument()
+  expect(oldSignal?.aborted).toBe(true)
+  rerender(view(true, "actor-b", 3))
+  await screen.findByText(fileNext.filename)
+  resolveDelete(fileDeletionReceipt(fileOne.asset_id))
+  await submitted
+  expect(screen.getByText(fileNext.filename)).toBeInTheDocument()
+  expect(mutate).toHaveBeenCalledTimes(1)
+})
+
+it("文件删除的明确 404 不是成功回执，也不提供同命令的盲目重试", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  vi.stubGlobal("fetch", vi.fn(async (_target: string | Request, init?: RequestInit) => init?.method === "DELETE"
+    ? Response.json({ error: { code: "file_not_found", message: "No visible file", retryable: false } }, {
+      status: 404, headers: { "cache-control": "no-store", "x-request-id": "owner-rejection" },
+    })
+    : Response.json(filePage([fileOne]))))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} projectReadBoundary={{ admitted: true, subject: "owner", generation: 1 }} /></LocaleProvider>)
+  const trigger = await screen.findByRole("button", { name: `Delete ${fileOne.filename}` })
+  fireEvent.click(trigger)
+  const dialog = within(screen.getByRole("alertdialog", { name: "Delete file" }))
+  fireEvent.click(dialog.getByRole("button", { name: "Delete file" }))
+  expect(await dialog.findByRole("alert")).toBeInTheDocument()
+  expect(dialog.queryByRole("button", { name: "Retry deletion" })).not.toBeInTheDocument()
+  expect(trigger).toBeInTheDocument()
+})
+
 it("个人文件卡独立在窄屏改为两行网格，下载按钮换行且不挤压文件名", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(filePage([fileOne])), { status: 200 })))
   render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)

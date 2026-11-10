@@ -15,6 +15,9 @@ export function useLibraryFiles(refreshRevision = 0, listFiles: ListFiles = list
   const controllerRef = useRef<AbortController | null>(null)
   const usedCursors = useRef(new Set<string>())
   const inFlightCursor = useRef<string | null>(null)
+  // An already-started list request may describe the file before its delete
+  // ACK. The acknowledged IDs retire that projection only for this tab scope.
+  const retired = useRef(new Set<string>())
 
   const load = useCallback(async (cursor: string | null) => {
     const id = ++requestId.current
@@ -35,7 +38,7 @@ export function useLibraryFiles(refreshRevision = 0, listFiles: ListFiles = list
       const nextCursor = page.nextCursor !== null && usedCursors.current.has(page.nextCursor) ? null : page.nextCursor
       setState((current) => {
         const byId = new Map((cursor === null ? [] : current.items).map((item) => [item.assetId, item]))
-        for (const item of page.items) byId.set(item.assetId, item)
+        for (const item of page.items) if (!retired.current.has(item.assetId)) byId.set(item.assetId, item)
         return { items: [...byId.values()], nextCursor, phase: "ready" }
       })
     } catch {
@@ -58,6 +61,10 @@ export function useLibraryFiles(refreshRevision = 0, listFiles: ListFiles = list
   }, [load, refreshRevision])
 
   const reload = useCallback(() => { void load(null) }, [load])
+  const acknowledgeDeletion = useCallback((assetId: string) => {
+    retired.current.add(assetId)
+    setState((current) => ({ ...current, items: current.items.filter((item) => item.assetId !== assetId) }))
+  }, [])
   const loadMore = useCallback(() => {
     const cursor = state.nextCursor
     if (cursor === null || state.phase === "loadingMore" || inFlightCursor.current === cursor) return
@@ -68,5 +75,5 @@ export function useLibraryFiles(refreshRevision = 0, listFiles: ListFiles = list
     void load(cursor)
   }, [load, state.nextCursor, state.phase])
 
-  return { ...state, reload, loadMore }
+  return { ...state, reload, loadMore, acknowledgeDeletion }
 }

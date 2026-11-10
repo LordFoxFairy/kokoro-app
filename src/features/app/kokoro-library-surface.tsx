@@ -273,7 +273,7 @@ function LibraryWorkspace(props: KokoroLibrarySurfaceProps) {
         <Button ref={sourceFocusRef} type="button" variant="ghost" size="icon-sm" aria-label={t("library.artifactsTab")} onClick={() => writeLibraryTab("artifacts")}><ArrowLeft aria-hidden="true" /></Button>
         <h1>{t("library.filesTab")}</h1>
       </header>
-      <KokoroLibraryFiles preview={props.preview === true} upload={upload} />
+      <KokoroLibraryFiles preview={props.preview === true} upload={upload} boundary={props.projectReadBoundary} />
     </> : <KokoroArtifactLibrary {...props} sourceFocusRef={sourceFocusRef} favoriteIds={favoriteIds} setFavoriteIds={setFavoriteIds} />}
   </div>
 }

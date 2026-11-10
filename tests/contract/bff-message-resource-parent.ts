@@ -1,7 +1,19 @@
 // Build-time exact additive inverse; never a runtime downgrade.
 import { createHash } from "node:crypto"
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
+export function restorePublic2825LibraryFileDeletionContract(source: string): string {
+  if (!/^  version: 28\.26\.0$/mu.test(source)) return source
+  if (hash(source) !== "c80d5aaba1732eca0fb7bc8f32f500adef99e7d884f579cfb7944b8b11e8901a") throw Error("Library file deletion Public28.26 child drift")
+  const parent = source
+    .replace(/^  \/v1\/library\/files\/\{asset_id\}:\n[\s\S]*?(?=^ {0,2}\S)/mu, "")
+    .replace(/^    LibraryFileDeletionResponse:\n[\s\S]*?(?=^ {0,4}\S)/mu, "")
+    .replace(/^    LibraryFileDeletionError:\n[\s\S]*?(?=^ {0,4}\S)/mu, "")
+    .replace("  version: 28.26.0\n", "  version: 28.25.0\n")
+  if (hash(parent) !== "008667f501044dc186e615b83370f96a7401de8027f25e7635248724fb165759") throw Error("Library file deletion complete Public28.25 parent drift")
+  return parent
+}
 export function restorePublic2824FinalAnswerResourceContract(source: string): string {
+  source = restorePublic2825LibraryFileDeletionContract(source)
   if (!/^  version: 28\.25\.0$/mu.test(source)) return source
   if (hash(source) !== "008667f501044dc186e615b83370f96a7401de8027f25e7635248724fb165759") throw Error("Final-answer resource Public28.25 child drift")
   const parent = source

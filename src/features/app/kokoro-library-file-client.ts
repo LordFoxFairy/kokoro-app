@@ -1,4 +1,4 @@
-import { libraryFileListResponseSchema } from "@/contract/library-file"
+import { isLibraryFileDeleteOwnerError, libraryFileAssetIdSchema, libraryFileDeleteErrorSchema, libraryFileDeleteKeySchema, libraryFileDeleteResponseSchema, libraryFileListResponseSchema } from "@/contract/library-file"
 import { downloadFetchedFile, fileFetch } from "@/engine/file-fetch"
 
 const PAGE_LIMIT = 50
@@ -12,6 +12,13 @@ export type LibraryFile = {
 }
 
 export type LibraryFilePage = { items: readonly LibraryFile[]; nextCursor: string | null }
+
+export class LibraryFileDeleteError extends Error {
+  constructor(readonly kind: "unknown" | "rejected" | "auth_required") {
+    super(`library_file_delete_${kind}`)
+    this.name = "LibraryFileDeleteError"
+  }
+}
 
 /** BFF personal Library read; file identity and shape never pass through ArtifactRecord. */
 export async function listLibraryFiles(cursor: string | null, signal: AbortSignal): Promise<LibraryFilePage> {
@@ -41,7 +48,7 @@ export async function listLibraryFiles(cursor: string | null, signal: AbortSigna
 
 /** Same-origin personal byte delivery; the file card, not ArtifactRecord, owns this intent. */
 export async function downloadPersonalLibraryFile(file: LibraryFile, signal: AbortSignal): Promise<void> {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(file.assetId)) throw new Error("library_file_invalid_asset")
+  if (!libraryFileAssetIdSchema.safeParse(file.assetId).success) throw new Error("library_file_invalid_asset")
   const expectedSize = Number(file.sizeBytes)
   if (!Number.isSafeInteger(expectedSize) || expectedSize < 0 || expectedSize > 1_048_576) throw new Error("library_file_invalid_size")
   const response = await fileFetch(`/api/hub/library/files/${encodeURIComponent(file.assetId)}/content`, signal)
@@ -58,4 +65,37 @@ export async function downloadPersonalLibraryFile(file: LibraryFile, signal: Abo
     if (signal.aborted) return
     throw new Error("library_file_download_failed")
   }
+}
+
+/** Caller owns the intent. Transport never retries or treats missing files as an ACK. */
+export async function deletePersonalLibraryFile(assetId: string, key: string, signal: AbortSignal): Promise<void> {
+  if (!libraryFileAssetIdSchema.safeParse(assetId).success || !libraryFileDeleteKeySchema.safeParse(key).success)
+    throw new LibraryFileDeleteError("rejected")
+  const deadline = AbortSignal.any([signal, AbortSignal.timeout(12_000)])
+  let response: Response
+  let payload: unknown
+  try {
+    deadline.throwIfAborted()
+    response = await fetch(`/api/hub/library/files/${encodeURIComponent(assetId)}`, {
+      method: "DELETE", headers: { "idempotency-key": key }, cache: "no-store", redirect: "error", signal: deadline,
+    })
+    if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "") ||
+      !response.headers.get("x-request-id") || !/\bno-store\b/iu.test(response.headers.get("cache-control") ?? ""))
+      throw new LibraryFileDeleteError("unknown")
+    payload = await response.json()
+    deadline.throwIfAborted()
+  } catch {
+    throw new LibraryFileDeleteError("unknown")
+  }
+  if (response.status === 200) {
+    const ack = libraryFileDeleteResponseSchema.safeParse(payload)
+    if (!ack.success || ack.data.data.asset_id !== assetId) throw new LibraryFileDeleteError("unknown")
+    return
+  }
+  const failure = libraryFileDeleteErrorSchema.safeParse(payload)
+  if (failure.success && isLibraryFileDeleteOwnerError(response.status, failure.data.error.code, failure.data.error.retryable) && !failure.data.error.retryable) {
+    if (response.status === 401 || response.status === 403) throw new LibraryFileDeleteError("auth_required")
+    if ([400, 404, 409].includes(response.status)) throw new LibraryFileDeleteError("rejected")
+  }
+  throw new LibraryFileDeleteError("unknown")
 }

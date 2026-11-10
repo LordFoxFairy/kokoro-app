@@ -1,18 +1,20 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
-import { Download, FileText, Search } from "lucide-react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { Download, FileText, Search, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { useLocale, useT } from "@/i18n/context"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
 
 import { useLibraryFiles } from "./kokoro-library-file-state"
-import { downloadPersonalLibraryFile, type LibraryFile } from "./kokoro-library-file-client"
+import { deletePersonalLibraryFile, downloadPersonalLibraryFile, LibraryFileDeleteError, type LibraryFile } from "./kokoro-library-file-client"
 import { KokoroLibraryFileUpload } from "./kokoro-library-file-upload"
 import type { LibraryUploadIntent } from "./kokoro-library-file-upload-state"
 import styles from "./kokoro-library-surface.module.css"
@@ -78,8 +80,12 @@ function FileEmpty() {
 }
 
 type DownloadPhase = "idle" | "loading" | "not_found" | "auth_required" | "failed"
+type FileDeletion = { file: LibraryFile; phase: "confirm" } |
+  { file: LibraryFile; key: string; phase: "pending" | "unknown" | "rejected" | "auth_required" }
 
-function FileCard({ file, locale }: { file: LibraryFile; locale: string }) {
+function FileCard({ file, locale, deleteDisabled, onDelete }: {
+  file: LibraryFile; locale: string; deleteDisabled: boolean; onDelete: (file: LibraryFile, trigger: HTMLButtonElement) => void
+}) {
   const t = useT()
   const [downloadPhase, setDownloadPhase] = useState<DownloadPhase>("idle")
   const controllerRef = useRef<AbortController | null>(null)
@@ -128,6 +134,10 @@ function FileCard({ file, locale }: { file: LibraryFile; locale: string }) {
           {downloadPhase === "loading" ? t("library.downloading") : hasError ? t("library.fileRetryDownload") : t("library.fileDownload")}
         </Button>
         {downloadPhase === "loading" ? <Button type="button" variant="ghost" size="sm" onClick={cancel}>{t("library.cancelDownload")}</Button> : null}
+        <Button type="button" variant="ghost" size="icon-sm" disabled={deleteDisabled}
+          aria-label={t("library.fileDeleteAria", { title: file.filename })} onClick={(event) => onDelete(file, event.currentTarget)}>
+          <Trash2 aria-hidden="true" />
+        </Button>
       </span>
     </CardContent>
     {hasError ? <div role="alert" className={styles.fileDownloadError}>
@@ -140,7 +150,53 @@ function LiveFiles({ upload }: { upload: UploadProps }) {
   const t = useT()
   const { locale } = useLocale()
   const { query, filter } = useFileUrlState()
-  const { items, nextCursor, phase, reload, loadMore } = useLibraryFiles(upload.refreshRevision)
+  const { items, nextCursor, phase, reload, loadMore, acknowledgeDeletion } = useLibraryFiles(upload.refreshRevision)
+  const [deletion, setDeletion] = useState<FileDeletion | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const deleteFlight = useRef<AbortController | null>(null)
+  const deleteTrigger = useRef<HTMLButtonElement | null>(null)
+  const search = useRef<HTMLInputElement | null>(null)
+  const active = useRef(false)
+  useLayoutEffect(() => {
+    active.current = true
+    return () => {
+      active.current = false
+      deleteFlight.current?.abort()
+      deleteFlight.current = null
+    }
+  }, [])
+  const openDeletion = (file: LibraryFile, trigger: HTMLButtonElement) => {
+    if (!active.current || deleteFlight.current !== null || deletion?.phase === "auth_required") return
+    if (deletion?.phase === "unknown" && deletion.file.assetId !== file.assetId) return
+    deleteTrigger.current = trigger
+    if (deletion?.phase !== "unknown") setDeletion({ file, phase: "confirm" })
+    setDeleteOpen(true)
+  }
+  const closeDeletion = () => {
+    if (deleteFlight.current !== null) return
+    setDeleteOpen(false)
+    if (deletion?.phase !== "unknown" && deletion?.phase !== "auth_required") setDeletion(null)
+  }
+  const submitDeletion = async () => {
+    if (!active.current || !deleteOpen || deleteFlight.current !== null ||
+      (deletion?.phase !== "confirm" && deletion?.phase !== "unknown")) return
+    const command = { file: deletion.file, key: deletion.phase === "confirm" ? `library-file-delete:${crypto.randomUUID()}` : deletion.key }
+    const controller = new AbortController()
+    deleteFlight.current = controller
+    setDeletion({ ...command, phase: "pending" })
+    try {
+      await deletePersonalLibraryFile(command.file.assetId, command.key, controller.signal)
+      if (deleteFlight.current !== controller || controller.signal.aborted) return
+      acknowledgeDeletion(command.file.assetId)
+      setDeleteOpen(false)
+      setDeletion(null)
+    } catch (error) {
+      if (deleteFlight.current !== controller || controller.signal.aborted) return
+      setDeletion({ ...command, phase: error instanceof LibraryFileDeleteError ? error.kind : "unknown" })
+    } finally {
+      if (deleteFlight.current === controller) deleteFlight.current = null
+    }
+  }
   const normalizedQuery = query.trim().normalize("NFC").toLowerCase()
   const visibleItems = useMemo(() => items.filter((file) =>
     fileMatchesFilter(file, filter) &&
@@ -151,7 +207,7 @@ function LiveFiles({ upload }: { upload: UploadProps }) {
     <div className={styles.toolbar} data-testid="library-file-filters">
       <label className={styles.search}>
         <Search aria-hidden="true" />
-        <Input value={query} aria-label={t("library.search")} placeholder={t("library.search")} onChange={(event) => writeFileUrlState({ query: event.target.value })} onKeyDown={(event) => {
+        <Input ref={search} value={query} aria-label={t("library.search")} placeholder={t("library.search")} onChange={(event) => writeFileUrlState({ query: event.target.value })} onKeyDown={(event) => {
           if (event.key === "Escape" && query !== "") { event.preventDefault(); writeFileUrlState({ query: "" }) }
         }} />
       </label>
@@ -167,12 +223,45 @@ function LiveFiles({ upload }: { upload: UploadProps }) {
     {phase === "loading" ? <div className={styles.stateRegion} role="status">{t("library.filesLoading")}</div> : null}
     {phase === "error" ? <div className={styles.stateRegion}><Alert variant="destructive" className={styles.errorState}><AlertDescription><span>{t("library.filesLoadError")}</span><Button type="button" variant="outline" size="sm" onClick={reload}>{t("library.filesRetry")}</Button></AlertDescription></Alert></div> : null}
     {phase === "ready" && visibleItems.length === 0 ? <FileEmpty /> : null}
-    {phase !== "loading" && phase !== "error" && visibleItems.length > 0 ? <div className={styles.list} data-testid="library-files" role="list" aria-label={t("library.filesTab")}>{visibleItems.map((file) => <FileCard key={file.assetId} file={file} locale={locale} />)}</div> : null}
+    {phase !== "loading" && phase !== "error" && visibleItems.length > 0 ? <div className={styles.list} data-testid="library-files" role="list" aria-label={t("library.filesTab")}>{visibleItems.map((file) => <FileCard key={file.assetId} file={file} locale={locale}
+      deleteDisabled={deletion?.phase === "auth_required" || (deletion?.phase === "unknown" && deletion.file.assetId !== file.assetId)} onDelete={openDeletion} />)}</div> : null}
     {phase !== "loading" && phase !== "error" && nextCursor !== null ? <div className={styles.pagination}>{phase === "moreError" ? <Alert variant="destructive" className={styles.loadMoreError}><AlertDescription><span>{t("library.filesLoadMoreError")}</span><Button type="button" variant="outline" size="sm" onClick={loadMore}>{t("library.filesRetryMore")}</Button></AlertDescription></Alert> : <Button type="button" variant="outline" size="sm" disabled={phase === "loadingMore"} onClick={loadMore}>{phase === "loadingMore" ? t("library.filesLoading") : t("library.filesLoadMore")}</Button>}</div> : null}
+    <AlertDialog open={deleteOpen} onOpenChange={(open) => { if (!open) closeDeletion() }}>
+      <AlertDialogContent onEscapeKeyDown={(event) => { if (deleteFlight.current !== null) event.preventDefault() }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          if (!active.current) return
+          const trigger = deleteTrigger.current
+          if (trigger?.isConnected && !trigger.disabled) trigger.focus()
+          else search.current?.focus()
+        }}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("library.fileDeleteTitle")}</AlertDialogTitle>
+          <AlertDialogDescription className="break-words">{t("library.fileDeleteDescription", { title: deletion?.file.filename ?? "" })}</AlertDialogDescription>
+        </AlertDialogHeader>
+        {deletion?.phase === "pending" ? <p role="status">{t("library.fileDeleting")}</p> : null}
+        {deletion && ["unknown", "rejected", "auth_required"].includes(deletion.phase) ? <p role="alert">
+          {t(deletion.phase === "unknown" ? "library.fileDeleteUnknown" : deletion.phase === "auth_required" ? "library.fileAuthRequired" : "library.fileDeleteRejected")}
+        </p> : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deletion?.phase === "pending"}>
+            {t(deletion?.phase === "confirm" ? "firstSite.cancel" : "library.fileDeleteClose")}
+          </AlertDialogCancel>
+          <Button variant="destructive" type="button" disabled={deletion?.phase !== "confirm" && deletion?.phase !== "unknown"}
+            onClick={() => void submitDeletion()}>
+            {t(deletion?.phase === "unknown" ? "library.fileDeleteRetry" : "library.fileDeleteTitle")}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </>
 }
 
 /** Explicit preview stays local; live file pages never silently become an empty fixture. */
-export function KokoroLibraryFiles({ preview, upload }: { preview: boolean; upload: UploadProps }) {
-  return preview ? <FileEmpty /> : <LiveFiles upload={upload} />
+export function KokoroLibraryFiles({ preview, upload, boundary }: { preview: boolean; upload: UploadProps; boundary?: ProjectReadBoundary | undefined }) {
+  const t = useT()
+  if (preview) return <FileEmpty />
+  if (boundary !== undefined && (!boundary.admitted || boundary.subject === null))
+    return <div className={styles.stateRegion} role="status">{t("library.filesLoading")}</div>
+  return <LiveFiles key={JSON.stringify([boundary?.tenant, boundary?.subject, boundary?.generation, boundary?.authInvalidationHint])} upload={upload} />
 }

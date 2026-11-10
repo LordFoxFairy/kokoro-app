@@ -5038,6 +5038,56 @@ it.each([null, "0"])("accepts actual EOF on an empty Next DELETE stream with con
   expect(new Headers(options?.headers).get("idempotency-key")).toBe("original-command")
   expect(options?.body).toBeUndefined()
 })
+
+it("personal file DELETE sends only the original empty command and rejects a different asset ACK", async () => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route")
+  let attempt = 0
+  vi.mocked(requestWithDomain).mockImplementation(async (_target, _domain, options) => {
+    attempt += 1
+    const asset_id = attempt === 1 ? "another-asset" : "asset-1"
+    const ownerId = attempt === 2 ? "wrong-request" : new Headers(options?.headers).get("x-kokoro-request-id") ?? ""
+    return Response.json({ data: { asset_id, deleted_at: "2026-11-10T00:00:00.000Z", replayed: true } }, {
+      headers: { "cache-control": "private, no-store", "x-request-id": ownerId },
+    })
+  })
+  const call = () => DELETE(new Request("http://localhost/api/hub/library/files/asset-1", {
+    method: "DELETE", headers: { origin: "http://localhost", "idempotency-key": "original-delete", cookie: "kokoro-issuer.session_token=fixture; debug=discard", "x-kokoro-subject": "forged", "content-type": "text/plain" },
+    body: new ReadableStream<Uint8Array>({ start(controller) { controller.close() } }), duplex: "half",
+  } as RequestInit & { duplex: string }), params(["library", "files", "asset-1"]))
+  const mismatch = await call()
+  expect(mismatch.status).toBe(502)
+  expect(await mismatch.json()).toEqual({ error: { code: "storage_response_invalid", message: expect.any(String), retryable: false } })
+  expect((await call()).status).toBe(502)
+  const replay = await call()
+  expect(replay.status).toBe(200)
+  expect(replay.headers.get("x-request-id")).toBe(new Headers(vi.mocked(requestWithDomain).mock.calls[2]?.[2].headers).get("x-kokoro-request-id"))
+  expect(await replay.json()).toEqual({ data: { asset_id: "asset-1", deleted_at: "2026-11-10T00:00:00.000Z", replayed: true } })
+  for (const [target, , options] of vi.mocked(requestWithDomain).mock.calls) {
+    expect(target).toBe("http://bff.test/v1/library/files/asset-1")
+    expect(options?.method).toBe("DELETE")
+    expect(options?.body).toBeUndefined()
+    const forwarded = new Headers(options?.headers)
+    expect(forwarded.get("idempotency-key")).toBe("original-delete")
+    expect(forwarded.get("cookie")).toBe("kokoro-issuer.session_token=fixture")
+    expect(forwarded.has("x-kokoro-subject")).toBe(false)
+    expect(forwarded.has("content-type")).toBe(false)
+  }
+  expect(requestWithDomain).toHaveBeenCalledTimes(3)
+})
+
+it("personal file DELETE rejects aliases, query, forged preconditions and an actual body before forwarding", async () => {
+  const { DELETE } = await import("@/app/api/hub/[...path]/route")
+  const key = { origin: "http://localhost", "idempotency-key": "original-delete", cookie: "kokoro-issuer.session_token=fixture" }
+  const path = params(["library", "files", "asset-1"])
+  const url = "http://localhost/api/hub/library/files/asset-1"
+  for (const [request, target, status] of [
+    [new Request(url + "?scope=forged", { method: "DELETE", headers: key }), path, 400],
+    [new Request(url, { method: "DELETE", headers: { ...key, "if-match": "forged" } }), path, 400],
+    [new Request(url, { method: "DELETE", headers: key, body: new Uint8Array([1]) }), path, 400],
+    [new Request("http://localhost/api/hub/self/library/files/asset-1", { method: "DELETE", headers: key }), params(["self", "library", "files", "asset-1"]), 404],
+  ] as const) expect((await DELETE(request, target)).status).toBe(status)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
 it.each([
   { "content-type": "application/json" }, { "transfer-encoding": "chunked" },
   { "content-encoding": "identity" }, { "content-length": "1" },

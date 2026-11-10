@@ -1,3 +1,7 @@
+## A‑09 · Public 28.26 个人文件删除
+
+唯一公开 snapshot 按 BFF `697cece8c913349c9424a024bd6d8003bb3adeae` canonical Git blob 固定，SHA‑256 `c80d5aaba1732eca0fb7bc8f32f500adef99e7d884f579cfb7944b8b11e8901a`。现资源生成器从同一来源生成个人文件删除的 Asset/key、闭合回执及 status/code/retryable 校验，不新增可编辑契约副本。旧 A‑12 28.23 与其它独立来源保持；test-only 完整逆变换仍核原父字节，运行时只消费当前协议。
+
 ## A‑08：唯一当前 Public28.25 消费者
 
 `src/generated/bff-public-openapi.yaml` 为 BFF `8d7892c82378b44ef1cbbdf0658f8d0da2be9968` / Public28.25.0 完整 Git blob，SHA‑256 `008667f501044dc186e615b83370f96a7401de8027f25e7635248724fb165759`。原13条公共生成入口与 current pins 同步；从 owner `MessageCreateRequest.selected_resource_refs` 正规生成 `final_answer`，仍仅接受 opaque Message ID 和 kind，复用原 Chat submit/recovery。test-only 精确逆回 Public28.24 再接原28.23、28.22和历史父链，不在运行中降级。下方 A‑12 独立窄发行物与其它 private/policy 来源保持。
