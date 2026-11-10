@@ -31,10 +31,11 @@ export class AgentClientError extends Error {
 export const AGENT_CONNECTION_BODY_LIMIT = 1_024
 export const AGENT_CONNECTION_RESPONSE_LIMIT = 8_192
 export const AGENT_CONNECTION_DEADLINE_MS = 10_000
+export const SLACK_CALLBACK_PATH = "/api/agents/connections/slack/callback"
 export const AGENT_CONNECTION_JSON = /^application\/json(?:\s*;\s*charset=utf-8)?$/iu
 
 /** Check exact owner state/receipt; don't turn a different setup into navigation. */
-export function parseAgentConnectionResponse(raw: unknown, requestId: string, platform: AgentPlatform, command?: AgentConnectionCommand) {
+export function parseAgentConnectionResponse(raw: unknown, requestId: string, platform: AgentPlatform, command?: AgentConnectionCommand, webOrigin?: string) {
   const parsed = agentConnectionResponseSchema.safeParse(raw)
   if (!parsed.success || parsed.data.meta.request_id !== requestId || parsed.data.data.platform !== platform) return null
   const state = parsed.data.data
@@ -50,11 +51,19 @@ export function parseAgentConnectionResponse(raw: unknown, requestId: string, pl
       !/^\/R\/oaMessage\/%40[A-Za-z0-9_.-]{1,64}\/$/u.test(url.pathname) ||
       url.search !== `?${encodeURIComponent(`Kokoro connect ${state.setup_id}`)}` || url.href !== state.continue_url) return null
   }
+  if (state.status === "awaiting_slack") {
+    const url = new URL(state.continue_url)
+    const clientId = url.searchParams.get("client_id")
+    const redirect = webOrigin === undefined ? null : new URL(SLACK_CALLBACK_PATH, webOrigin).href
+    if (url.origin !== "https://slack.com" || url.pathname !== "/oauth/v2/authorize" || url.username || url.password ||
+      url.hash || url.href !== state.continue_url || !redirect || !clientId || !/^[0-9]{1,32}\.[0-9]{1,32}$/u.test(clientId) ||
+      url.search !== `?${new URLSearchParams({ client_id: clientId, scope: "team:read", redirect_uri: redirect, state: state.setup_id })}`) return null
+  }
   if (command) {
     const delta = Number(state.state_version) - Number(command.expected_state_version)
-    const matches = command.action === "start" ? state.status === (platform === "line" ? "awaiting_line" : "awaiting_telegram") && delta === 1
+    const matches = command.action === "start" ? state.status === `awaiting_${platform}` && delta === 1
       : command.action === "confirm" ? platform === "telegram" && state.status === "connected" && delta === 1
-      : state.status === "disconnected" && (command.action === "cancel" ? delta === 1 || platform === "telegram" && delta === 2 : delta === 0 || delta === 1)
+      : state.status === "disconnected" && (command.action === "cancel" ? delta === 1 || platform !== "line" && delta === 2 : delta === 0 || delta === 1)
     if (!matches) return null
   }
   return parsed.data
@@ -118,7 +127,7 @@ export function createAgentClient(fetcher: typeof fetch = fetch): AgentClient {
     if (!agentPlatformSchema.safeParse(platform).success || (command !== undefined && !agentConnectionCommandSchema.safeParse(command).success))
       throw new AgentClientError(400, "invalid_agent_connection_request")
     return exchange(`/api/agents/connections/setup?platform=${platform}`, command, caller,
-      (raw, requestId) => parseAgentConnectionResponse(raw, requestId, platform, command))
+      (raw, requestId) => parseAgentConnectionResponse(raw, requestId, platform, command, typeof window === "undefined" ? undefined : window.location.origin))
   }
   return {
     connectionSetup: (platform, signal) => setup(platform, signal),

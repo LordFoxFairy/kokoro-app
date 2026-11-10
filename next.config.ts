@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
         /^\/auth\/select-tenant(?:\?.*)?$/u,
         /^\/iam\/interactions\/select-tenant(?:\?.*)?$/u,
         /^\/iam\/oauth2\/authorize(?:\?.*)?$/u,
+        /^\/api\/agents\/connections\/slack\/callback(?:\?.*)?$/u,
         /^\/api\/auth\/callback\/kokoro-iam(?:\?.*)?$/u,
       ],
     },

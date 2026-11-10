@@ -164,6 +164,7 @@ it("过期修订只重新 GET，已切走的 setup 回执不覆盖面板", async
   let finish!: (value: AgentConnectionSetup) => void
   const connectionSetup = vi.fn<AgentClient["connectionSetup"]>().mockResolvedValueOnce(disconnected)
     .mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    .mockResolvedValueOnce({ platform: "slack", status: "disconnected", state_version: "1" })
   const changeConnection = vi.fn<AgentClient["changeConnection"]>().mockRejectedValueOnce(new AgentClientError(412, "agent_connection_precondition_failed"))
   renderAgents({ client: { connectionSetup, changeConnection, continueLineConnection: vi.fn() } })
   const dialog = openSetup()
@@ -173,7 +174,7 @@ it("过期修订只重新 GET，已切走的 setup 回执不覆盖面板", async
   fireEvent.focus(dialog.getByRole("tab", { name: "Slack" }))
   expect(readback?.aborted).toBe(true)
   await act(async () => { finish(awaiting) })
-  expect(dialog.getByRole("status")).toHaveTextContent("Slack 连接暂不可用")
+  expect(await dialog.findByRole("button", { name: "开始连接 Slack" })).toBeInTheDocument()
   expect(dialog.queryByRole("link")).not.toBeInTheDocument()
   expect(changeConnection).toHaveBeenCalledTimes(1)
 })

@@ -2,9 +2,9 @@
 import { z } from "zod"
 
 export const BFF_PROJECT_WEBSITES_PROVENANCE = {
-  "ownerCommit": "c535c16990eb6ea1100ceef5d88e3e3652f6d902",
-  "sourceSha256": "ea0b6ff7b4ea4a0348a4dd579c2440dca32e58c5958b2374e8555e02b74382a6",
-  "openapiVersion": "28.34.0"
+  "ownerCommit": "18dcc30179632eb32a86f160a5f13c71eb1c5d27",
+  "sourceSha256": "a26431d45ad96c4e80e6751d61e66a14b3933ae7c2ffb6f9e7df57fcc7e6808f",
+  "openapiVersion": "28.35.0"
 } as const
 export const PROJECT_WEBSITE_URL_LIMIT = 16
 export const PROJECT_WEBSITE_URL_MAX_BYTES = 2048

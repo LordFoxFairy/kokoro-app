@@ -90,3 +90,35 @@ it("LINE continuation only returns the official URL bound to the original setup 
   expect(wrong.status).toBe(502)
   expect(await wrong.text()).not.toContain("wrong-token")
 })
+
+it("Slack top-level callback sends a bounded private POST and always redirects without its query", async () => {
+  productBffConfig.mockReturnValue(config)
+  const callback = "https://app.example/api/agents/connections/slack/callback"
+  const route = { params: Promise.resolve({ path: ["connections", "slack", "callback"] }) }
+  const state = "a".repeat(32)
+  const code = "1234.5678.fixture"
+  const go = (query: string, session = cookie) => GET(new Request(`${callback}?${query}`, { headers: {
+    cookie: session, "sec-fetch-mode": "navigate", "sec-fetch-dest": "document",
+  } }), route)
+  requestWithDomain.mockImplementation(async (target: string, domain: string, init: { method: string; body: ArrayBuffer; headers: Headers }) => {
+    expect(target).toBe("https://bff.internal/v1/agents/connections/slack/complete")
+    expect(domain).toBe(config.domain)
+    expect(init.method).toBe("POST")
+    expect(init.headers.get("cookie")).toBe(cookie)
+    expect(init.headers.get("origin")).toBe(config.session.webOrigin)
+    expect(JSON.parse(new TextDecoder().decode(init.body))).toEqual({ state, code })
+    return new Response(null, { status: 409 }) // An owner refusal is never shown as a connection.
+  })
+  const assertSafeReturn = async (result: Response) => {
+    expect(result.status).toBe(303)
+    expect(result.headers.get("location")).toBe("/app/agents?connection=slack")
+    expect(result.headers.get("cache-control")).toContain("no-store")
+    expect(result.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(await result.text()).toBe("")
+  }
+  await assertSafeReturn(await go(`error=access_denied&state=${state}`))
+  await assertSafeReturn(await go(`code=${code}&state=${state}`, ""))
+  expect(requestWithDomain).not.toHaveBeenCalled()
+  await assertSafeReturn(await go(`code=${code}&state=${state}`))
+  expect(requestWithDomain).toHaveBeenCalledTimes(1)
+})

@@ -283,10 +283,15 @@ describe("trusted actual product target projection", () => {
 })
 
 describe("native interaction privacy at the final Proxy boundary", () => {
-  it("keeps the exact LINE continuation response opaque to referrers", async () => {
+  it.each([
+    ["/api/agents/connections/line/continue", "POST"],
+    ["/api/agents/connections/slack/callback?code=private-fixture&state=fixture", "GET"],
+  ])("keeps the exact provider continuation opaque at the final Proxy boundary", async (path, method) => {
     const { proxy } = await import("@/proxy")
-    const response = await proxy(new NextRequest(ORIGIN + "/api/agents/connections/line/continue", { method: "POST", headers: { origin: ORIGIN } }))
+    const response = await proxy(new NextRequest(ORIGIN + path, { method, headers: { origin: ORIGIN } }))
     expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.get("cache-control")).toContain("no-store")
+    expect(response.headers.get("x-middleware-request-x-kokoro-product-return-target")).toBeNull()
   })
   it.each(["/auth/select-tenant", "/iam/interactions/select-tenant"])("uses a proxy-owned nonce and restrictive document policy for %s", async (path) => {
     const { proxy } = await import("@/proxy")

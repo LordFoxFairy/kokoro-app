@@ -1,3 +1,7 @@
+## A‑13 Slack workspace association
+
+The same Agents dialog offers official Slack authorization in the current tab. Its callback gives the one-time code to BFF through the existing authenticated boundary and redirects to the fixed Agents page. Only the admitted BFF read can show connected; personal disconnect does not uninstall Slack. Public 28.35 is pinned; real Chromium and live-provider evidence are tracked by Root.
+
 ## A‑13 LINE account connection
 
 The existing Agents dialog accepts the private bot return only for its signed-in owner, removes the fragment, and requires an explicit approval. The one-time official continuation lives only in memory. Setup reads and disconnect still use the same owner route. BFF Public 28.34 is pinned; real Chromium pairing and provider acceptance are tracked by Root.

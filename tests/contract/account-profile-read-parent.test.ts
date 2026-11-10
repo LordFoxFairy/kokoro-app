@@ -11,7 +11,7 @@ const raw = readFileSync("src/generated/bff-public-openapi.yaml", "utf8")
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
 
 it("restores the entire Public28.17 parent and preserves its 199 operations in order", () => {
-  expect(hash(raw)).toBe("ea0b6ff7b4ea4a0348a4dd579c2440dca32e58c5958b2374e8555e02b74382a6")
+  expect(hash(raw)).toBe("a26431d45ad96c4e80e6751d61e66a14b3933ae7c2ffb6f9e7df57fcc7e6808f")
   const parent = restorePublic2817AccountProfileReadContract(raw)
   expect(hash(parent)).toBe("ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7")
   const public2820 = restorePublic2820InterruptSubmitContract(raw)
@@ -44,7 +44,7 @@ it.each([
   ["new schema", raw.replace("    AccountProfileReadResponse:\n", "    ChangedAccountProfileReadResponse:\n")],
   ["existing PATCH operation", raw.replace("operationId: updateAccountProfile", "operationId: changedUpdateAccountProfile")],
   ["unrelated operation", raw.replace("listTeamMembers", "changedListTeamMembers")],
-  ["version", raw.replace("  version: 28.34.0\n", "  version: 28.23.0\n")],
+  ["version", raw.replace("  version: 28.35.0\n", "  version: 28.23.0\n")],
   ["extra byte", raw + "\n"],
 ])("rejects %s drift before entering the historical parent chain", (_label, changed) => {
   expect(changed).not.toBe(raw)

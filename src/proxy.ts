@@ -199,6 +199,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   if (path === "/api/agents/connections/line/continue" && request.method === "POST" && request.nextUrl.search === "") {
     response.headers.set("Referrer-Policy", "no-referrer")
   }
+  // The provider's query must not survive the 303 as a browser referrer.
+  if (path === "/api/agents/connections/slack/callback" && request.method === "GET") {
+    response.headers.set("Referrer-Policy", "no-referrer")
+  }
   // Only exact binary GET paths suppress referrer data at the final Next
   // boundary. Do not accept arbitrary percent escapes or double decoding here.
   if (

@@ -7,15 +7,16 @@ import YAML from "yaml"
 const source = new URL("../src/generated/bff-public-openapi.yaml", import.meta.url)
 const target = new URL("../src/generated/bff-agent-connections.ts", import.meta.url)
 const provenance = {
-  ownerCommit: "c535c16990eb6ea1100ceef5d88e3e3652f6d902",
-  sourceSha256: "ea0b6ff7b4ea4a0348a4dd579c2440dca32e58c5958b2374e8555e02b74382a6",
-  openapiVersion: "28.34.0",
+  ownerCommit: "18dcc30179632eb32a86f160a5f13c71eb1c5d27",
+  sourceSha256: "a26431d45ad96c4e80e6751d61e66a14b3933ae7c2ffb6f9e7df57fcc7e6808f",
+  openapiVersion: "28.35.0",
 }
 
 function render(spec) {
   assert.equal(spec.info.version, provenance.openapiVersion)
   const operations = spec.paths["/v1/agents/connections/setup"]
   const lineContinue = spec.paths["/v1/agents/connections/line/continue"].post
+  const slackComplete = spec.paths["/v1/agents/connections/slack/complete"].post
   const schemas = spec.components.schemas
   assert.equal(operations.get.operationId, "getAgentConnectionSetup")
   assert.equal(operations.post.operationId, "changeAgentConnection")
@@ -31,6 +32,9 @@ function render(spec) {
   assert.equal(lineContinue.requestBody.required, true)
   assert.deepEqual(schemaOf(lineContinue.requestBody.content), { $ref: "#/components/schemas/LineConnectionContinueRequest" })
   assert.deepEqual(schemaOf(lineContinue.responses[200].content), { $ref: "#/components/schemas/LineConnectionContinueResponse" })
+  assert.equal(slackComplete.operationId, "completeSlackConnection")
+  assert.equal(slackComplete.requestBody.required, true)
+  assert.deepEqual(schemaOf(slackComplete.requestBody.content), { $ref: "#/components/schemas/SlackConnectionCompleteRequest" })
   const maxVersion = /between 1 and ([0-9]+)\)\.$/u.exec(schemas.AgentConnectionStateVersion.description)?.[1]
   assert.ok(maxVersion && Number.isSafeInteger(Number(maxVersion)))
 
@@ -91,6 +95,7 @@ export const agentConnectionSetupSchema = ${union("AgentConnectionSetup", "statu
 export const agentConnectionResponseSchema = ${renderSchema(schemas.AgentConnectionSetupResponse)}
 export const lineConnectionContinueRequestSchema = ${renderSchema(schemas.LineConnectionContinueRequest)}
 export const lineConnectionContinueResponseSchema = ${renderSchema(schemas.LineConnectionContinueResponse)}
+export const slackConnectionCompleteRequestSchema = ${renderSchema(schemas.SlackConnectionCompleteRequest)}
 export const agentConnectionErrorSchema = ${renderSchema(schemas.ErrorEnvelope)}
 
 export type AgentPlatform = z.infer<typeof agentPlatformSchema>
