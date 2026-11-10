@@ -64,6 +64,7 @@ type UploadProps = {
   intent: LibraryUploadIntent | null
   select: (file: File) => void
   submit: () => void
+  cancel: () => void
   refreshRevision: number
 }
 
@@ -249,7 +250,7 @@ function LiveFiles({ upload, boundary }: { upload: UploadProps; boundary: Projec
       <span className="min-w-0 break-words text-sm text-muted-foreground">{deletion.file.filename}</span>
       <Button type="button" variant="outline" size="sm" onClick={(event) => openDeletion(deletion.file, event.currentTarget)}>{t("library.fileDeleteRetry")}</Button>
     </div> : null}
-    <KokoroLibraryFileUpload intent={upload.intent} onSelect={upload.select} onSubmit={upload.submit} />
+    <KokoroLibraryFileUpload intent={upload.intent} onSelect={upload.select} onSubmit={upload.submit} onCancel={upload.cancel} />
     {validQuery && phase === "loading" ? <div className={styles.stateRegion} role="status">{t("library.filesLoading")}</div> : null}
     {phase === "error" ? <div className={styles.stateRegion}><Alert variant="destructive" className={styles.errorState}><AlertDescription><span>{t("library.filesLoadError")}</span><Button type="button" variant="outline" size="sm" onClick={reload}>{t("library.filesRetry")}</Button></AlertDescription></Alert></div> : null}
     {phase === "ready" && items.length === 0 ? <FileEmpty /> : null}

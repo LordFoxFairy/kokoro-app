@@ -10,17 +10,16 @@ export function useLibraryFileUpload() {
   const [intent, setIntent] = useState<LibraryUploadIntent | null>(null)
   const [refreshRevision, setRefreshRevision] = useState(0)
   const intentRef = useRef<LibraryUploadIntent | null>(null)
-  const running = useRef(false)
-  const epoch = useRef(0)
   const controllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => () => {
-    epoch.current++
-    controllerRef.current?.abort()
+    const controller = controllerRef.current
+    controllerRef.current = null
+    controller?.abort()
   }, [])
 
   const select = useCallback((file: File) => {
-    if (running.current) return
+    if (controllerRef.current !== null) return
     const next: LibraryUploadIntent = {
       file,
       key: `library-file:${crypto.randomUUID()}`,
@@ -31,11 +30,27 @@ export function useLibraryFileUpload() {
     setIntent(next)
   }, [])
 
+  const cancel = useCallback(() => {
+    const current = intentRef.current
+    if (current?.phase === "selected") {
+      intentRef.current = null
+      setIntent(null)
+      return
+    }
+    const controller = controllerRef.current
+    if (current?.phase !== "uploading" || controller === null) return
+    // Cancellation stops waiting, not the owner command. Retain the original
+    // File/key and retire this request before an abort or late ACK can settle.
+    controllerRef.current = null
+    const unknown = { ...current, phase: "recoverable" as const, error: "upload_cancelled_unknown" }
+    intentRef.current = unknown
+    setIntent(unknown)
+    controller.abort()
+  }, [])
+
   const submit = useCallback(async () => {
     const current = intentRef.current
-    if (current === null || running.current || current.phase === "terminal" || current.phase === "clean") return
-    running.current = true
-    const id = ++epoch.current
+    if (controllerRef.current !== null || (current?.phase !== "selected" && current?.phase !== "recoverable")) return
     const controller = new AbortController()
     controllerRef.current = controller
     const uploading = { ...current, phase: "uploading" as const, error: null }
@@ -43,22 +58,21 @@ export function useLibraryFileUpload() {
     setIntent(uploading)
     try {
       await uploadLibraryFile(current.file, current.key, controller.signal)
-      if (id !== epoch.current || controller.signal.aborted) return
+      if (controllerRef.current !== controller) return
       const clean = { ...current, phase: "clean" as const, error: null }
       intentRef.current = clean
       setIntent(clean)
       setRefreshRevision((revision) => revision + 1)
     } catch (error) {
-      if (id !== epoch.current || controller.signal.aborted) return
+      if (controllerRef.current !== controller) return
       const known = error instanceof LibraryFileUploadError ? error : new LibraryFileUploadError("upload_network_error", true)
       const failed = { ...current, phase: known.retryable ? "recoverable" as const : "terminal" as const, error: known.code }
       intentRef.current = failed
       setIntent(failed)
     } finally {
-      running.current = false
-      if (id === epoch.current) controllerRef.current = null
+      if (controllerRef.current === controller) controllerRef.current = null
     }
   }, [])
 
-  return { intent, select, submit, refreshRevision }
+  return { intent, select, submit, cancel, refreshRevision }
 }

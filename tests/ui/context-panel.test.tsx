@@ -608,6 +608,66 @@ function ControlledDeliveredCanvas() {
   </LocaleProvider>
 }
 
+it("a new Canvas selection during exit supersedes the old close and focus, including the same artifact", async () => {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
+  const second = { ...textDelivery, artifactId: "second_artifact", title: "Second delivery" }
+  const thread = { ...createSessionStreamState(), deliveries: [textDelivery, second] }
+  const fetcher = vi.fn<(url: string, options: RequestInit) => Promise<Response>>(() => new Promise(() => {}))
+  vi.stubGlobal("fetch", fetcher)
+
+  function Harness() {
+    const canvas = useCanvasWorkspace("session_1", thread, true)
+    return <LocaleProvider>
+      <button type="button" data-canvas-opener="true" onClick={() => canvas.openDelivery(textDelivery)}>First opener</button>
+      <button type="button" data-canvas-opener="true" onClick={() => canvas.openDelivery(second)}>Second opener</button>
+      {canvas.resolvedCanvas ? <ContextPanel sessionId="session_1" content={canvas.resolvedCanvas} files={[]} deliveries={thread.deliveries}
+        readBoundary={textBoundary} fullscreen={canvas.fullscreen} onSelectFile={canvas.onSelectFile} onSelectDelivery={canvas.onSelectDelivery}
+        onToggleFullscreen={canvas.onToggleFullscreen} isCurrentOpening={canvas.isCurrentOpening} onClose={canvas.onClose} /> : null}
+    </LocaleProvider>
+  }
+
+  const { container, rerender } = render(<Harness />)
+  const opener = (name: string) => screen.getByRole("button", { name })
+  const open = (name: string) => { const target = opener(name); target.focus(); fireEvent.click(target) }
+  const close = () => { const target = screen.getByRole("button", { name: "Close preview" }); target.focus(); fireEvent.click(target) }
+  const host = () => container.querySelector('[data-slot="context-panel"]')
+  open("First opener")
+  await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
+
+  vi.useFakeTimers()
+  try {
+    close()
+    expect(host()).toHaveAttribute("inert")
+    expect(fetcher.mock.calls[0]![1].signal?.aborted).toBe(true)
+    open("Second opener")
+    await act(async () => { await vi.advanceTimersByTimeAsync(221) })
+    expect(host()).toHaveAttribute("data-state", "open")
+    expect(screen.getByRole("heading", { name: second.title })).toBeVisible()
+    expect(opener("Second opener")).toHaveFocus()
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/hub/library/artifacts/session_1/artifact_text",
+      "/api/hub/library/artifacts/session_1/second_artifact",
+    ])
+
+    close()
+    expect(fetcher.mock.calls[1]![1].signal?.aborted).toBe(true)
+    open("Second opener")
+    await act(async () => { await vi.advanceTimersByTimeAsync(221) })
+    expect(host()).toHaveAttribute("data-state", "open")
+    expect(screen.getByRole("heading", { name: second.title })).toBeVisible()
+    expect(fetcher.mock.calls[2]?.[0]).toBe("/api/hub/library/artifacts/session_1/second_artifact")
+    expect(opener("Second opener")).toHaveFocus()
+
+    close()
+    rerender(<Harness />) // A render is not an explicit open intent.
+    await act(async () => { await vi.advanceTimersByTimeAsync(221) })
+    expect(host()).toBeNull()
+    expect(opener("Second opener")).toHaveFocus()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 it("delivery loading is quiet; Close aborts before delayed unmount and explicit reopen reads fresh bytes", async () => {
   localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
   vi.stubGlobal("crypto", webcrypto)

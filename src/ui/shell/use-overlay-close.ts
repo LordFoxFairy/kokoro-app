@@ -10,7 +10,7 @@ function focusable(target: HTMLElement | null): target is HTMLElement {
 
 /** Keep a controlled Radix overlay mounted while its exit animation renders. */
 export function useOverlayClose(onClose: () => void, durationMs = 220) {
-  const [open, setOpen] = useState(true)
+  const [{ open, reopenRevision }, setOverlay] = useState({ open: true, reopenRevision: 0 })
   const closingRef = useRef(false)
   const timerRef = useRef<number | null>(null)
   // Controlled Dialogs have no Radix Trigger. Capture the actual opener once
@@ -38,7 +38,7 @@ export function useOverlayClose(onClose: () => void, durationMs = 220) {
   const requestClose = useCallback(() => {
     if (closingRef.current) return
     closingRef.current = true
-    setOpen(false)
+    setOverlay(current => ({ ...current, open: false }))
     const reducedMotion = typeof window !== "undefined"
       && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     const delay = reducedMotion ? 0 : durationMs
@@ -52,6 +52,17 @@ export function useOverlayClose(onClose: () => void, durationMs = 220) {
     }, delay)
   }, [durationMs, onClose])
 
+  const cancelClose = useCallback(() => {
+    if (!closingRef.current) return false
+    closingRef.current = false
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    setOverlay(current => ({ open: true, reopenRevision: current.reopenRevision + 1 }))
+    return true
+  }, [])
+
   const onCloseAutoFocus = useCallback((event: Event) => {
     const target = returnFocusRef.current
     if (!focusable(target)) return
@@ -59,5 +70,5 @@ export function useOverlayClose(onClose: () => void, durationMs = 220) {
     window.requestAnimationFrame(() => target.focus({ preventScroll: true }))
   }, [])
 
-  return { open, requestClose, onCloseAutoFocus, returnFocusRef }
+  return { open, requestClose, cancelClose, reopenRevision, onCloseAutoFocus, returnFocusRef }
 }

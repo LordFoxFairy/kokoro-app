@@ -28,6 +28,7 @@ export type CanvasWorkspace = {
   canvasOpen: boolean
   canReopenCanvas: boolean
   fullscreen: boolean
+  isCurrentOpening: () => boolean
   openActivity: (runId: string, activityId: string, subject: string) => void
   openFile: (path: string) => void
   openDelivery: (delivery: SessionDelivery) => void
@@ -48,6 +49,13 @@ export function useCanvasWorkspace(activeId: string | null, thread: Thread, moun
       : null
   const canvasOpen = resolvedCanvas !== null && activeId !== null
   const canReopenCanvas = mounted && activityAdmitted && activeId !== null && !slot.open && slot.content !== null
+  const opening = slot.content
+  // A delayed close must see the current store intent even before React has
+  // committed the newer selection. Metadata refreshes don't replace it.
+  const isCurrentOpening = useCallback(
+    () => activeId !== null && canvasSlot(readCanvasState(), activeId).content === opening,
+    [activeId, opening],
+  )
 
   const openActivity = useCallback((runId: string, activityId: string, subject: string) => {
     if (activeId !== null && boundary?.admitted && boundary.subject === subject) openCanvas(activeId, { kind: "activity", runId, activityId, subject, generation: boundary.generation })
@@ -105,6 +113,7 @@ export function useCanvasWorkspace(activeId: string | null, thread: Thread, moun
     canvasOpen,
     canReopenCanvas,
     fullscreen: slot.fullscreen,
+    isCurrentOpening,
     openActivity,
     openFile,
     openDelivery,

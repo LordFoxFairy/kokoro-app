@@ -77,7 +77,9 @@ export function canvasSlot(current: CanvasState, key: string | null): CanvasSlot
 
 // 打开内容：换内容即展开（用户点击产物/工具本身就是打开意图，覆盖此前的手动关闭）。
 export function openCanvas(key: string, content: CanvasContentRef): void {
-  patchSlot(key, { content, open: true })
+  // Each explicit selection is a fresh intent, including the same artifact.
+  // Passive metadata/fullscreen updates keep this reference unchanged.
+  patchSlot(key, { content: { ...content }, open: true })
 }
 
 // 手动关闭（唯一记「closed」的路径）：内容留槽，重开入口据此可恢复。
@@ -89,7 +91,7 @@ export function closeCanvas(key: string): void {
 export function reopenCanvas(key: string): void {
   const slot = state.byKey[key]
   if (slot?.content) {
-    patchSlot(key, { open: true })
+    openCanvas(key, slot.content)
   }
 }
 

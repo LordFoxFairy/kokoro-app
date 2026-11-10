@@ -218,6 +218,7 @@ export function AppFrameShell({
                       onSelectFile={canvas.onSelectFile}
                       onSelectDelivery={canvas.onSelectDelivery}
                       onToggleFullscreen={canvas.onToggleFullscreen}
+                      isCurrentOpening={canvas.isCurrentOpening}
                       onClose={canvas.onClose}
                     />
                   </ResizablePanel>

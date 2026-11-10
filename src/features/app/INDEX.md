@@ -9,6 +9,10 @@ Canvas Delivery 核原会话、Asset、来源 Run 和元数据。正文不入持
 
 Composer 复用现 Library CLEAN 文件/FINAL artifact 和 Project resources 列表/上传，不建立第二 API 或文件缓存。`uploadProjectResource` 增加可选 AbortSignal，既有 Project 页面调用保持原义，Composer 退休上传时可终止网络并忽略迟到成功；未知结果仍保原 File/key 供显式重试。
 
+## 个人上传取消（A‑09）
+
+未提交的选择可直接清除，不发请求。请求开始后取消只中止当前浏览器等待，原文件和命令键仍用于显式恢复；旧请求或迟到回执不得刷新或接管新尝试。仍用原 CLEAN owner 回执与重新读取的个人列表确认，不宣称服务器撤销。
+
 ## 个人文件删除（A‑09）
 
 `kokoro-library-files.tsx` 在原个人文件列表中确认删除，`kokoro-library-file-client.ts` 只发送同源空命令。未确认时保持文件和原键；精确回执后才退休该行和其过期分页投影。身份/准入或标签页退休中止当前请求，不保留本地删除事实。

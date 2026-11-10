@@ -59,11 +59,13 @@ function installUploadRequestShim() {
     readonly url: string
     readonly method: string
     readonly headers: Headers
+    readonly signal: AbortSignal | null
     readonly form: FormData
     constructor(url: URL, init: RequestInit) {
       this.url = String(url)
       this.method = init.method ?? "GET"
       this.headers = new Headers(init.headers)
+      this.signal = init.signal ?? null
       this.form = init.body as FormData
     }
     clone() {
@@ -423,6 +425,66 @@ it("用户点击单文件上传后只以重新读取的个人 GET 显示文件",
   const post = calls.mock.calls.find(([input]) => requestUrl(input) === "/api/hub/library/files")?.[0] as Request
   expect(post.method).toBe("POST")
   expect(post.headers.get("Idempotency-Key")).toMatch(/^library-file:/u)
+})
+
+it("personal upload cancellation clears unsubmitted files and ignores a late ACK while the same intent retries", async () => {
+  installUploadRequestShim()
+  const attempts: { request: Request & { form: FormData }; response: PromiseWithResolvers<Response> }[] = []
+  let listed = false
+  let listReads = 0
+  vi.stubGlobal("fetch", vi.fn((input: string | Request) => {
+    if (requestUrl(input) === "/api/hub/library/files") {
+      if (typeof input === "string") throw new Error("upload must use the native multipart Request")
+      const response = Promise.withResolvers<Response>()
+      attempts.push({ request: input as Request & { form: FormData }, response })
+      return response.promise
+    }
+    listReads++
+    return Promise.resolve(Response.json(filePage(listed ? [fileOne] : [])))
+  }))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} /></LocaleProvider>)
+  await screen.findByTestId("library-files-empty")
+  const choose = (file: File) => fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [file] } })
+  const cancel = () => fireEvent.click(screen.getByRole("button", { name: /^取消$/u }))
+
+  choose(new File(["discard"], "not-uploaded.txt", { type: "text/plain" }))
+  cancel()
+  expect(screen.queryByText("not-uploaded.txt")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "上传个人文件" })).toBeDisabled()
+  expect(attempts).toHaveLength(0)
+
+  const file = new File([new Uint8Array(2048)], fileOne.filename, { type: fileOne.mime_type })
+  choose(file)
+  fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
+  await waitFor(() => expect(attempts).toHaveLength(1))
+  const first = attempts[0]!
+  cancel()
+  expect(first.request.signal.aborted).toBe(true)
+  expect(screen.getByRole("alert")).toHaveTextContent("上传结果暂不确定")
+  expect(screen.getByText(file.name)).toBeInTheDocument()
+  showArtifacts()
+  await screen.findByText("季度汇报.pptx")
+  showFiles()
+  await screen.findByTestId("library-files-empty")
+  expect(attempts).toHaveLength(1)
+
+  fireEvent.click(screen.getByRole("button", { name: "重试上传同一文件" }))
+  await waitFor(() => expect(attempts).toHaveLength(2))
+  const second = attempts[1]!
+  expect(second.request.headers.get("Idempotency-Key")).toBe(first.request.headers.get("Idempotency-Key"))
+  expect(second.request.form.get("files")).toBe(file)
+  const readsBeforeLateAck = listReads
+  await act(async () => { first.response.resolve(Response.json(cleanUploadReceipt())); await first.response.promise })
+  expect(listReads).toBe(readsBeforeLateAck)
+  expect(screen.getByRole("button", { name: "正在上传…" })).toBeDisabled()
+  expect(second.request.signal.aborted).toBe(false)
+
+  listed = true
+  await act(async () => { second.response.resolve(Response.json(cleanUploadReceipt())); await second.response.promise })
+  expect(await screen.findByTestId("library-files")).toHaveTextContent(file.name)
+  expect(listReads).toBe(readsBeforeLateAck + 1)
+  expect(screen.queryByRole("button", { name: /^取消$/u })).not.toBeInTheDocument()
+  expect(attempts).toHaveLength(2)
 })
 
 it("上传响应未知时切到作品再返回仍保留同一文件和键供显式重试", async () => {

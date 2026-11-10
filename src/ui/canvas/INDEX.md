@@ -8,7 +8,7 @@ CanvasContentRef新增activity的Run/activity/subject/generation引用，resolve
 产物/文件/工具快照的第三栏展示（全屏切换、文件/投递切换、拖拽改宽）。内容按会话隔离。
 
 ## 公开件
-- `CanvasPanel`（`canvas-panel.tsx`）+ `formatDeliveryTime`：第三栏组件。 桌面 ContextPanel 在焦点位于面板内时用 Escape 走现有关闭路径，按原动作身份回焦。
+- `CanvasPanel`（`canvas-panel.tsx`）+ `formatDeliveryTime`：第三栏组件。 桌面 ContextPanel 在焦点位于面板内时用 Escape 走现有关闭路径，按原动作身份回焦。 同一或另一件的显式打开意图退役旧退出计时器及回焦；普通 metadata 更新不重挂预览。
 - `canvas-store.ts`：事件总线 store——按会话键各存一槽（内容+开合+全屏）；`openCanvas`/`closeCanvas`/`reopenCanvas`/`toggleCanvasFullscreen`/`canvasSlot`/`resolveCanvasContent`/`subscribe`/`read`/`serverState`/`resetCanvasStore`(test)。
 - `useCanvasResize`：main/canvas 宽度拖拽；观察实际 workspace 容器并在 rail/窗口变窄时钳制第三栏，保证 main 最小宽度。
 

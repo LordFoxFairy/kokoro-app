@@ -1,3 +1,13 @@
+## 2026-11-10 A‑09 upload cancellation and A‑10 Canvas reopening
+
+Cancel clears an unsubmitted personal selection without POST. After dispatch it
+aborts only the browser wait, retains the File and command key for explicit
+recovery, and prevents a late result from refreshing or replacing a newer
+attempt. No BFF/Storage contract changed. A newer Canvas open intent wins over
+a pending exit timer and its focus callback, including reopening the same
+Artifact. Regular keyboard close and focus return use the existing path.
+Root records the scoped real browser evidence.
+
 ## 2026-11-10 A‑09/A‑10 owner-backed content preview
 
 Personal Library files, Artifact detail and Canvas Delivery use the same bounded
