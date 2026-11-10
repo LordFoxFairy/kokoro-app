@@ -1,6 +1,6 @@
-## A‑08：唯一当前 Public28.24 消费者
+## A‑08：唯一当前 Public28.25 消费者
 
-`src/generated/bff-public-openapi.yaml` 为 BFF `534ace39b3a9fa2c2c1762d8c1cdf25412593cd1` / Public28.24.0 完整 Git blob，SHA‑256 `921c4b7273580a5c64cf6a220808472e828239d4abfbc7b5b93138ecc055a429`。原13条公共生成入口与 current pins 同步；现 tool-display generator 另从 MessageCreateRequest.selected_resource_refs 正式字段生成 strict opaque refs decoder，复用原 Chat submit/recovery，无新增 SDK runtime。test-only 按 owner 正式 inverse 精确还原28.23和28.22后承接既有父链；历史断言保持，不在运行中降级。下方A‑12独立窄发行物与其它private/policy来源保持。
+`src/generated/bff-public-openapi.yaml` 为 BFF `8d7892c82378b44ef1cbbdf0658f8d0da2be9968` / Public28.25.0 完整 Git blob，SHA‑256 `008667f501044dc186e615b83370f96a7401de8027f25e7635248724fb165759`。原13条公共生成入口与 current pins 同步；从 owner `MessageCreateRequest.selected_resource_refs` 正规生成 `final_answer`，仍仅接受 opaque Message ID 和 kind，复用原 Chat submit/recovery。test-only 精确逆回 Public28.24 再接原28.23、28.22和历史父链，不在运行中降级。下方 A‑12 独立窄发行物与其它 private/policy 来源保持。
 
 ## A‑12：固定 Public 28.23 执行记录窄消费者
 

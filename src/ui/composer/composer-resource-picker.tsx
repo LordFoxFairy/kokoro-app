@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { selectedResourceRefsSchema, type SelectedResourceRef } from "@/contract/chat"
+import type { SessionClient } from "@/engine/client"
+import { DIRECT_SESSION_SCOPE } from "@/engine/session-scope"
 import { listLibraryFiles } from "@/features/app/kokoro-library-file-client"
 import { listLibraryArtifacts } from "@/features/app/kokoro-library-artifact-client"
 import { LibraryFileUploadError, uploadLibraryFile } from "@/features/app/kokoro-library-file-upload-client"
@@ -24,12 +26,14 @@ export type ComposerResources = Readonly<{
   selected: readonly SelectedResourceRef[]
   onChange: (refs: readonly SelectedResourceRef[]) => void
   recentTasks: readonly { id: string; title: string }[]
+  readRecentTaskSnapshot: SessionClient["fetchSnapshot"]
 }>
-type Candidate = { ref: SelectedResourceRef; label: string; conversationId?: string }
+type Candidate = { ref: SelectedResourceRef; label?: string; conversationId?: string }
 type Catalog = { view: object; items: Candidate[]; cursor: string | null; status: "loading" | "ready" | "error" }
 type Upload = { scope: object; file: File; key: string; status: "selected" | "uploading" | "unknown" | "rejected"; error?: string }
 const route = () => `${window.location.pathname}${window.location.search}${window.location.hash}`
 const key = (ref: SelectedResourceRef) => `${ref.kind}:${ref.resource_id}`
+const RECENT_TASK_READ_TIMEOUT_MS = 10_000
 function markerMatches(subject: string | null): boolean {
   try { return subject !== null && window.localStorage.getItem("kokoro.web.auth-index-subject") === subject } catch { return false }
 }
@@ -85,23 +89,53 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
   const available = boundary.admitted && boundary.subject !== null && retired !== scope
   const current = useCallback(() => active.current?.scope === scope && active.current.view === view && active.current.live && active.current.route === route() && markerMatches(scope.subject)
     && latest.current.selectable && latest.current.boundary.admitted, [scope, view])
+  const taskIsMember = useCallback(() => task !== null && latest.current.recentTasks.some(item => item.id === task), [task])
+  const candidateLabel = (item: Candidate) => item.label ?? t("composer.resourceFinalAnswer")
   const select = (item: Candidate) => {
-    if (!current()) return false
+    if (!current() || (source === "recent" && (!taskIsMember() || item.conversationId !== task))) return false
     const refs = latest.current.selected
     if (refs.some(ref => key(ref) === key(item.ref))) return true
     const parsed = selectedResourceRefsSchema.safeParse([...refs, item.ref])
     if (!parsed.success) { setLimitError(true); return false }
     latest.current.onChange(parsed.data)
-    setLabels(previous => ({ scope, values: { ...(previous.scope === scope ? previous.values : {}), [key(item.ref)]: item.label } }))
+    setLabels(previous => ({ scope, values: { ...(previous.scope === scope ? previous.values : {}), [key(item.ref)]: candidateLabel(item) } }))
     setLimitError(false)
     return true
   }
   const read = useCallback(async (cursor: string | null, append = false) => {
-    if (!current() || source === null || source === "upload" || source === "recent" && task === null) return
+    if (!current() || source === null || source === "upload" || source === "recent" && !taskIsMember()) return
     request.current?.abort()
     const abort = new AbortController(); request.current = abort
     setCatalog(previous => ({ view, items: append && previous?.view === view ? previous.items : [], cursor, status: "loading" }))
+    const stillCurrent = () => !abort.signal.aborted && request.current === abort && current() && (source !== "recent" || taskIsMember())
+    const show = (items: Candidate[], nextCursor: string | null) => {
+      if (!stillCurrent()) return
+      setCatalog(previous => {
+        const combined = [...(append && previous?.view === view ? previous.items : []), ...items]
+        return { view, items: combined.filter((item, index) => combined.findIndex(other => key(other.ref) === key(item.ref)) === index), cursor: nextCursor, status: "ready" }
+      })
+    }
     try {
+      if (source === "recent" && task !== null && cursor === null) {
+        const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(RECENT_TASK_READ_TIMEOUT_MS)])
+        const snapshot = await latest.current.readRecentTaskSnapshot(task, {
+          signal, scope: projectRef ? { kind: "project", projectRef } : DIRECT_SESSION_SCOPE,
+        })
+        if (!stillCurrent()) return
+        signal.throwIfAborted()
+        if (snapshot === null) { show([], null); return }
+        if (snapshot.session.session_id !== task || snapshot.session.owner_id !== scope.subject) throw new Error("Recent task snapshot binding mismatch")
+        if (snapshot.deliveries.length === 0 && !snapshot.deliveries_has_more) {
+          // The private snapshot is in owner message order. An inline answer or
+          // missing durable marker never becomes a reference via inference.
+          const message = snapshot.messages?.findLast(item => item.role === "assistant" && item.status === "completed" &&
+            "rendering" in item && item.run_id.trim() && item.rendering.revision !== "0" && item.rendering.final_segment_id?.trim())
+          const refs = message && selectedResourceRefsSchema.safeParse([{ kind: "final_answer", resource_id: message.message_id }])
+          const ref = refs?.success ? refs.data[0] : undefined
+          show(ref ? [{ ref, conversationId: task }] : [], null)
+          return
+        }
+      }
       let items: Candidate[], nextCursor: string | null
       if (source === "library" && tab === "files") {
         const page = projectRef ? await listProjectResources(projectRef, cursor, abort.signal) : await listLibraryFiles(cursor, abort.signal)
@@ -115,15 +149,11 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
         }))
         nextCursor = page.nextCursor
       }
-      if (abort.signal.aborted || request.current !== abort || !current()) return
-      setCatalog(previous => {
-        const combined = [...(append && previous?.view === view ? previous.items : []), ...items]
-        return { view, items: combined.filter((item, index) => combined.findIndex(other => key(other.ref) === key(item.ref)) === index), cursor: nextCursor, status: "ready" }
-      })
+      show(items, nextCursor)
     } catch {
-      if (!abort.signal.aborted && request.current === abort && current()) setCatalog(previous => ({ view, items: previous?.view === view ? previous.items : [], cursor, status: "error" }))
+      if (stillCurrent()) setCatalog(previous => ({ view, items: previous?.view === view ? previous.items : [], cursor, status: "error" }))
     }
-  }, [current, projectRef, source, tab, task, view])
+  }, [current, projectRef, scope.subject, source, tab, task, taskIsMember, view])
   useEffect(() => {
     let live = true
     queueMicrotask(() => { if (live) void read(null) })
@@ -158,16 +188,19 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
       if (abort.signal.aborted) setUpload(previous => previous?.scope === scope && previous.key === intent.key && previous.status === "uploading" ? { ...previous, status: "unknown" } : previous)
     }
   }
-  const page = catalog?.view === view ? catalog : null
-  const choices = (page?.items ?? []).filter(item => (source !== "recent" || item.conversationId === task) && item.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+  const taskUnavailable = source === "recent" && task !== null && !controller.recentTasks.some(item => item.id === task)
+  const page = !taskUnavailable && catalog?.view === view ? catalog : null
+  const choices = (page?.items ?? []).filter(item => (source !== "recent" || item.conversationId === task) && candidateLabel(item).toLocaleLowerCase().includes(query.toLocaleLowerCase()))
   const selectedKeys = new Set(controller.selected.map(key))
   const uploadIntent = upload?.scope === scope ? upload : null
   const selectedLabels = labels.scope === scope ? labels.values : {}
+  const selectedLabel = (ref: SelectedResourceRef) => selectedLabels[key(ref)] ??
+    t(ref.kind === "final_answer" ? "composer.resourceFinalAnswer" : "composer.resourceAttachment")
   const open = source !== null && available && selectable
   return <>
     {available && controller.selected.length > 0 ? <ul className={styles.selected} aria-label={t("composer.resourcesSelected")}>{controller.selected.map(ref => <li key={key(ref)}>
-      <FileText aria-hidden="true" /><span>{selectedLabels[key(ref)] ?? t("composer.resourceAttachment")}</span>
-      <Button type="button" variant="ghost" size="icon-sm" disabled={!selectable} aria-label={t("composer.resourceRemove", { name: selectedLabels[key(ref)] ?? t("composer.resourceAttachment") })} onClick={() => { if (current()) { latest.current.onChange(latest.current.selected.filter(item => key(item) !== key(ref))); setLimitError(false) } }}><X aria-hidden="true" /></Button>
+      <FileText aria-hidden="true" /><span>{selectedLabel(ref)}</span>
+      <Button type="button" variant="ghost" size="icon-sm" disabled={!selectable} aria-label={t("composer.resourceRemove", { name: selectedLabel(ref) })} onClick={() => { if (current()) { latest.current.onChange(latest.current.selected.filter(item => key(item) !== key(ref))); setLimitError(false) } }}><X aria-hidden="true" /></Button>
     </li>)}</ul> : null}
     <Dialog open={open} onOpenChange={next => { if (!next) { request.current?.abort(); uploadFlight.current?.abort(); onClose() } }}>
       <DialogContent className={styles.dialog} closeLabel={t("canvas.close")} onCloseAutoFocus={event => {
@@ -199,13 +232,12 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
             {source === "recent" ? <Button type="button" variant="ghost" onClick={() => { setTask(null) }}>{t("composer.resourcesBack")}</Button> : null}
             <div className={styles.list} aria-busy={page?.status === "loading"}>
               {page?.status === "loading" ? <p role="status">{t("composer.resourcesLoading")}</p> : null}
-              {choices.map(item => <Button type="button" variant="ghost" key={key(item.ref)} disabled={selectedKeys.has(key(item.ref)) || controller.selected.length >= 16} onClick={() => select(item)}><FileText aria-hidden="true" /><span>{item.label}</span>{selectedKeys.has(key(item.ref)) ? <span>{t("composer.resourceAdded")}</span> : null}</Button>)}
-              {page?.status === "ready" && choices.length === 0 ? <p className={styles.hint}>{t("composer.resourcesEmptyPage")}</p> : null}
+              {choices.map(item => <Button type="button" variant="ghost" key={key(item.ref)} disabled={selectedKeys.has(key(item.ref)) || controller.selected.length >= 16} onClick={() => select(item)}><FileText aria-hidden="true" /><span>{candidateLabel(item)}</span>{selectedKeys.has(key(item.ref)) ? <span>{t("composer.resourceAdded")}</span> : null}</Button>)}
+              {taskUnavailable || page?.status === "ready" && choices.length === 0 ? <p className={styles.hint}>{t(source === "recent" ? "composer.resourcesNoTaskResult" : "composer.resourcesEmptyPage")}</p> : null}
             </div>
             {page?.status === "error" ? <div role="alert"><p>{t("composer.resourcesError")}</p><Button type="button" variant="ghost" onClick={() => void read(page.cursor, page.items.length > 0)}>{t("skills.retry")}</Button></div> : null}
             {page?.cursor && page.status !== "error" ? <Button type="button" variant="ghost" disabled={page.status === "loading"} onClick={() => void read(page.cursor, true)}>{t("composer.resourcesMore")}</Button> : null}
           </>}
-          {source === "recent" ? <p className={styles.hint}>{t("composer.resourcesAnswersUnavailable")}</p> : null}
         </>}
         {limitError || controller.selected.length >= 16 ? <p role="status">{t("composer.resourcesLimit")}</p> : null}
         <Button type="button" variant="ghost" onClick={() => { request.current?.abort(); uploadFlight.current?.abort(); onClose() }}>{t("canvas.close")}</Button>

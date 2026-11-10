@@ -1,4 +1,8 @@
-## 2026-11-09 A-08 Composer 资源选择（未提交候选）
+## 2026-11-09 A‑08 最近任务最终答复（未提交候选）
+
+基线 `311535e7`。唯一 Public28.25 固定 BFF `8d7892c8`，最近任务复用当前 scope 的私有 snapshot 识别无交付且具有 owner durable 标记的最终答复；只选择 assistant Message ID，不读取正文。草稿恢复与实时／持久正文链保持。真实 native Chromium／BFF／Agent 组合验收归 Root。
+
+## 2026-11-09 A-08 Composer 资源选择（Public28.24 历史候选）
 
 基线 `001d901c`；唯一 Public28.24 原件固定 BFF `534ace39`，13 条既有生成链正规配对，资源 decoder 来自 owner schema，删除手写重复定义。现有＋菜单支持本地上传、Library 与最近任务 FINAL；仅提交 opaque refs。Project 新 Conversation 分配后移交原选择；取消/移除不发送，unknown 保留原 File/key 或原 Message 意图。最近任务复用已加载 owner 列表，无产物答案引用与发送前选择硬刷新保持仍 OPEN。
 

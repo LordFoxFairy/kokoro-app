@@ -898,6 +898,7 @@ function AppFrameRuntime({
         if (draftRouteIsCurrent() && (!projectOverview || projectDraftIsCurrent())) updateResourceRefs(refs)
       },
       recentTasks: conversations.map(item => ({ id: item.id, title: item.title })),
+      readRecentTaskSnapshot: browserListClient({ preview }).fetchSnapshot,
     },
     skills: { client: composerSkillClient, boundary: composerSkillBoundary, scopeKey: composerSkillScope, selectable: canSubmitMessage && !hydrating && !skillSelectionSnapshot?.hasPendingSubmission && !skillSelectionSnapshot?.canRetryPendingSubmission, onSelect: actions.selectSkillForCurrentDraft },
     connections,

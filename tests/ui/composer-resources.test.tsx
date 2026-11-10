@@ -9,12 +9,14 @@ import { listLibraryArtifacts } from "@/features/app/kokoro-library-artifact-cli
 import { uploadLibraryFile } from "@/features/app/kokoro-library-file-upload-client"
 import { listProjectResources } from "@/features/app/project-resource-list"
 import { createSessionEngine } from "@/engine/machine"
+import type { SessionClient } from "@/engine/client"
 import type { ConversationStore } from "@/core/conversations"
 import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
 import { AppFrame } from "@/components/blocks/app-frame/app-frame"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 import { admitBrowserAuthSessionIndexes } from "@/ui/shell/page-clients"
 import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
+import { makeSnapshot } from "../core/fixtures"
 
 vi.mock("@/features/app/kokoro-library-file-client", () => ({ listLibraryFiles: vi.fn() }))
 vi.mock("@/features/app/kokoro-library-artifact-client", () => ({ listLibraryArtifacts: vi.fn() }))
@@ -24,6 +26,17 @@ vi.mock("@/features/app/kokoro-library-file-upload-client", async importOriginal
 const boundary = { admitted: true, subject: "resource-actor", generation: 1 }
 const file = { assetId: "asset-clean", filename: "notes.txt", mimeType: "text/plain", sizeBytes: "8", createdAt: "2026-11-09T00:00:00Z" }
 const artifact = { conversationId: "task-with-file", artifactId: "artifact-final", assetId: "asset-final", artifactKind: "document" as const, title: "Final result", filename: "result.txt", mimeType: "text/plain", sizeBytes: "4", deliveredAt: "2026-11-09T00:00:00Z" }
+const ordered = (id: string, revision = "7", finalSegmentId?: string) => ({
+  message_id: id, role: "assistant" as const, run_id: `run-${id}`, content: null,
+  status: "completed" as const, created_at: "2026-11-09T00:00:00Z",
+  rendering: { mode: "ordered" as const, format_version: 1 as const, revision, event_watermark: null,
+    parts_cursor: "opaque-parts-cursor", ...(finalSegmentId === undefined ? {} : { final_segment_id: finalSegmentId }) },
+})
+const recentSnapshot = (id: string, opts: Parameters<typeof makeSnapshot>[0] = {}) => {
+  const snapshot = makeSnapshot({ ...opts, sessionId: id })
+  return { ...snapshot, session: { ...snapshot.session, owner_id: boundary.subject } }
+}
+const readRecentTaskSnapshot = vi.fn<SessionClient["fetchSnapshot"]>()
 function Harness({ initialSource = "library", projectRef, onChange = vi.fn(), initialSelected = [] }: {
   initialSource?: ComposerResourceSource; projectRef?: string; onChange?: (refs: readonly SelectedResourceRef[]) => void; initialSelected?: readonly SelectedResourceRef[]
 }) {
@@ -32,6 +45,7 @@ function Harness({ initialSource = "library", projectRef, onChange = vi.fn(), in
   return <ComposerResourcePicker source={source} onClose={() => setSource(null)} controller={{
     boundary, scopeKey: projectRef ?? "personal", ...(projectRef ? { projectRef } : {}), selectable: true, selected,
     onChange: refs => { setSelected(refs); onChange(refs) },
+    readRecentTaskSnapshot,
     recentTasks: [{ id: "answer-only", title: "Answer only task" }, { id: "task-with-file", title: "Task with file" }],
   }} />
 }
@@ -42,6 +56,7 @@ beforeEach(() => {
   vi.mocked(listLibraryFiles).mockResolvedValue({ items: [file], nextCursor: null })
   vi.mocked(listProjectResources).mockResolvedValue({ items: [{ ...file, assetId: "project-asset" }], nextCursor: null })
   vi.mocked(listLibraryArtifacts).mockResolvedValue({ items: [artifact], nextCursor: null })
+  readRecentTaskSnapshot.mockImplementation(async id => recentSnapshot(id))
 })
 afterEach(() => { cleanup(); vi.resetAllMocks(); localStorage.clear() })
 
@@ -105,13 +120,75 @@ it("uses the current Project file owner and limits history to its actual tasks",
   expect(onChange).toHaveBeenLastCalledWith([{ kind: "asset", resource_id: "project-asset" }, { kind: "artifact", resource_id: "artifact-final" }])
 })
 
-it("shows answer-only recent tasks honestly while selecting only delivered artifacts", async () => {
-  render(<Harness initialSource="recent" />, { wrapper: LocaleProvider })
-  expect(screen.getByRole("button", { name: "Answer only task" })).toBeVisible()
-  expect(screen.getByText(/Answer-only task references are not available yet/)).toBeVisible()
+it.each([undefined, "project-current"])("selects only the latest durable final answer using one exact-scope snapshot (%s)", async projectRef => {
+  const onChange = vi.fn()
+  readRecentTaskSnapshot.mockResolvedValueOnce(recentSnapshot("answer-only", {
+    messages: [ordered("older-assistant", "6", "old-segment"), ordered("exact-assistant", "7", "final-segment"), ordered("no-marker")],
+  }))
+  render(<Harness initialSource="recent" onChange={onChange} {...(projectRef === undefined ? {} : { projectRef })} />, { wrapper: LocaleProvider })
+  expect(readRecentTaskSnapshot).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "Answer only task" }))
+  fireEvent.click(await screen.findByRole("button", { name: "Final answer" }))
+  expect(readRecentTaskSnapshot).toHaveBeenCalledExactlyOnceWith("answer-only", { signal: expect.any(AbortSignal),
+    scope: projectRef ? { kind: "project", projectRef } : { kind: "direct" } })
+  expect(onChange).toHaveBeenCalledExactlyOnceWith([{ kind: "final_answer", resource_id: "exact-assistant" }])
   expect(listLibraryArtifacts).not.toHaveBeenCalled()
+})
+
+it("keeps artifact paging when the snapshot does not prove a task has no deliveries", async () => {
+  readRecentTaskSnapshot.mockResolvedValueOnce(recentSnapshot("task-with-file", {
+    messages: [ordered("not-an-attachment", "7", "final-segment")], deliveriesHasMore: true,
+  }))
+  vi.mocked(listLibraryArtifacts).mockResolvedValueOnce({ items: [artifact], nextCursor: "library-next" })
+  render(<Harness initialSource="recent" />, { wrapper: LocaleProvider })
   fireEvent.click(screen.getByRole("button", { name: "Task with file" }))
   expect(await screen.findByRole("button", { name: "result.txt" })).toBeVisible()
+  fireEvent.click(screen.getByRole("button", { name: "Load more" }))
+  await waitFor(() => expect(listLibraryArtifacts).toHaveBeenCalledTimes(2))
+  expect(readRecentTaskSnapshot).toHaveBeenCalledTimes(1)
+  expect(screen.queryByRole("button", { name: "Final answer" })).toBeNull()
+})
+
+it("shows no final-answer option without an owner-bound durable marker", async () => {
+  readRecentTaskSnapshot.mockResolvedValueOnce(recentSnapshot("answer-only", {
+    messages: [ordered("no-marker"), ordered("zero-revision", "0", "not-durable")],
+  }))
+  render(<Harness initialSource="recent" />, { wrapper: LocaleProvider })
+  fireEvent.click(screen.getByRole("button", { name: "Answer only task" }))
+  expect(await screen.findByText("No selectable results for this task")).toBeVisible()
+  expect(screen.queryByRole("button", { name: "Final answer" })).toBeNull()
+  expect(listLibraryArtifacts).not.toHaveBeenCalled()
+})
+
+it.each(["task", "owner"])("does not use a durable marker from a different %s", async mismatch => {
+  const snapshot = recentSnapshot(mismatch === "task" ? "other-task" : "answer-only", {
+    messages: [ordered("foreign-answer", "7", "final-segment")],
+  })
+  if (mismatch === "owner") snapshot.session.owner_id = "other-owner"
+  readRecentTaskSnapshot.mockResolvedValueOnce(snapshot)
+  render(<Harness initialSource="recent" />, { wrapper: LocaleProvider })
+  fireEvent.click(screen.getByRole("button", { name: "Answer only task" }))
+  expect(await screen.findByRole("alert")).toBeVisible()
+  expect(screen.queryByRole("button", { name: "Final answer" })).toBeNull()
+  expect(listLibraryArtifacts).not.toHaveBeenCalled()
+})
+
+it("retires the one recent-task read and discards its late candidate when leaving the route", async () => {
+  let finish!: (snapshot: ReturnType<typeof recentSnapshot>) => void
+  readRecentTaskSnapshot.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const onChange = vi.fn()
+  render(<Harness initialSource="recent" onChange={onChange} />, { wrapper: LocaleProvider })
+  fireEvent.click(screen.getByRole("button", { name: "Answer only task" }))
+  await waitFor(() => expect(readRecentTaskSnapshot).toHaveBeenCalledOnce())
+  act(() => {
+    history.replaceState(null, "", "/app/project/other")
+    window.dispatchEvent(new Event("kokoro:surface-navigation"))
+  })
+  expect(readRecentTaskSnapshot.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
+  await act(async () => finish(recentSnapshot("answer-only", { messages: [ordered("late-answer", "7", "final-segment")] })))
+  expect(screen.queryByRole("button", { name: "Final answer" })).toBeNull()
+  expect(onChange).not.toHaveBeenCalled()
+  expect(listLibraryArtifacts).not.toHaveBeenCalled()
 })
 
 it.each([false, true])("restores the unsent composer selection in a new AppFrame and sends it once (Project=%s)", async project => {
