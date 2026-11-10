@@ -527,6 +527,59 @@ describe("Project reads stay independent from conversation list/title state", ()
     view.unmount()
   })
 
+  it("keeps a confirmed Project and its history visible through a same-page refresh", async () => {
+    const { useProjectList } = await import("@/features/app/use-project-list")
+    const boundary = { admitted: true, subject: "reader", generation: 1 }
+    const updated = { ...alpha, name: "Updated project" }
+    const first = { id: "rev-1", instruction: "Confirmed", updated_at: alpha.updated_at, actor_name: "Reader", current: true }
+    const next = { ...first, id: "rev-2", instruction: "Updated" }
+    const projects = (project: typeof alpha) => Response.json({ data: { projects: [project] }, meta: { request_id: "req_list" } })
+    const history = (item: typeof first) => Response.json({ data: { items: [item] }, meta: { request_id: "req_history" } })
+    let finishRail!: (response: Response) => void
+    let finishHistory!: (response: Response) => void
+    let finishMissing!: (response: Response) => void
+    let finishDetail!: (response: Response) => void
+    const rail = vi.fn().mockResolvedValueOnce(projects(alpha)).mockImplementationOnce(() =>
+      new Promise<Response>(resolve => { finishRail = resolve })).mockImplementationOnce(() =>
+      new Promise<Response>(resolve => { finishMissing = resolve }))
+    const revisions = vi.fn().mockResolvedValueOnce(history(first)).mockImplementationOnce(() =>
+      new Promise<Response>(resolve => { finishHistory = resolve }))
+    const detail = vi.fn().mockResolvedValueOnce(envelope(alpha)).mockImplementationOnce(() =>
+      new Promise<Response>(resolve => { finishDetail = resolve }))
+    vi.spyOn(globalThis, "fetch").mockImplementation(async input => String(input) === "/api/hub/projects" ? rail()
+      : String(input).endsWith("/instruction-revisions") ? revisions() : detail())
+    const view = renderHook(() => useProjectList(false, boundary, alpha.id, true))
+    await waitFor(() => expect(view.result.current.list.status).toBe("ready"))
+    expect(detail).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(view.result.current.instructionHistory).toEqual({ status: "ready", data: [first] }))
+
+    act(() => view.result.current.refresh())
+    await waitFor(() => expect(rail).toHaveBeenCalledTimes(2))
+    expect(view.result.current.list).toEqual({ status: "ready", data: [alpha] })
+    expect(view.result.current.current).toEqual({ status: "ready", data: alpha })
+    expect(view.result.current.instructionHistory).toEqual({ status: "ready", data: [first] })
+    expect(revisions).toHaveBeenCalledTimes(1)
+
+    await act(async () => { finishRail(projects(updated)) })
+    await waitFor(() => expect(revisions).toHaveBeenCalledTimes(2))
+    expect(view.result.current.current).toEqual({ status: "ready", data: updated })
+    expect(view.result.current.instructionHistory).toEqual({ status: "ready", data: [first] })
+    await act(async () => { finishHistory(history(next)) })
+    expect(view.result.current.instructionHistory).toEqual({ status: "ready", data: [next] })
+
+    act(() => view.result.current.refresh())
+    await waitFor(() => expect(rail).toHaveBeenCalledTimes(3))
+    expect(view.result.current.current).toEqual({ status: "ready", data: updated })
+    await act(async () => { finishMissing(Response.json({ data: { projects: [] }, meta: { request_id: "req_missing" } })) })
+    await waitFor(() => expect(detail).toHaveBeenCalledTimes(2))
+    expect(view.result.current.current.status).toBe("loading")
+    expect(view.result.current.instructionHistory.status).toBe("loading")
+    expect(revisions).toHaveBeenCalledTimes(2)
+    await act(async () => { finishDetail(Response.json({}, { status: 404 })) })
+    expect(view.result.current.current).toEqual({ status: "error", retryable: false })
+    view.unmount()
+  })
+
   it("does not let a late rail response restore a Project after exact denial", async () => {
     const { useProjectList } = await import("@/features/app/use-project-list")
     let finishRail!: (response: Response) => void

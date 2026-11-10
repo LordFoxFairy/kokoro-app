@@ -369,7 +369,7 @@ Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下
 | `src/features/app/kokoro-library-file-state.ts`、`src/features/app/kokoro-library-files.tsx` | 个人文件的局部分页/取消/错误状态、GET 权威 Asset 列表及现有卡片的下载/取消/重试 |
 | `src/features/app/kokoro-library-file-upload-{client,state}.ts`、`kokoro-library-file-upload.tsx` | 原生 multipart 整体限额/同源 POST、跨页签 File/key 意图与 shadcn 单文件上传 UI；只在 CLEAN 回执后触发 GET |
 | `src/contract/project-create.ts`、`src/features/app/project-create.ts`、`src/components/blocks/app-frame/use-app-frame-project.ts` | 固定 BFF ProjectResponse consumer 校验、同源 POST 与正式/预览创建意图区分；仅 canonical id 导航 |
-| `src/features/app/use-project-list.ts` | 冷打开并行读取准确 Project 和侧栏；已加载的同身份 Project 不重复读详情，任一路拒权均撤投影 |
+| `src/features/app/use-project-list.ts` | 冷打开并行读取准确 Project 和侧栏；已加载的同身份 Project 不重复读详情；同页重读保留已确认投影，缺失／拒权立即清除 |
 | `src/contract/agui-events.ts` | 严格解析 AG-UI wire frame；不拥有 reducer 投影 |
 | `src/contract/agent-failure.ts` | 从 generated owner tuple 派生唯一 safe Agent failure schema/type；不维护第二码表 |
 | `src/core/chat-projection-event.ts` | Web 内部 Chat 投影事件 schema；不是 wire contract |
