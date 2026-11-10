@@ -233,8 +233,10 @@ export function useDraft(activeId: string | null, mounted: boolean, projectRef?:
       flushPendingWrite()
       if (owner !== null && committed.current?.scope.access === access) committed.current.retired = true
     }
-    window.addEventListener("pagehide", onPageHide)
-    return () => window.removeEventListener("pagehide", onPageHide)
+    // Native dispatch can commit the auth listener's retirement between
+    // callbacks. Flush the current lease before those non-capture listeners.
+    window.addEventListener("pagehide", onPageHide, true)
+    return () => window.removeEventListener("pagehide", onPageHide, true)
   }, [access, owner, flushPendingWrite])
 
   const visible = actorAtRender.current

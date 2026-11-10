@@ -1,4 +1,6 @@
 import { act, cleanup, renderHook } from "@testing-library/react"
+import { useState } from "react"
+import { flushSync } from "react-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { admitBrowserAuthSessionIndexes } from "@/ui/shell/page-clients"
@@ -21,6 +23,32 @@ afterEach(() => {
 describe("useDraft persistence", () => {
   const owner = { admitted: true, subject: "draft-owner", tenant: "tenant-a", generation: 1 }
   const refs: SelectedResourceRef[] = [{ kind: "asset", resource_id: "selected-asset" }]
+
+  it("flushes a pending draft before an earlier pagehide auth listener commits retirement", () => {
+    vi.useFakeTimers()
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    let retire = () => {}
+    const authPageHide = () => flushSync(retire)
+    window.addEventListener("pagehide", authPageHide)
+    try {
+      const { result } = renderHook(() => {
+        const [boundary, setBoundary] = useState(owner)
+        const draft = useDraft(null, true, undefined, boundary)
+        return { draft, retire: () => setBoundary({ ...owner, admitted: false, generation: 2 }) }
+      })
+      retire = result.current.retire
+      act(() => {
+        result.current.draft.updateResourceRefs(refs)
+        result.current.draft.updateDraft("typed immediately before reload")
+      })
+      expect(window.localStorage.getItem(DRAFTS_KEY)).toBeNull()
+      const old = result.current.draft
+      act(() => window.dispatchEvent(new PageTransitionEvent("pagehide")))
+      expect(old.readCurrentDraft()).toBeNull()
+      expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}").__pending__)
+        .toMatchObject({ text: "typed immediately before reload", refs })
+    } finally { window.removeEventListener("pagehide", authPageHide) }
+  })
 
   it("flushes text and opaque refs together on navigation or pagehide and fences the retired tenant", () => {
     vi.useFakeTimers()
@@ -151,7 +179,7 @@ describe("useDraft persistence", () => {
 
     expect(registration).toBeDefined()
     unmount()
-    expect(remove).toHaveBeenCalledWith("pagehide", registration?.[1])
+    expect(remove).toHaveBeenCalledWith("pagehide", registration?.[1], registration?.[2])
   })
 
   it("keeps an empty project's draft separate from a newer direct-chat draft", () => {
