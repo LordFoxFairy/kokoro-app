@@ -8,6 +8,7 @@ Custom API draft selection lives in `custom-api-selection.ts` as immutable profi
 
 <!-- Ordered private Message reads: message-parts-reader.ts is the sole bounded continuation reader; machine owns its context retirement and read-only retryMessageParts. It never retries commands or advances resumeCursor. -->
 <!-- A typed page GET401 may await the existing ProductReadRecheck once, using the captured subject/data epoch and the original10s episode; only trusted same-subject readmission permits the exact same scope/cursor GET. Abort/retirement,409 and subsequent401 do not replay. -->
+`message-parts-reader.ts` 只把同一已校验 ordered text slot 的 owner 分片交给锁定 AI SDK `readUIMessageStream` 装配；页面仍经原 Message merge 使用该文本。每次读最多一个 SDK slot，沿原 10 秒预算与取消，不推进 SSE cursor，不以 SDK 完成推断 Run 终态。实时 AG-UI 片字保持原路径。
 CHAT-1当前：`ownerConfirmedSessionId`只投影当前视图的正向snapshot/create ACK，内存保存，不由乐观正文或浏览器索引推断；供归档读取资格使用，不授权或改变原提交恢复。
 
 ## CHAT-1 未决提交刷新恢复（2026-10-24，候选）

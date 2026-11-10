@@ -9,11 +9,50 @@ afterEach(() => vi.useRealTimers())
 describe("bounded message parts read", () => {
   it("continues scalar slices and forwards exact scope without decoding opaque IDs", async () => {
     const client = createFakeClient(), controller = new AbortController()
-    client.nextParts = async (args) => args.cursor === "opaque-next" ? page([text({ text: "a", offset: "1", end: "2" })]) : page([text()], "opaque-next")
-    const read = await readMessageParts({ client, sessionId: "s", messageId: "m", runId: "r", scope: { kind: "project", projectRef: "project" }, cursor: "opaque-initial", signal: controller.signal })
-    expect(read.items).toHaveLength(1)
-    expect(read.items[0]).toMatchObject({ text: "😀a", segment_id: "public-segment", part_id: "opaque:not-a-codec", end: "2" })
-    expect(client.partsCalls.map((call) => [call.cursor, call.limit, call.scope])).toEqual([["opaque-initial", 16, { kind: "project", projectRef: "project" }], ["opaque-next", 16, { kind: "project", projectRef: "project" }]])
+    const onProgress = vi.fn()
+    const scope = { kind: "project", projectRef: "project" } as const
+    client.nextParts = async ({ cursor }) => {
+      if (cursor === "opaque-initial") return page([text({ total_scalars: "3" })], "opaque-next")
+      if (cursor === "opaque-next") return page([text({ text: "界", offset: "1", end: "2", total_scalars: "3" })], "opaque-last")
+      return page([
+        text({ text: "𠮷", offset: "2", end: "3", total_scalars: "3" }),
+        text({ part_id: "another-opaque-slot", segment_id: "next-segment", first_sequence: "7", text: "尾", total_scalars: "1" }),
+      ])
+    }
+    const read = await readMessageParts({ client, sessionId: "s", messageId: "m", runId: "r", scope, cursor: "opaque-initial", signal: controller.signal, onProgress })
+    expect(read.items).toMatchObject([
+      { text: "😀界𠮷", segment_id: "public-segment", part_id: "opaque:not-a-codec", end: "3" },
+      { text: "尾", segment_id: "next-segment", part_id: "another-opaque-slot", end: "1" },
+    ])
+    expect(onProgress.mock.calls.map(([progress]) => progress.items[0].text)).toEqual(["😀", "😀界", "😀界𠮷"])
+    expect(client.partsCalls.map(({ cursor, limit, scope }) => [cursor, limit, scope]))
+      .toEqual([["opaque-initial", 16, scope], ["opaque-next", 16, scope], ["opaque-last", 16, scope]])
+  })
+  it("keeps only the admitted prefix when a valid continuation arrives after cancellation", async () => {
+    const client = createFakeClient(), controller = new AbortController()
+    const onProgress = vi.fn()
+    let continuationSignal: AbortSignal | undefined
+    let finish!: (value: MessagePartsPage) => void
+    const continuation = new Promise<MessagePartsPage>(resolve => { finish = resolve })
+    let continuationStarted!: () => void
+    const started = new Promise<void>(resolve => { continuationStarted = resolve })
+    client.nextParts = async ({ cursor, signal }) => {
+      if (cursor === undefined) return page([text()], "next")
+      continuationSignal = signal
+      continuationStarted()
+      return continuation
+    }
+    const pending = readMessageParts({ client, sessionId: "s", messageId: "m", runId: "r",
+      scope: { kind: "direct" }, signal: controller.signal, onProgress })
+    const rejected = expect(pending).rejects.toThrow("retired or timed out")
+    await started
+    controller.abort()
+    await rejected
+    expect(continuationSignal?.aborted).toBe(true)
+    finish(page([text({ text: "𠮷", offset: "1", end: "2" })]))
+    // Simulate a provider that resolves after abort despite receiving its signal.
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+    expect(onProgress.mock.calls.map(([progress]) => progress.items[0].text)).toEqual(["😀"])
   })
   it.each(["gap", "EOF", "version", "owner", "cycle"])("rejects %s rather than succeeding with incomplete history", async (failure) => {
     const client = createFakeClient(); let count = 0
