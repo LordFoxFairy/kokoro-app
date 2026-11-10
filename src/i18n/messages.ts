@@ -531,6 +531,8 @@ export const zh = {
   "composer.voiceListening": "正在聆听",
   "composer.voiceTranscribing": "正在转写",
   "composer.voiceUnavailable": "当前浏览器无法使用语音输入",
+  "composer.voicePermissionDenied": "麦克风权限未获准",
+  "composer.voiceServiceUnavailable": "暂时无法完成语音识别",
   "composer.voicePreviewTranscript": "请帮我整理今天的工作重点",
   // expand 放大编辑
   "expand.collapseAria": "收起放大编辑",

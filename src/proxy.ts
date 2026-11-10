@@ -63,18 +63,31 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     headers.delete("x-kokoro-sign-in-feedback")
   }
   headers.delete("x-kokoro-sign-in-proof")
+  // All /app shell entries can reach the authenticated Composer via pushState,
+  // without a new document or policy. Never grant this to RSC, frames or APIs.
+  const destination = request.headers.get("sec-fetch-dest")
+  const workbenchDocument = request.method === "GET" &&
+    (destination === null || destination === "document") &&
+    request.headers.get("rsc") !== "1" &&
+    request.headers.get("accept")?.split(",").some(type => type.split(";", 1)[0]?.trim().toLowerCase() === "text/html") === true &&
+    (path === "/app" || path.startsWith("/app/")) && parseProductReturnTarget(path) !== null
   const responseSecurityHeaders = securityHeaders(nonce, process.env.NODE_ENV === "development", {
     webOrigin: process.env.KOKORO_WEB_ORIGIN,
     localUploadOrigin: process.env.KOKORO_WEB_LOCAL_UPLOAD_ORIGIN,
     requestProtocol: request.nextUrl.protocol,
     requestHost: request.headers.get("host"),
     requestOrigin: request.headers.get("origin"),
-  })
+  }, workbenchDocument)
   const policy = responseSecurityHeaders["Content-Security-Policy"]
   headers.set("x-nonce", nonce)
   if (policy !== undefined) headers.set("Content-Security-Policy", policy)
 
-  if (path === "/auth/sign-in/form" && !internalSignInView) return new NextResponse(null, { status: 404 })
+  // Sign-in also has terminal responses that bypass the common header merge.
+  const withPermissionsPolicy = (response: NextResponse) => {
+    response.headers.set("Permissions-Policy", responseSecurityHeaders["Permissions-Policy"])
+    return response
+  }
+  if (path === "/auth/sign-in/form" && !internalSignInView) return withPermissionsPolicy(new NextResponse(null, { status: 404 }))
 
   let response: NextResponse
   if (path === "/auth/sign-in" && request.method === "GET") {
@@ -99,7 +112,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     const reject = (status: number) => {
       const result = new NextResponse(null, { status, headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" } })
       for (const name of retired) result.headers.append("set-cookie", clearIamCsrfCookie("/auth/sign-in", config?.secureCookies ?? false, name))
-      return result
+      return withPermissionsPolicy(result)
     }
     if (config === null || !redisUrl) return reject(503)
     if (!matchesCanonicalWebRequest(request, config, "GET")) return reject(403)
@@ -113,7 +126,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       const result = NextResponse.redirect(new URL(path, config.webOrigin), 303)
       result.headers.set("cache-control", "no-store")
       result.headers.set("referrer-policy", "no-referrer")
-      return result
+      return withPermissionsPolicy(result)
     }
     try {
       const flowId = iamSignInFlowId(request.url)

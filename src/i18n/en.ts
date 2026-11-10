@@ -651,6 +651,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "composer.voiceListening": "Listening",
   "composer.voiceTranscribing": "Transcribing",
   "composer.voiceUnavailable": "Voice input is unavailable in this browser",
+  "composer.voicePermissionDenied": "Microphone permission was denied",
+  "composer.voiceServiceUnavailable": "Speech recognition is currently unavailable",
   "composer.voicePreviewTranscript": "Help me organize today's priorities",
   "expand.collapseAria": "Collapse editor",
   "expand.inputAria": "Expanded editor input",

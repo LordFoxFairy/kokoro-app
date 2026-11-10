@@ -25,6 +25,7 @@ type ShellComposerProps = Omit<
   | "projectWorkspace"
   | "onCreationIntentDismiss"
   | "voicePreview"
+  | "voiceDraftScope"
 >
 
 export type AppFrameComposerProps = ShellComposerProps & {
@@ -97,6 +98,12 @@ export function AppFrameComposer({
 }: AppFrameComposerProps) {
   const composerResourcesTriggerRef = useRef<HTMLButtonElement | null>(null)
   const resourceScope = useMemo(() => ({ client: skills?.client, boundary: skills?.boundary, key: skills?.scopeKey, selectable: skills?.selectable, enabled: workspaceCapabilities.skills, preview }), [skills?.client, skills?.boundary, skills?.scopeKey, skills?.selectable, workspaceCapabilities.skills, preview])
+  const draftBoundary = resources?.boundary ?? skills?.boundary
+  const draftKey = resources?.scopeKey ?? skills?.scopeKey
+  const { admitted, subject, tenant, generation, authInvalidationHint } = draftBoundary ?? {}
+  const voiceDraftScope = useMemo(() => preview ? {}
+    : admitted && typeof subject === "string" && draftKey !== undefined ? { subject, draftKey, tenant, generation, authInvalidationHint } : null,
+    [preview, admitted, subject, draftKey, tenant, generation, authInvalidationHint])
   const [resourceDialog, setResourceDialog] = useState<{ scope: object; source: ComposerResourceSource } | null>(null)
   const [resourceMenu, setResourceMenu] = useState<{ scope: typeof resourceScope; slash: ComposerSlashCommand | null } | null>(null)
   const liveScope = useRef<typeof resourceScope | null>(null)
@@ -142,6 +149,7 @@ export function AppFrameComposer({
         projectWorkspace={projectWorkspace}
         environmentSelectorPlacement={projectWorkspace && hasMessages ? "floating" : "controls"}
         voicePreview={preview}
+        voiceDraftScope={voiceDraftScope}
         onDraftChange={value => { setResourceMenu(null); composerProps.onDraftChange(value) }}
         onResourceMenuRequest={command => {
           if (!resourcesEnabled) return
