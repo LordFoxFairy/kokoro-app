@@ -169,6 +169,35 @@ function reviewedDisplayAnnotation(path, key, value, rootPath) {
   );
 }
 
+// Public28.35 product annotations are reviewed by canonical schema location,
+// key and typed value; they do not become generally allowed extension/header names.
+const reviewedProductAnnotations = new Map([
+  ['PrivateSessionSnapshotResponse.properties.data.properties.composer_selection.properties.selected_custom_api_profiles', {
+    'x-kokoro-unique-by': 'profile_id',
+  }],
+  ['MessageCreateRequest.properties.selected_custom_api_profiles', {
+    'x-kokoro-unique-by': 'profile_id',
+  }],
+  ['RunDisplay.properties.workspace_outputs', {
+    'x-kokoro-unique-by': 'version_id',
+  }],
+  ['ProjectWebsiteUrls.items', { 'x-kokoro-utf8-byte-limit': 2048 }],
+  ['ProjectWebsitesStateVersion', { 'x-kokoro-decimal-maximum': '2147483647' }],
+  ['RunWorkspaceOutputVersion.properties.virtual_path', { 'x-kokoro-utf8-byte-limit': 4096 }],
+  ['DeliveredArtifactDisplayPath', {
+    'x-kokoro-utf8-byte-limit': 4096,
+    'x-kokoro-unicode-domain': 'NFC Unicode scalars; no Cc, Cf or Cs',
+    'x-kokoro-binding': 'Equal to the exact Agent-attested source path; only a proven virtual workspace path, without hidden segments or sensitive names.',
+  }],
+]);
+
+function reviewedProductAnnotation(path, key, value, rootPath) {
+  const prefix = `${rootPath}.components.schemas.`;
+  if (!path.startsWith(prefix)) return false;
+  const annotations = reviewedProductAnnotations.get(path.slice(prefix.length));
+  return annotations !== undefined && Object.hasOwn(annotations, key) && annotations[key] === value;
+}
+
 function inspectValue(value, path, violations, seen, options) {
   if (typeof value === 'string') {
     inspectString(value, path, violations, options);
@@ -193,6 +222,7 @@ function inspectValue(value, path, violations, seen, options) {
       key.toLowerCase().startsWith('x-kokoro-') &&
       !PUBLIC_KOKORO_NAMES.has(key.toLowerCase()) &&
       !reviewedDisplayAnnotation(path, key, child, options.rootPath) &&
+      !reviewedProductAnnotation(path, key, child, options.rootPath) &&
       !(
         (key === 'x-kokoro-max-response-bytes' &&
           path === `${options.rootPath}.paths./v1/sessions/{id}/messages/{messageId}/parts.get` &&

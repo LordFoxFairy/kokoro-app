@@ -77,15 +77,7 @@ test('the generated reference is the metadata inventory for the pinned BFF contr
     operation.owner === entry.owner
       && operation.visibility === entry.visibility
       && ['stable', 'beta', 'experimental'].includes(operation.stability)
-      && (['none', 'required', 'inherent'].includes(operation.idempotency)
-        || (operation.idempotency === 'natural'
-          && operation.method === 'PUT'
-          && ((operation.path === '/v1/projects/{projectId}/mcp-recommendations'
-            && operation.operationId === 'replaceProjectMcpRecommendations')
-            || (operation.path === '/v1/projects/{projectId}/pin'
-              && operation.operationId === 'setProjectPin')
-            || (operation.path === '/v1/sessions/{id}/messages/{messageId}/feedback'
-              && operation.operationId === 'setMessageFeedback')))),
+      && ['none', 'required', 'inherent', 'natural'].includes(operation.idempotency),
   ));
 
   const referenceText = [...files.values()].join('\n');
@@ -103,11 +95,12 @@ test('the generated reference is the metadata inventory for the pinned BFF contr
         method: method.toUpperCase(),
         operationId: operation.operationId,
         path,
+        idempotency: operation['x-kokoro-idempotency'],
       });
     }
   }
   assert.deepEqual(
-    manifest.operations.map(({ method, operationId, path }) => ({ method, operationId, path })),
+    manifest.operations.map(({ method, operationId, path, idempotency }) => ({ method, operationId, path, idempotency })),
     sourceOperations,
   );
 

@@ -9,6 +9,6 @@
 3. 打开具体 tag 页，先查看 Owner、Visibility、Stability、Idempotency、Permission 和 Authentication，再阅读参数、字段和 response。
 4. 对字段级问题只引用生成页和 pinned artifact；不要从手写指南推导不存在的字段。
 
-生成页顶部会显示 artifact version、owner、visibility、source commit 和 SHA-256。当前固定 `23.0.0` 源契约的 186 个 operation 中，门户只展示 180 个由 `kokoro-bff` 拥有并标为 `public` 的 operation；6 个 `browser-private` operation 不发布。来源摘要仍绑定完整 owner artifact，不绑定门户过滤结果。这描述 contract metadata，不等同于每个 live implementation 的完成度。
+生成页顶部显示 artifact version、owner、visibility、source commit 和 SHA-256；operation 与 schema 库存从当前固定合同计算，不在此手填旧数量。门户只展示由 `kokoro-bff` 拥有且标为 `public` 的 operation，`browser-private` 不发布。来源摘要绑定完整 owner artifact，不绑定过滤结果；合同 metadata 不代表每个 live implementation 已完成验收。
 
 <!--@include: ./generated/index-fragment.md-->
