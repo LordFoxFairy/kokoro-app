@@ -12,14 +12,14 @@ import {
 
 function portalFixture() {
   const root = mkdtempSync(join(tmpdir(), 'kokoro-portal-architecture-'));
-  mkdirSync(join(root, 'docs/guides'), { recursive: true });
+  mkdirSync(join(root, 'docs/api/guides'), { recursive: true });
   mkdirSync(join(root, 'examples/curl'), { recursive: true });
   mkdirSync(join(root, 'catalog'), { recursive: true });
   writeFileSync(
     join(root, 'docs/index.md'),
-    '# Public API\n\n[x](/guides/create-run)\n',
+    '# Public API\n\n[x](/api/guides/create-run)\n',
   );
-  writeFileSync(join(root, 'docs/guides/create-run.md'), '# Create a run\n');
+  writeFileSync(join(root, 'docs/api/guides/create-run.md'), '# Create a run\n');
   writeFileSync(
     join(root, 'examples/curl/create-run.sh'),
     'curl --header "x-kokoro-service: web-bff" "$KOKORO_BASE_URL/v1/sessions"\n',
@@ -99,13 +99,13 @@ test('rejects publication links that escape into an internal owner checkout', ()
 
 test('scans generated reference output with the publication policy', () => {
   const root = portalFixture();
-  mkdirSync(join(root, 'docs/reference/v1/generated'), { recursive: true });
+  mkdirSync(join(root, 'docs/api/reference/v1/generated'), { recursive: true });
   writeFileSync(
-    join(root, 'docs/reference/v1/generated/manifest.json'),
+    join(root, 'docs/api/reference/v1/generated/manifest.json'),
     JSON.stringify({ generatedBy: 'kokoro-developer-docs/reference-v1' }),
   );
   writeFileSync(
-    join(root, 'docs/reference/v1/generated/chat.md'),
+    join(root, 'docs/api/reference/v1/generated/chat.md'),
     '<script>alert(1)</script>',
   );
 

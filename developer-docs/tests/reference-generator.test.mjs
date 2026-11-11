@@ -239,14 +239,14 @@ test('generates deterministic operation, schema, and manifest files', () => {
   const indexFragment = first.get('index-fragment.md');
   assert.match(
     indexFragment,
-    /\]\(\/reference\/v1\/generated\/chat#create-message\)/,
+    /\]\(\/api\/reference\/v1\/generated\/chat#create-message\)/,
   );
   assert.doesNotMatch(indexFragment, /\]\(\.\//);
 
   const manifest = JSON.parse(first.get('manifest.json'));
   assert.deepEqual(manifest.items, [
-    { text: 'Chat', link: '/reference/v1/generated/chat' },
-    { text: 'Schemas', link: '/reference/v1/generated/schemas' },
+    { text: 'Chat', link: '/api/reference/v1/generated/chat' },
+    { text: 'Schemas', link: '/api/reference/v1/generated/schemas' },
   ]);
 });
 
@@ -428,6 +428,14 @@ test('keeps reference replacement inside managed or temporary directories', () =
   } finally {
     rmSync(escapeDirectory, { force: true, recursive: true });
   }
+});
+
+test('retires the old portal reference destination', () => {
+  const files = generateReferenceFiles(fixtureContract(), catalogEntry);
+  assert.throws(
+    () => writeReferenceFiles(files, join(process.cwd(), 'docs/reference/v1/generated'), { portalRoot: process.cwd() }),
+    /managed generated directory or a temporary directory/,
+  );
 });
 
 test('rejects a temporary output path hidden behind an escaping symlink', () => {

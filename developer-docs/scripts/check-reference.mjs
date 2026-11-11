@@ -60,7 +60,7 @@ try {
       `reference generation is nondeterministic: ${firstDigest} != ${secondDigest}`,
     );
   }
-  const outputDirectory = join(portalRoot, 'docs/reference/v1/generated');
+  const outputDirectory = join(portalRoot, 'docs/api/reference/v1/generated');
   writeReferenceFiles(files, outputDirectory, { portalRoot });
   const manifest = JSON.parse(
     readFileSync(join(outputDirectory, 'manifest.json'), 'utf8'),

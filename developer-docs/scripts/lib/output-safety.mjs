@@ -92,7 +92,7 @@ function assertOutputPath(outputDirectory, options) {
 
   let canonicalTarget;
   if (options.portalRoot !== undefined) {
-    canonicalTarget = resolve(options.portalRoot, 'docs/reference/v1/generated');
+    canonicalTarget = resolve(options.portalRoot, 'docs/api/reference/v1/generated');
     const portalRoot = resolve(options.portalRoot);
     const isCanonical = target === canonicalTarget;
     const isTemporary = isRealPathWithin(temporaryRoot, target);

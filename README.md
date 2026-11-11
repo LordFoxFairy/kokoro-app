@@ -129,4 +129,4 @@ preview fixture 替代。
   不作为生产证据。
 ## 产品文档维护
 
-公开文档与 API 参考位于独立包 [`developer-docs/`](developer-docs/README.md)，运行 `pnpm docs:dev`、`pnpm docs:build` 或 `pnpm docs:check`；内部工程说明仍在 [`docs/`](docs/INDEX.md)，不进入公开构建。产品指南从 [`developer-docs/docs/product/index.md`](developer-docs/docs/product/index.md) 开始，介绍实际工作台操作和支持限制；API 参考由固定 BFF 合同生成。帮助菜单的 `/docs` 需要部署环境实际挂载，本次未发布部署；不把文档生成成功等同业务验收。
+公开文档与 API 参考位于独立包 [`developer-docs/`](developer-docs/README.md)，运行 `pnpm docs:dev`、`pnpm docs:build` 或 `pnpm docs:check`；内部工程说明仍在 [`docs/`](docs/INDEX.md)，不进入公开构建。产品指南从 [`developer-docs/docs/product/index.md`](developer-docs/docs/product/index.md) 开始，按任务、文件、项目、定时、连接子目录分层；API 从 [`developer-docs/docs/api/index.md`](developer-docs/docs/api/index.md) 独立阅读，接口参考由固定 BFF 合同生成。帮助菜单的 `/docs` 需要部署环境实际挂载，本次未发布部署；不把文档生成成功等同业务验收。
