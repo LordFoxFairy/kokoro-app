@@ -1,8 +1,8 @@
-# Kokoro Developer API 门户
+# Kokoro 产品与开发者文档门户
 
-本目录从 Root 已合 `2e008595` 的门户迁入 App，继续作为独立包维护；保留原依赖图与校验链。App 根目录可运行 `pnpm docs:check`／`pnpm docs:build`／`pnpm docs:dev`。公开构建输入仅为本包的 `docs/`；App 的 `../docs/` 内部维护记录不进入公开产物或搜索索引。Root 旧目录将在配对集成时删除，不增加旧路径回退。
+本目录从 Root 已合 `2e008595` 的门户迁入 App，继续作为独立包维护；保留原依赖图与校验链。App 根目录可运行 `pnpm docs:check`／`pnpm docs:build`／`pnpm docs:dev`。公开构建输入仅为本包的 `docs/`；App 的 `../docs/` 内部维护记录不进入公开产物或搜索索引。Root 不保留第二份公开文档源码，不增加旧路径回退。
 
-`developer-docs/` 是 Kokoro Developer API 的中文静态门户。它负责阅读入口、工作流说明、导航、示例、版本目录、生成和校验；`kokoro-bff` 负责发布 public API 的机器契约。门户不保存一份可编辑的 OpenAPI 副本，也不拥有跨仓 DTO、数据库结构或内部 provider payload。
+`developer-docs/` 是 Kokoro 产品使用指南与 Developer API 的中文静态门户。产品指南源在 `docs/product/`，讲解已交付工作台的操作与明确限制；API 原入口和生成链保持。它不是新的文档站点。它负责阅读入口、工作流说明、导航、示例、版本目录、生成和校验；`kokoro-bff` 负责发布 public API 的机器契约。门户不保存一份可编辑的 OpenAPI 副本，也不拥有跨仓 DTO、数据库结构或内部 provider payload。
 
 ## 事实源与阅读顺序
 
@@ -46,3 +46,9 @@ corepack pnpm run ci
 它按顺序执行 lint、类型检查、单元测试、provenance、确定性参考生成、可执行示例、架构策略、生产构建和构建站点链接检查。`docs/reference/v1/generated/` 是构建输入并由 `.gitignore` 排除；不要手动编辑或提交其中的文件。
 
 更多 owner、目录和扩展规则见[`INDEX.md`](./INDEX.md)。
+
+## 产品指南与发布边界
+
+维护入口为 `docs/product/index.md`，导航位于 `docs/.vitepress/config.mts`。页面以实际产品路径和已验范围为依据，不从竞品文档推导 Kokoro 已支持能力；现可复用的参考来源和核对日期写在相应指南页。内部验收收据、机器状态和凭据不进入公开内容。
+
+账户帮助菜单链接 `/docs`；本包默认按独立静态门户构建，实际域名／子路径挂载需由部署配置验证。本次仅更新源码与本地构建，没有发布部署。

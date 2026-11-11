@@ -3,7 +3,7 @@
 `catalog/contracts.yaml` 是门户的版本目录。当前条目记录：
 
 - owner `kokoro-bff` 与 `public` visibility；
-- contract version `23.0.0`；
+- `info.version` 对应的 contract version（以 catalog 和生成页为准，不维护第二个手写版本号）；
 - source repository 和 canonical path；
 - 固定的完整 Git commit；
 - 对 canonical 文件字节计算的 SHA-256；

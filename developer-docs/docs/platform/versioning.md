@@ -1,6 +1,6 @@
 # 版本与弃用
 
-当前 public contract version 是 `23.0.0`，业务路径前缀为 `/v1`；operation stability 逐项按 metadata 展示。版本、owner、visibility 和 stability 以 catalog pin 与 generated manifest 为准。
+当前 public contract version 以 catalog pin 与 generated manifest 为准，业务路径前缀为 `/v1`。owner、visibility 和 stability 逐项使用正式 metadata，不再手写一个易失同步的当前版本号。
 
 ## 兼容性说明
 

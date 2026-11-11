@@ -34,6 +34,19 @@ const HTTP_METHODS = new Set([
 ]);
 const STABILITY_VALUES = new Set(['stable', 'beta', 'experimental']);
 const IDEMPOTENCY_VALUES = new Set(['none', 'required', 'inherent']);
+// Reviewed owner natural-idempotency semantics, not a general HTTP-method inference.
+const NATURAL_OPERATIONS = new Map([
+  ['PUT /v1/projects/{projectId}/mcp-recommendations', 'replaceProjectMcpRecommendations'],
+  ['PUT /v1/projects/{projectId}/pin', 'setProjectPin'],
+  ['PUT /v1/projects/{project_id}/websites', 'replaceProjectWebsites'],
+  ['POST /v1/agents/connections/setup', 'changeAgentConnection'],
+  ['POST /v1/agents/connections/telegram/webhook', 'acceptTelegramConnectionUpdate'],
+  ['POST /v1/agents/connections/line/webhook', 'acceptLineConnectionEvent'],
+  ['POST /v1/agents/connections/line/continue', 'continueLineConnection'],
+  ['POST /v1/agents/connections/slack/complete', 'completeSlackConnection'],
+  ['PUT /v1/library/artifacts/{conversation_id}/{artifact_id}/favorite', 'setLibraryArtifactFavorite'],
+  ['PUT /v1/sessions/{id}/messages/{messageId}/feedback', 'setMessageFeedback'],
+]);
 const PERMISSION_PATTERN =
   /^(?:anonymous|[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)*)$/u;
 
@@ -183,11 +196,9 @@ export function assertPublicContract(contractValue, catalogEntry) {
       );
     }
     const idempotency = requireString(operation, 'x-kokoro-idempotency', label);
-    const naturalRecommendations = method === 'PUT' &&
-      ((path === '/v1/projects/{projectId}/mcp-recommendations' && operationId === 'replaceProjectMcpRecommendations') ||
-       (path === '/v1/projects/{projectId}/pin' && operationId === 'setProjectPin') ||
-       (path === '/v1/sessions/{id}/messages/{messageId}/feedback' && operationId === 'setMessageFeedback')) && idempotency === 'natural';
-    if (!IDEMPOTENCY_VALUES.has(idempotency) && !naturalRecommendations) {
+    const reviewedNatural = idempotency === 'natural' &&
+      NATURAL_OPERATIONS.get(`${method} ${path}`) === operationId;
+    if (!IDEMPOTENCY_VALUES.has(idempotency) && !reviewedNatural) {
       throw new ReferenceGenerationError(
         `${operationId} has unsupported x-kokoro-idempotency ${idempotency}`,
       );
@@ -219,7 +230,7 @@ export function assertPublicContract(contractValue, catalogEntry) {
         `${operationId} Idempotency-Key must be required`,
       );
     }
-    if ((idempotency === 'none' || idempotency === 'inherent' || naturalRecommendations) && idempotencyParameter !== undefined) {
+    if ((idempotency === 'none' || idempotency === 'inherent' || reviewedNatural) && idempotencyParameter !== undefined) {
       throw new ReferenceGenerationError(
         `${operationId} must not declare Idempotency-Key when idempotency is ${idempotency}`,
       );

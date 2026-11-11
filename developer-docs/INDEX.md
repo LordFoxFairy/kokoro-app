@@ -61,3 +61,7 @@
 ## App 维护位置（2026-10-21）
 
 沿 Root `2e008595` 的既有门户迁入 App 独立包，生成器／依赖及 public 白名单不扩权。当前 catalog 与 App 同源 Public22.3固定原始 `e461d517` artifact，完整182项只发布176 public项／367个可达schema，6 browser-private继续排除；字段和schema由生成物展示，不再手写另一份清单。Root旧目录删除与精确gitlink留到配对集成；内部说明仍由 App `docs/` 维护，不被公开构建读取。此为候选，不能据文档宣称身份producer或完整产品已交付。
+
+## 产品阅读入口
+
+`docs/product/` 提供工作台快速上手、聊天／附件／结果、项目／定时和支持范围。与现API参考共用导航、搜索、构建及链接检查，不另建一套门户；API事实仍来自固定BFF合同。

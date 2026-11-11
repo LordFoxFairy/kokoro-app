@@ -59,13 +59,14 @@ const referenceItems = loadReferenceItems();
 
 export default defineConfig({
   lang: 'zh-CN',
-  title: 'Kokoro Developer API',
-  description: 'Kokoro public Product API 的中文 contract-first 开发者门户。',
+  title: 'Kokoro 文档',
+  description: 'Kokoro 产品使用指南与 contract-first 开发者文档。',
   cleanUrls: true,
   lastUpdated: false,
   themeConfig: {
     nav: [
-      { text: '文档', link: '/introduction' },
+      { text: '产品指南', link: '/product/' },
+      { text: '开发者指南', link: '/introduction' },
       { text: 'API 参考', link: '/reference/v1/' },
       { text: '变更记录', link: '/changelog' },
     ],
@@ -85,6 +86,15 @@ export default defineConfig({
       },
     },
     sidebar: [
+      {
+        text: '产品使用',
+        items: [
+          { text: '开始使用 Kokoro', link: '/product/' },
+          { text: '聊天、附件与结果', link: '/product/tasks' },
+          { text: '项目与定时任务', link: '/product/projects-and-schedules' },
+          { text: '当前支持范围', link: '/product/availability' },
+        ],
+      },
       {
         text: '开始使用',
         items: [
@@ -153,7 +163,7 @@ export default defineConfig({
     ],
     footer: {
       message: 'Public contract 的事实 owner 是 kokoro-bff。',
-      copyright: 'Kokoro Developer API',
+      copyright: 'Kokoro 文档',
     },
     outline: { label: '本页目录', level: [2, 3] },
   },
