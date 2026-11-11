@@ -62,15 +62,16 @@ Browser
   选择器或内部凭据。
 - Web 以部署侧 `KOKORO_DOMAIN` 生成受信 `Forwarded` 上下文；仅将 allowlist 内的 IAM issuer Cookie、
   配置 Origin 和 Web 服务身份交给 BFF 做在线准入，不把浏览器自报 tenant/subject 当 authority。
-  当前业务认证传递仍待 Task A 标准重设计；已否决的 Session 引用方案不再实施。
+  App 是同源薄桥，当前 Session 与资格由 BFF／IAM 准入，不建立第二套 Session、principal 或引用协议。
 - Web 的同源 API 是 `browser-private` surface，只服务当前 Web，不进入 Developer API 门户。
   对外 Product API 只由 `kokoro-bff` 的 `public` contract 发布。
-- Web 与 BFF 的 Agent 对话事件网络协议只允许 AG-UI。`SessionEvent` 只能作为 Web 内部 reducer
+- Web 与 BFF 的 Agent 对话事件网络协议只允许 AG-UI。`ChatProjectionEvent` 只是 Web 内部 reducer
   投影；Vercel AI SDK 的 `ChatTransport`/`UIMessage` 也只能是 Web 内部状态与渲染适配，不能形成
   第二条网络流或第二个 cursor 事实源。
 
-当前实现仍处于协议收敛期：AG-UI parser 已存在，但 live SSE client 仍兼容读取旧
-`SessionEvent`，且仓内尚未实现 `AgUiChatTransport`/`UIMessage` 适配。准确状态和缺口见
+当前 live SSE client 通过 `AgUiChatTransport` 读取、校验和重连 AG-UI，拒绝旧 reducer-shaped wire；
+mapper 将同一帧映射为 AI SDK `UIMessageChunk` 和内部 reducer 投影，不新增网络协议或 cursor。
+历史正文分片也使用锁定 AI SDK 的 `readUIMessageStream` 作本地文本装配。实际验收与剩余范围见
 [`docs/CURRENT.md`](docs/CURRENT.md)。
 
 ## 代码地图
@@ -78,7 +79,7 @@ Browser
 | 路径 | 职责 |
 | --- | --- |
 | `src/app/` | Next.js 页面与同源 `/api/*` route adapter |
-| `src/lib/server/` | Product Session 在线 admission、受信上下文、上游 HTTP 与错误映射；旧 envelope 仅供待删除登录/Team 链 |
+| `src/lib/server/` | 原生 Session 的同源薄桥、受信上下文、上游 HTTP 与错误映射；认证与资格准入归 BFF／IAM |
 | `src/contract/` | 当前运行时 Zod contract 与路径 helper |
 | `src/engine/`、`src/core/` | Chat 状态机、重连和纯 reducer 投影 |
 | `src/features/`、`src/ui/`、`src/components/` | 产品 surface 与 UI；本阶段不修改 |
@@ -91,8 +92,7 @@ Browser
 
 ## 五分钟启动
 
-要求：Node.js 22、Corepack，以及仓库当前锁定的 `pnpm@11.2.2`。Root 规范要求迁移到
-`pnpm@11.25.0`，该工具链升级尚未在本阶段执行，见 `docs/CURRENT.md`。
+要求：Node.js 22、Corepack，以及 `package.json` 当前锁定的 `pnpm@11.25.0`。
 
 ```bash
 corepack enable
@@ -114,11 +114,13 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm test:e2e
 ```
 
-`pnpm test` 会包含 contract 与 architecture 测试；独立命令用于快速定位治理失败。当前尚无
-`test:e2e` script，Playwright/axe/视觉回归和真实 BFF 联调仍是发布缺口，不能由 unit test 或
-preview fixture 替代。
+`pnpm test` 会包含 contract 与 architecture 测试；独立命令用于快速定位治理失败。
+`pnpm test:e2e` 使用 Playwright 的桌面／移动 Chromium 配置，默认启动确定性 preview；
+也可通过 `KOKORO_E2E_BASE_URL` 指向已有服务。preview 回归不替代真实 BFF／owner 链路验收，
+已有证据与未验范围见 [`docs/CURRENT.md`](docs/CURRENT.md)。
 
 ## 部署
 
