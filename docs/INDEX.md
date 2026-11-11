@@ -16,7 +16,7 @@ Public22.5／固定BFF4d8a028，三面设计顶部记录同源桥边界，`CURRE
 
 ## 管理员积分充值通路（2026-10-22）
 
-当前固定Public22.4，具名成员读取及非现金充值经原Product同源链；设计见 `TECHNICAL_DESIGN.md`／`API_CONTRACT.md`，实际验证与未完成范围见 `CURRENT.md`。对外指南唯一维护在App `developer-docs/docs/guides/credits.md`，不复制为另一份公开事实源。
+当前固定Public22.4，具名成员读取及非现金充值经原Product同源链；设计见 `TECHNICAL_DESIGN.md`／`API_CONTRACT.md`，实际验证与未完成范围见 `CURRENT.md`。对外指南唯一维护在App `developer-docs/docs/api/guides/credits.md`，不复制为另一份公开事实源。
 
 ## 当前租户 Credit 初始化（2026-10-22）
 

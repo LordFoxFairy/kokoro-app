@@ -605,20 +605,20 @@ export function generateReferenceFiles(contract, catalogEntry) {
     );
     manifestItems.push({
       text: tagName,
-      link: `/reference/v1/generated/${tagSlug}`,
+      link: `/api/reference/v1/generated/${tagSlug}`,
     });
     for (const collectedOperation of tagOperations) {
       const { method, operation, path } = collectedOperation;
       const operationId = requireString(operation, 'operationId', path);
       indexRows.push(
-      `| <span class="api-method api-method--${method.toLowerCase()}">${method}</span> | [${escapeTable(normalizeDescription(operation.summary, operationId))}](/reference/v1/generated/${tagSlug}#${slugify(operationId)}) | \`${escapeTable(path)}\` | \`${operation['x-kokoro-owner']}\` | \`${operation['x-kokoro-visibility']}\` | \`${operation['x-kokoro-stability']}\` | \`${operation['x-kokoro-idempotency']}\` |`,
+      `| <span class="api-method api-method--${method.toLowerCase()}">${method}</span> | [${escapeTable(normalizeDescription(operation.summary, operationId))}](/api/reference/v1/generated/${tagSlug}#${slugify(operationId)}) | \`${escapeTable(path)}\` | \`${operation['x-kokoro-owner']}\` | \`${operation['x-kokoro-visibility']}\` | \`${operation['x-kokoro-stability']}\` | \`${operation['x-kokoro-idempotency']}\` |`,
       );
     }
   }
 
   manifestItems.push({
     text: 'Schemas',
-    link: '/reference/v1/generated/schemas',
+    link: '/api/reference/v1/generated/schemas',
   });
   files.set('schemas.md', renderSchemasPage(contract, catalogEntry, schemaNames));
   files.set(

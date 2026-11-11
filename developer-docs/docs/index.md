@@ -11,15 +11,15 @@ hero:
       link: /product/
     - theme: alt
       text: API 快速开始
-      link: /quickstart
+      link: /api/quickstart
 ---
 
 ## 使用工作台
 
-[开始第一项任务](/product/) → [选择资料、查看过程与结果](/product/tasks) → [用项目和计划组织工作](/product/projects-and-schedules)。
+[快速开始](/product/) → [任务与对话](/product/tasks/) → [文件与结果](/product/files/)。
 
-需要先了解格式、语音、外部连接或支付边界，请读[当前支持范围](/product/availability)。
+继续按[项目](/product/projects/)、[定时任务](/product/scheduled-tasks/)或[连接与语音](/product/connections/)查找操作。限制与未验范围见[当前支持范围](/product/availability)。
 
 ## 接入 API
 
-[开发者介绍](/introduction)、[认证约定](/authentication)和[API v1 参考](/reference/v1/)沿既有 contract-first 入口维护。字段、响应头和约束的唯一事实源仍是固定的 BFF public contract，不因新增使用指南而改变。
+[开发者介绍](/api/)、[认证约定](/api/authentication)和[API v1 参考](/api/reference/v1/)沿既有 contract-first 入口维护。字段、响应头和约束的唯一事实源仍是固定的 BFF public contract，不因新增使用指南而改变。
