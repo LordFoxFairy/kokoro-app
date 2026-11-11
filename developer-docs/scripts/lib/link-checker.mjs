@@ -94,7 +94,7 @@ export class BuiltSiteLinkError extends Error {
   }
 }
 
-export function checkBuiltSiteLinks(distRoot) {
+function checkBuiltSiteLinks(distRoot) {
   const files = walkFiles(distRoot);
   const targets = new Map();
   const htmlDocuments = [];
