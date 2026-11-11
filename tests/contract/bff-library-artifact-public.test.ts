@@ -6,13 +6,13 @@ import { expect, it } from "vitest"
 import YAML from "yaml"
 
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
-const OWNER_COMMIT = "853ca9a5d8da3500b0c37543c72198a520e46225"
-const OWNER_SHA256 = "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7"
-const OWNER_VERSION = "28.17.0"
+const OWNER_COMMIT = "18dcc30179632eb32a86f160a5f13c71eb1c5d27"
+const OWNER_SHA256 = "a26431d45ad96c4e80e6751d61e66a14b3933ae7c2ffb6f9e7df57fcc7e6808f"
+const OWNER_VERSION = "28.35.0"
 
 it("pins the BFF Artifact Product page, binary and two-part selector", async () => {
   const bytes = await readFile(SNAPSHOT)
-  expect(OWNER_COMMIT).toBe("853ca9a5d8da3500b0c37543c72198a520e46225")
+  expect(OWNER_COMMIT).toBe("18dcc30179632eb32a86f160a5f13c71eb1c5d27")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }
@@ -41,6 +41,15 @@ it("pins the BFF Artifact Product page, binary and two-part selector", async () 
   const detail = spec.paths["/v1/library/artifacts/{conversation_id}/{artifact_id}"]?.get
   const content = spec.paths["/v1/library/artifacts/{conversation_id}/{artifact_id}/content"]?.get
   expect(detail?.operationId).toBe("getLibraryArtifact")
+  expect(spec.components.schemas.LibraryArtifactItem).toMatchObject({
+    properties: { project_ref: { type: ["string", "null"], pattern: expect.stringMatching(/^\^project_/) } },
+  })
+  expect(spec.components.schemas.LibraryArtifactItem?.required).not.toContain("project_ref")
+  expect(spec.components.schemas.LibraryArtifactItem?.required).toContain("favorited")
+  expect(list?.parameters).toContainEqual(expect.objectContaining({ name: "favorites_only", schema: { type: "boolean", default: false } }))
+  expect(spec.paths["/v1/library/artifacts/{conversation_id}/{artifact_id}"]?.delete?.operationId).toBe("deleteLibraryArtifact")
+  expect(spec.paths["/v1/library/artifacts/{conversation_id}/{artifact_id}/favorite"]?.put?.operationId).toBe("setLibraryArtifactFavorite")
+  expect(detail?.responses).toHaveProperty(["200", "content", "application/json", "schema", "$ref"], "#/components/schemas/LibraryArtifactResponse")
   expect(content?.operationId).toBe("downloadLibraryArtifact")
   expect(content?.parameters).toEqual(
     expect.arrayContaining([

@@ -133,7 +133,7 @@ it("keeps exact action title and safe target identity across snapshot, live stat
   let state = mergeMessageParts(first, read, [], true)
   const updated = { ...target, status: "completed" as const }
   state = applyChatProjectionEvents(state, [makeEvent("activity.updated", updated, { run_id: "r", publicSequence: "9007199254740994" })])
-  const expected = () => groupSegments(state.stepsByRun.r ?? [], state.executionProcess?.activities).flatMap(segment => segment.activities)
+  const expected = () => groupSegments(state.stepsByRun.r ?? []).flatMap(segment => segment.activities)
   expect(expected()).toEqual([updated])
   expect(state.stepsByRun.r?.find(step => step.kind === "activity")?.seq).toBe("2")
   state = preserveMessageParts(state, stateFromSnapshot(input))

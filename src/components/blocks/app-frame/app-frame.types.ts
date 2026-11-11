@@ -7,6 +7,7 @@ import type {
 } from "@/contract/project-resource";
 import type { SkillCard } from "@/hub/schemas";
 import type { SessionEngine } from "@/engine/machine";
+import type { SessionScope } from "@/engine/session-scope";
 import type { SessionClient } from "@/engine/client";
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
@@ -157,7 +158,7 @@ export type EmptyStateProps = {
   activeProjectConversationId?: string | null;
   onSelectProjectConversation?: (id: string) => void;
   /** Open the artifact's source conversation without coupling a site surface to the engine. */
-  onOpenSession?: (id: string) => void;
+  onOpenSession?: (scope: SessionScope, id: string) => void;
   projectConversationsLoading?: boolean;
   projectConversationsError?: boolean;
   onRetryProjectConversations?: () => void;

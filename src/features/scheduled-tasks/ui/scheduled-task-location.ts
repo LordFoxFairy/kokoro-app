@@ -5,7 +5,7 @@ import { useMemo, useSyncExternalStore } from "react"
 export const EDITOR_HASH = "#scheduled-tasks/new"
 export const SCHEDULED_LOCATION_EVENT = "kokoro:scheduled-location"
 
-export type ScheduledView = "calendar" | "list"
+export type ScheduledView = "calendar" | "list" | "updates"
 export type ScheduledTaskCreationContext =
   | { kind: "personal" }
   | { kind: "project"; projectId: string }
@@ -14,35 +14,40 @@ export type ScheduledLocationState = {
   view: ScheduledView
   editorOpen: boolean
   creationContext: ScheduledTaskCreationContext
+  filterContext: ScheduledTaskCreationContext
 }
 
-const DEFAULT_SCHEDULED_LOCATION_SNAPSHOT = JSON.stringify(["calendar", false, "personal", null])
+const DEFAULT_SCHEDULED_LOCATION_SNAPSHOT = JSON.stringify(["calendar", false, "personal", null, "personal", null])
 const EDITOR_HISTORY_KEY = "scheduledTaskEditor"
 
 function readScheduledView(): ScheduledView {
   if (typeof window === "undefined") return "calendar"
-  return new URLSearchParams(window.location.search).get("tab") === "list" ? "list" : "calendar"
+  const tab = new URLSearchParams(window.location.search).get("tab")
+  return tab === "list" || tab === "updates" ? tab : "calendar"
 }
 
 function readScheduledLocationSnapshot(): string {
   if (typeof window === "undefined") return DEFAULT_SCHEDULED_LOCATION_SNAPSHOT
-  const creationContext = readScheduledTaskCreationContext()
+  const creationContext = readScheduledProjectContext("project_id")
+  const filterContext = readScheduledProjectContext("filter_project_id")
   return JSON.stringify([
     readScheduledView(),
     window.location.hash === EDITOR_HASH,
     creationContext.kind,
     creationContext.kind === "project" ? creationContext.projectId : null,
+    filterContext.kind,
+    filterContext.kind === "project" ? filterContext.projectId : null,
   ])
 }
 
-function readScheduledTaskCreationContext(): ScheduledTaskCreationContext {
+function readScheduledProjectContext(parameterName: string): ScheduledTaskCreationContext {
   const references: string[] = []
   for (const parameter of window.location.search.slice(1).split("&")) {
     if (parameter.length === 0) continue
     const separator = parameter.indexOf("=")
     const encodedName = separator === -1 ? parameter : parameter.slice(0, separator)
     const name = decodeSearchComponent(encodedName)
-    if (name !== "project_id") continue
+    if (name !== parameterName) continue
     const projectId = decodeSearchComponent(separator === -1 ? "" : parameter.slice(separator + 1))
     if (projectId === null) return { kind: "invalid" }
     references.push(projectId)
@@ -79,13 +84,16 @@ export function useScheduledLocation(): ScheduledLocationState {
     () => DEFAULT_SCHEDULED_LOCATION_SNAPSHOT,
   )
   return useMemo(() => {
-    const [view, editorOpen, kind, projectId] = JSON.parse(snapshot) as [ScheduledView, boolean, ScheduledTaskCreationContext["kind"], string | null]
+    const [view, editorOpen, kind, projectId, filterKind, filterId] = JSON.parse(snapshot) as [ScheduledView, boolean, ScheduledTaskCreationContext["kind"], string | null, ScheduledTaskCreationContext["kind"], string | null]
     const creationContext: ScheduledTaskCreationContext = kind === "project" && projectId !== null
       ? { kind, projectId }
       : kind === "invalid"
         ? { kind }
         : { kind: "personal" }
-    return { view, editorOpen, creationContext }
+    const filterContext: ScheduledTaskCreationContext = filterKind === "project" && filterId !== null
+      ? { kind: "project", projectId: filterId }
+      : filterKind === "invalid" ? { kind: "invalid" } : { kind: "personal" }
+    return { view, editorOpen, creationContext, filterContext }
   }, [snapshot])
 }
 
@@ -104,6 +112,15 @@ export function writeScheduledView(view: ScheduledView): void {
   if (typeof window === "undefined") return
   const url = new URL(window.location.href)
   url.searchParams.set("tab", view)
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
+  window.dispatchEvent(new Event(SCHEDULED_LOCATION_EVENT))
+}
+
+export function writeScheduledProjectFilter(projectId: string | null): void {
+  if (typeof window === "undefined") return
+  const url = new URL(window.location.href)
+  if (projectId === null) url.searchParams.delete("filter_project_id")
+  else url.searchParams.set("filter_project_id", projectId)
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
   window.dispatchEvent(new Event(SCHEDULED_LOCATION_EVENT))
 }

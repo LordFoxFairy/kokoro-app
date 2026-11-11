@@ -1,7 +1,7 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http"
 import { beforeEach, afterEach, it, expect, vi } from "vitest"
-const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+
+
 import { GET, POST, PUT } from "@/app/api/session/[...path]/route"
 let server: Server, calls: IncomingMessage[], bodies: string[], peer: (req: IncomingMessage, res: ServerResponse) => void
 const feedback = { session_id: "session", message_id: "answer", feedback: null }
@@ -22,14 +22,7 @@ beforeEach(async () => {
   calls = []
   bodies = []
   peer = reply
-  currentProductSession.mockReset().mockResolvedValue({
-    id: "session-cookie",
-    generation: 1,
-    subject: "subject",
-    access: "private-fixture-access",
-    accessExpiresAt: Date.now() + 60000,
-    expiresAt: Date.now() + 60000,
-  })
+
   server = createServer((req, res) => {
     calls.push(req)
     let body = ""
@@ -59,7 +52,7 @@ afterEach(async () => {
 const request = (method = "GET", suffix = "feedback", body?: string) =>
   new Request(`http://web.test/api/session/sessions/session/messages/answer/${suffix}`, {
     method,
-    headers: {
+    headers: {cookie: "kokoro-issuer.session_token=fixture",
       host: "web.test",
       ...(method !== "GET" ? { origin: "http://web.test", "content-type": "application/json" } : {}),
       ...(suffix === "regenerate" ? { "idempotency-key": "same-key" } : {}),
@@ -71,7 +64,7 @@ const run = (req: Request, suffix = "feedback") =>
     params: Promise.resolve({ path: ["sessions", "session", "messages", "answer", suffix] }),
   })
 
-it("projects only exact four read/write operations through current Product Session and preserves one original regeneration key", async () => {
+it("projects only exact four read/write operations through current native admission and preserves one original regeneration key", async () => {
   const read = await run(request())
   expect(read.status).toBe(200)
   expect(await read.json()).toEqual(feedback)
@@ -81,7 +74,7 @@ it("projects only exact four read/write operations through current Product Sessi
   expect(calls).toHaveLength(2)
   expect(calls[1]?.headers["idempotency-key"]).toBe("same-key")
   expect(bodies[1]).toBe("{}")
-  expect(calls[0]?.headers.authorization).toBe("Bearer private-fixture-access")
+  expect(calls[0]?.headers.cookie).toBe("kokoro-issuer.session_token=fixture")
 })
 it("rejects query/identity/unknown fields before BFF and rejects truncated or wrong-bound responses without retry", async () => {
   expect((await run(request("PUT", "feedback", '{"feedback":"up","actor":"other"}'))).status).toBe(400)
@@ -100,14 +93,30 @@ it("rejects query/identity/unknown fields before BFF and rejects truncated or wr
   expect(calls).toHaveLength(1)
 })
 
-it("a late actor change after a real ACK remains unconfirmed instead of exposing old target facts", async () => {
-  const original = currentProductSession.getMockImplementation()!
-  currentProductSession.mockImplementation(async () => {
-    const claims = await original()
-    return calls.length ? { ...claims, subject: "other" } : claims
+
+it("returns only the complete private bytes of an exact workspace version and rejects Range before contacting BFF", async () => {
+  const version = "wsv_" + "a".repeat(64)
+  const path = ["sessions", "session", "runs", "run", "workspace-outputs", version, "content"]
+  const body = Buffer.from('{"text":"原内容"}')
+  const get = (headers?: HeadersInit) => GET(new Request(`http://web.test/api/session/${path.join("/")}`, headers === undefined ? undefined : { headers }), {
+    params: Promise.resolve({ path }),
   })
-  const result = await run(request("POST", "regenerate", "{}"), "regenerate")
-  expect(result.status).toBe(401)
-  expect((await result.json()).data).toBeUndefined()
-  expect(calls).toHaveLength(1)
+  peer = (req, res) => {
+    res.writeHead(200, {
+      "content-type": "application/json; charset=UTF-8",
+      "content-length": body.length,
+      "content-disposition": "attachment; filename=report.json",
+      "cache-control": "no-store",
+      "x-request-id": String(req.headers["x-kokoro-request-id"]),
+    })
+    res.end(body)
+  }
+  expect((await get({ Range: "bytes=0-1" })).status).toBe(400)
+  expect(calls).toHaveLength(0)
+  const result = await get()
+  expect(result.status).toBe(200)
+  expect(Buffer.from(await result.arrayBuffer())).toEqual(body)
+  expect(result.headers.get("cache-control")).toBe("private, no-store")
+  expect(result.headers.get("x-content-type-options")).toBe("nosniff")
+  expect(calls.map(call => call.url)).toEqual([`/v1/${path.join("/")}`])
 })

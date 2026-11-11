@@ -124,7 +124,7 @@ it("clears old identity synchronously and aborts then ignores its late response"
   const signal = fetcher.mock.calls[0]![1].signal as AbortSignal;
   fetcher.mockResolvedValueOnce(
     Response.json({
-      data: { subject: "bob", name: "Bob", email: null, email_verified: null },
+      data: { subject: "bob", name: "Bob", email: "", email_verified: false },
     }),
   );
   view.rerender(card("bob", 2));
@@ -150,7 +150,7 @@ it("clears old identity synchronously and aborts then ignores its late response"
 it("rejects a successful response for another subject", async () => {
   fetcher.mockResolvedValueOnce(
     Response.json({
-      data: { subject: "bob", name: "Bob", email: null, email_verified: null },
+      data: { subject: "bob", name: "Bob", email: "", email_verified: false },
     }),
   );
   render(card());
@@ -196,7 +196,7 @@ it("ignores a late clipboard success after an identity switch", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Copy" }));
   fetcher.mockResolvedValueOnce(
     Response.json({
-      data: { subject: "bob", name: "Bob", email: null, email_verified: null },
+      data: { subject: "bob", name: "Bob", email: "", email_verified: false },
     }),
   );
   view.rerender(card("bob", 2));

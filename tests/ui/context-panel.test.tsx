@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 import { useMemo, useRef, useState } from "react"
 
@@ -7,6 +7,13 @@ import { ContextPanel } from "@/components/blocks/context-panel/context-panel"
 import { CanvasPanel } from "@/ui/canvas/canvas-panel"
 import { ToolCallRow } from "@/ui/thread/tool-call-row"
 import type { RunProcessActivity } from "@/contract/chat"
+import type { AnswerActionBoundary } from "@/ui/thread/answer-action-scope"
+
+const workspaceFile = {
+  runId: "run_1", versionId: "wsv_" + "1".repeat(64), path: "/outputs/report.md",
+  mime: "text/markdown", bytes: 12, contentSha256: "a".repeat(64),
+}
+const workspaceBoundary = { sessionId: "session_1", readEpoch: {}, isCurrent: () => true } as AnswerActionBoundary
 
 const originalWidth = window.innerWidth
 
@@ -132,32 +139,25 @@ it("多个 Canvas 触发器同时存在时关闭回到实际打开者而不是�
   await waitFor(() => expect(opener).toHaveFocus())
 })
 
-it("Canvas 文件列表的长路径保持可选且不重复渲染原始路径", () => {
-  const longPath = "/workspace/projects/very-long-folder-name/output/final-report.md"
+it("Canvas retains same-path versions and selects the exact row", () => {
+  const file = { ...workspaceFile, path: "/outputs/very-long-folder-name/output/final-report.md", bytes: 2048 }
+  const second = { ...file, runId: "run_2", versionId: "wsv_" + "2".repeat(64) }
   const onSelectFile = vi.fn()
 
   render(
     <LocaleProvider>
-      <CanvasPanel
-        sessionId="session_1"
-        content={{ kind: "file", file: { path: longPath, mime: "text/markdown", bytes: 2048 } }}
-        files={[{ path: longPath, mime: "text/markdown", bytes: 2048 }]}
-        deliveries={[]}
-        fullscreen={false}
-        onSelectFile={onSelectFile}
-        onSelectDelivery={vi.fn()}
-        onToggleFullscreen={vi.fn()}
-        onClose={vi.fn()}
-      />
+      <CanvasPanel sessionId="session_1" content={{ kind: "file", file }} files={[file, second]}
+        deliveries={[]} fullscreen={false} onSelectFile={onSelectFile} onSelectDelivery={vi.fn()}
+        onToggleFullscreen={vi.fn()} onClose={vi.fn()} />
     </LocaleProvider>,
   )
 
   fireEvent.click(screen.getByRole("radio", { name: "Files" }))
-  const fileButton = screen.getByRole("button", { name: /very-long-folder-name\/output\/final-report\.md/ })
-  expect(fileButton).toBeInTheDocument()
-  expect(fileButton).toHaveAttribute("aria-pressed", "true")
-  fireEvent.click(fileButton)
-  expect(onSelectFile).toHaveBeenCalledWith({ path: longPath, mime: "text/markdown", bytes: 2048 })
+  const [firstRow, secondRow] = screen.getAllByRole("button", { name: /very-long-folder-name\/output\/final-report\.md/ })
+  expect(firstRow).toHaveAttribute("aria-pressed", "true")
+  expect(secondRow).toHaveAttribute("aria-pressed", "false")
+  fireEvent.click(secondRow!)
+  expect(onSelectFile).toHaveBeenCalledWith(second)
 })
 
 it("Canvas 从文件列表回到预览时把焦点交给稳定标题", async () => {
@@ -165,8 +165,8 @@ it("Canvas 从文件列表回到预览时把焦点交给稳定标题", async () 
     <LocaleProvider>
       <CanvasPanel
         sessionId="session_1"
-        content={{ kind: "file", file: { path: "out/report.md", mime: "text/markdown", bytes: 12 } }}
-        files={[{ path: "out/report.md", mime: "text/markdown", bytes: 12 }]}
+        content={{ kind: "file", file: workspaceFile }}
+        files={[workspaceFile]}
         deliveries={[]}
         fullscreen={false}
         onSelectFile={vi.fn()}
@@ -178,8 +178,8 @@ it("Canvas 从文件列表回到预览时把焦点交给稳定标题", async () 
   )
 
   fireEvent.click(screen.getByRole("radio", { name: "Files" }))
-  fireEvent.click(screen.getByRole("button", { name: /out\/report\.md/ }))
-  await waitFor(() => expect(screen.getByRole("heading", { name: "out/report.md" })).toHaveFocus())
+  fireEvent.click(screen.getByRole("button", { name: /outputs\/report\.md/ }))
+  await waitFor(() => expect(screen.getByRole("heading", { name: "/outputs/report.md" })).toHaveFocus())
 })
 
 it("Canvas 下载失败后把同一按钮明确变为重新下载", async () => {
@@ -188,7 +188,8 @@ it("Canvas 下载失败后把同一按钮明确变为重新下载", async () => 
     <LocaleProvider>
       <CanvasPanel
         sessionId="session_1"
-        content={{ kind: "file", file: { path: "out/report.md", mime: "text/markdown", bytes: 12 } }}
+        answerActionBoundary={workspaceBoundary}
+        content={{ kind: "file", file: workspaceFile }}
         files={[]}
         deliveries={[]}
         fullscreen={false}
@@ -205,8 +206,9 @@ it("Canvas 下载失败后把同一按钮明确变为重新下载", async () => 
   expect(screen.getAllByRole("alert").length).toBeGreaterThanOrEqual(1)
 })
 
-it("Canvas 在 disabled 提交前的双击也只发起一次下载", async () => {
-  let resolveFetch: ((value: { ok: boolean; blob: () => Promise<Blob> }) => void) | undefined
+it("Canvas 在 disabled 提交前的双击也只发起一次下载，摘要不符不确认", async () => {
+  vi.stubGlobal("crypto", webcrypto)
+  let resolveFetch: ((value: Response) => void) | undefined
   const fetchMock = vi.fn().mockReturnValue(new Promise((resolve) => { resolveFetch = resolve }))
   vi.stubGlobal("fetch", fetchMock)
 
@@ -214,7 +216,8 @@ it("Canvas 在 disabled 提交前的双击也只发起一次下载", async () =>
     <LocaleProvider>
       <CanvasPanel
         sessionId="session_1"
-        content={{ kind: "file", file: { path: "out/report.md", mime: "text/markdown", bytes: 12 } }}
+        answerActionBoundary={workspaceBoundary}
+        content={{ kind: "file", file: workspaceFile }}
         files={[]}
         deliveries={[]}
         fullscreen={false}
@@ -232,8 +235,9 @@ it("Canvas 在 disabled 提交前的双击也只发起一次下载", async () =>
   fireEvent.click(button)
   expect(fetchMock).toHaveBeenCalledTimes(previewRequestCount + 1)
 
-  resolveFetch?.({ ok: true, blob: async () => new Blob(["markdown"]) })
-  await waitFor(() => expect(button).not.toBeDisabled())
+  expect(fetchMock.mock.calls.at(-1)?.[0]).toBe(`/api/session/sessions/session_1/runs/run_1/workspace-outputs/${workspaceFile.versionId}/content`)
+  resolveFetch?.(new Response("wrong digest", { headers: { "content-type": "text/markdown; charset=utf-8", "cache-control": "private, no-store" } }))
+  expect(await screen.findByRole("button", { name: /Retry download|重新下载/ })).toBeEnabled()
 })
 
 it("Canvas 跨会话切换后关闭时不回收到旧会话的已卸载触发器", async () => {
@@ -333,30 +337,44 @@ import { createSessionStreamState } from "@/core/state"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { resetCanvasStore } from "@/ui/canvas/canvas-store"
 
-const artifactText = "# Real delivery\n中文正文 <script>alert(1)</script> ![no network](https://foreign.test/x.png)"
+const artifactText = "# Real delivery\n中文正文 <script>alert(1)</script> ![no network](https://foreign.test/x.png) [reference label](https://foreign.test/reference)"
 const artifactBytes = new TextEncoder().encode(artifactText)
-const textDelivery = { conversationId: "session_1", artifactId: "artifact_text", assetId: "asset_text", artifactKind: "document" as const, title: "Delivered text", mime: "text/markdown", size: artifactBytes.length, runId: "run_1", createdAt: "2026-10-25T00:00:00Z" }
+const textDelivery = { conversationId: "session_1", artifactId: "artifact_text", assetId: "asset_text", artifactKind: "document" as const, title: "Delivered text", mime: "text/plain", size: artifactBytes.length, runId: "run_1", createdAt: "2026-10-25T00:00:00Z" }
 const textBoundary = { admitted: true, subject: "preview-reader", generation: 1 }
-function textMetadata(artifactId = "artifact_text") {
-  return Response.json({ data: { kind: "artifact", conversation_id: "session_1", artifact_id: artifactId, asset_id: "asset_text", artifact_kind: "document", title: "Delivered text", filename: "report.md", mime_type: "text/markdown", size_bytes: String(artifactBytes.length), content_sha256: createHash("sha256").update(artifactBytes).digest("hex"), source_run_id: "run_1", delivered_at: "2026-10-25T00:00:00Z" }, meta: { request_id: "preview-request" } })
+function textMetadata(artifactId = "artifact_text", mime = "text/plain", assetId = "asset_text") {
+  return Response.json({ data: { kind: "artifact", conversation_id: "session_1", artifact_id: artifactId, asset_id: assetId, artifact_kind: "document", title: "Delivered text", filename: "report.md", mime_type: mime, size_bytes: String(artifactBytes.length), content_sha256: createHash("sha256").update(artifactBytes).digest("hex"), source_run_id: "run_1", delivered_at: "2026-10-25T00:00:00Z", favorited: false }, meta: { request_id: "preview-request" } })
 }
-function textResponse() { return new Response(artifactBytes, { headers: { "content-type": "text/markdown", "content-length": String(artifactBytes.length) } }) }
+function textResponse(mime = "text/plain") { return new Response(artifactBytes, { headers: { "content-type": mime, "content-length": String(artifactBytes.length) } }) }
 function renderTextCanvas(boundary: ProjectReadBoundary | undefined, delivery = textDelivery, sessionId = "session_1") {
   return <LocaleProvider><CanvasPanel sessionId={sessionId} content={{ kind: "delivery", delivery }} files={[]} deliveries={[delivery]} fullscreen={false} onSelectFile={vi.fn()} onSelectDelivery={vi.fn()} onToggleFullscreen={vi.fn()} onClose={vi.fn()} {...(boundary === undefined ? {} : { readBoundary: boundary })} /></LocaleProvider>
 }
 afterEach(() => { resetCanvasStore(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.localStorage.removeItem("kokoro.web.auth-index-subject") })
 
-it("Canvas opens the actual bounded delivered bytes, not just metadata, without executing Markdown or fetching external resources", async () => {
+it("Canvas renders verified delivered Markdown without navigation, embeds or external loads", async () => {
   window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
   vi.stubGlobal("crypto", webcrypto)
-  const fetcher = vi.fn().mockResolvedValueOnce(textMetadata()).mockResolvedValueOnce(textResponse())
+  const mime = "text/markdown"
+  const fetcher = vi.fn().mockResolvedValueOnce(textMetadata("artifact_text", mime)).mockResolvedValueOnce(textResponse(mime))
   vi.stubGlobal("fetch", fetcher)
-  const view = render(renderTextCanvas(textBoundary))
-  await waitFor(() => expect(view.container.querySelector("pre")).toHaveTextContent("Real delivery"))
-  expect(view.container.querySelector("pre")?.textContent).toBe(artifactText)
-  expect(view.container.querySelector("script, img, iframe")).toBeNull()
+  const view = render(renderTextCanvas(textBoundary, { ...textDelivery, mime }))
+  expect(await screen.findByRole("heading", { name: "Real delivery" })).toBeVisible()
+  expect(screen.getByText(/no network/)).toBeVisible()
+  expect(screen.getByText(/reference label/)).toBeVisible()
+  expect(view.container.querySelector("script, img, iframe, a[href]")).toBeNull()
   expect(fetcher.mock.calls.map(([path]) => path)).toEqual(["/api/hub/library/artifacts/session_1/artifact_text", "/api/hub/library/artifacts/session_1/artifact_text/content"])
   expect(screen.getByRole("button", { name: "Download" })).toBeEnabled()
+})
+
+it("Canvas does not request content when exact detail points to a different Asset", async () => {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
+  vi.stubGlobal("crypto", webcrypto)
+  const fetcher = vi.fn().mockResolvedValueOnce(textMetadata("artifact_text", "text/plain", "foreign_asset"))
+    .mockResolvedValueOnce(textResponse())
+  vi.stubGlobal("fetch", fetcher)
+  const view = render(renderTextCanvas(textBoundary))
+  expect(await screen.findByRole("alert")).toHaveTextContent("Cannot preview — please download.")
+  expect(view.container.querySelector("pre")).toBeNull()
+  expect(fetcher).toHaveBeenCalledOnce()
 })
 
 it.each([undefined, { admitted: false, subject: "preview-reader", generation: 1 }])("missing or retired trusted boundary refuses preview but leaves native download available %j", async boundary => {
@@ -568,6 +586,50 @@ it("unrelated storage and unchanged auth-index events do not revoke the still-cu
 })
 
 
+it("compact Canvas lists real delivery directories, retains same-path versions, and selects the exact delivery", async () => {
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 })
+  const older = { ...textDelivery, artifactId: "summary_old", runId: "run_old", title: "summary.md", displayPath: "/reports/weekly/summary.md" }
+  const newer = { ...older, artifactId: "summary_new", runId: "run_new", size: 2048 }
+  const metrics = { ...textDelivery, artifactId: "metrics", title: "metrics.csv", displayPath: "/data/metrics.csv" }
+  const legacy = { ...textDelivery, artifactId: "legacy", title: "Legacy delivery" }
+  const root = { ...textDelivery, artifactId: "root", title: "Root delivery", displayPath: "/root.md" }
+  const onSelectDelivery = vi.fn()
+  const onSelectFile = vi.fn()
+  render(<LocaleProvider><CanvasPanel sessionId="session_1" content={{ kind: "delivery", delivery: older }}
+    files={[]} deliveries={[older, newer, metrics, legacy, root]} deliveriesHasMore fullscreen={false}
+    onSelectFile={onSelectFile} onSelectDelivery={onSelectDelivery} onToggleFullscreen={vi.fn()} onClose={vi.fn()} /></LocaleProvider>)
+
+  const files = screen.getByRole("radio", { name: "Files" })
+  files.focus()
+  fireEvent.click(files)
+  expect(files).toHaveAttribute("aria-checked", "true")
+  expect(screen.getByRole("radio", { name: "Preview" })).toBeInTheDocument()
+
+  const reports = screen.getByText("reports/weekly").closest("details")!
+  const data = screen.getByText("data").closest("details")!
+  expect(reports).toHaveAttribute("open")
+  expect(data).not.toHaveAttribute("open")
+  const summary = within(data).getByText("data").closest("summary")!
+  summary.focus()
+  expect(summary).toHaveFocus()
+  fireEvent.click(summary)
+  expect(data).toHaveAttribute("open")
+  expect(within(data).getByRole("button", { name: /metrics.csv/ })).toBeInTheDocument()
+
+  for (const label of [/Legacy delivery/, /Root delivery/]) expect(screen.getByRole("button", { name: label }).closest("details")).toBeNull()
+  expect(screen.getByRole("link", { name: "View all creations" })).toHaveAttribute("href", "/app/library?tab=artifacts")
+  expect(screen.getByText("No files in the workspace yet.")).toBeVisible()
+
+  const versions = within(reports).getAllByRole("button", { name: /summary.md/ })
+  expect(versions).toHaveLength(2)
+  expect(versions[0]).toHaveAttribute("aria-pressed", "true")
+  expect(versions[1]).toHaveAttribute("aria-pressed", "false")
+  fireEvent.click(versions[1]!)
+  expect(onSelectDelivery).toHaveBeenCalledExactlyOnceWith(newer)
+  expect(onSelectFile).not.toHaveBeenCalled()
+  await waitFor(() => expect(screen.getByRole("heading", { name: older.title })).toHaveFocus())
+})
+
 it("current task progress footer retires with an empty active-plan projection without hiding preview content", () => {
   const callbacks = { onSelectFile: vi.fn(), onSelectDelivery: vi.fn(), onToggleFullscreen: vi.fn(), onClose: vi.fn() }
   const view = (todos: { content: string; status: "pending" | "in_progress" }[]) => (
@@ -589,10 +651,70 @@ function ControlledDeliveredCanvas() {
   const canvas = useCanvasWorkspace("session_1", thread, true)
   return <LocaleProvider><button type="button" onClick={() => canvas.openDelivery(textDelivery)}>Open delivered preview</button>
     {canvas.resolvedCanvas ? <ContextPanel sessionId="session_1" content={canvas.resolvedCanvas} files={[]} deliveries={[textDelivery]}
-      readBoundary={textBoundary} fullscreen={canvas.fullscreen} onSelectFile={canvas.onSelectFile} onSelectDelivery={canvas.onSelectDelivery}
+      readBoundary={textBoundary} fullscreen={canvas.fullscreen} onSelectFile={canvas.openFile} onSelectDelivery={canvas.onSelectDelivery}
       onToggleFullscreen={canvas.onToggleFullscreen} onClose={canvas.onClose} /> : null}
   </LocaleProvider>
 }
+
+it("a new Canvas selection during exit supersedes the old close and focus, including the same artifact", async () => {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
+  const second = { ...textDelivery, artifactId: "second_artifact", title: "Second delivery" }
+  const thread = { ...createSessionStreamState(), deliveries: [textDelivery, second] }
+  const fetcher = vi.fn<(url: string, options: RequestInit) => Promise<Response>>(() => new Promise(() => {}))
+  vi.stubGlobal("fetch", fetcher)
+
+  function Harness() {
+    const canvas = useCanvasWorkspace("session_1", thread, true)
+    return <LocaleProvider>
+      <button type="button" data-canvas-opener="true" onClick={() => canvas.openDelivery(textDelivery)}>First opener</button>
+      <button type="button" data-canvas-opener="true" onClick={() => canvas.openDelivery(second)}>Second opener</button>
+      {canvas.resolvedCanvas ? <ContextPanel sessionId="session_1" content={canvas.resolvedCanvas} files={[]} deliveries={thread.deliveries}
+        readBoundary={textBoundary} fullscreen={canvas.fullscreen} onSelectFile={canvas.openFile} onSelectDelivery={canvas.onSelectDelivery}
+        onToggleFullscreen={canvas.onToggleFullscreen} isCurrentOpening={canvas.isCurrentOpening} onClose={canvas.onClose} /> : null}
+    </LocaleProvider>
+  }
+
+  const { container, rerender } = render(<Harness />)
+  const opener = (name: string) => screen.getByRole("button", { name })
+  const open = (name: string) => { const target = opener(name); target.focus(); fireEvent.click(target) }
+  const close = () => { const target = screen.getByRole("button", { name: "Close preview" }); target.focus(); fireEvent.click(target) }
+  const host = () => container.querySelector('[data-slot="context-panel"]')
+  open("First opener")
+  await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
+
+  vi.useFakeTimers()
+  try {
+    close()
+    expect(host()).toHaveAttribute("inert")
+    expect(fetcher.mock.calls[0]![1].signal?.aborted).toBe(true)
+    open("Second opener")
+    await act(async () => { await vi.advanceTimersByTimeAsync(221) })
+    expect(host()).toHaveAttribute("data-state", "open")
+    expect(screen.getByRole("heading", { name: second.title })).toBeVisible()
+    expect(opener("Second opener")).toHaveFocus()
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/hub/library/artifacts/session_1/artifact_text",
+      "/api/hub/library/artifacts/session_1/second_artifact",
+    ])
+
+    close()
+    expect(fetcher.mock.calls[1]![1].signal?.aborted).toBe(true)
+    open("Second opener")
+    await act(async () => { await vi.advanceTimersByTimeAsync(221) })
+    expect(host()).toHaveAttribute("data-state", "open")
+    expect(screen.getByRole("heading", { name: second.title })).toBeVisible()
+    expect(fetcher.mock.calls[2]?.[0]).toBe("/api/hub/library/artifacts/session_1/second_artifact")
+    expect(opener("Second opener")).toHaveFocus()
+
+    close()
+    rerender(<Harness />) // A render is not an explicit open intent.
+    await act(async () => { await vi.advanceTimersByTimeAsync(221) })
+    expect(host()).toBeNull()
+    expect(opener("Second opener")).toHaveFocus()
+  } finally {
+    vi.useRealTimers()
+  }
+})
 
 it("delivery loading is quiet; Close aborts before delayed unmount and explicit reopen reads fresh bytes", async () => {
   localStorage.setItem("kokoro.web.auth-index-subject", "preview-reader")
@@ -666,7 +788,7 @@ it("switching exact activity A to B returns keyboard focus to B when the same pa
 
 // Pointer activation need not focus a button (notably Safari). Identity, not
 // ambient document.activeElement or a repeated tool label, owns the return target.
-it.each(["pointer", "switch", "replace", "hidden", "hidden-after-unrelated-focus"] as const)("activity detail restores an exact visible target after %s", async scenario => {
+it.each(["pointer", "keyboard", "switch", "replace", "hidden", "hidden-after-unrelated-focus"] as const)("activity detail restores an exact visible target after %s", async scenario => {
   const activity = (id: string): Extract<RunProcessActivity, { activity: "tool" }> => ({ activity: "tool", activity_id: id, segment_id: "segment", display_code: "tool.mcp.call", status: "completed", action_title: "Read wiki" })
   function Harness() {
     const [selected, select] = useState<string | null>(null)
@@ -693,6 +815,15 @@ it.each(["pointer", "switch", "replace", "hidden", "hidden-after-unrelated-focus
   if (scenario.startsWith("hidden")) fireEvent.click(screen.getByRole("button", { name: "Hide selected row" }))
   const target = scenario.startsWith("hidden") ? screen.getByRole("textbox", { name: "Composer" }) : rows()[0]!
   const close = screen.getByRole("button", { name: "Close preview" })
-  close.focus(); fireEvent.click(close)
+  if (scenario === "keyboard") {
+    const outside = rows()[1]!
+    outside.focus()
+    fireEvent.keyDown(outside, { key: "Escape" })
+    expect(close).toBeVisible()
+    close.focus()
+    fireEvent.keyDown(close, { key: "Escape" })
+  } else {
+    close.focus(); fireEvent.click(close)
+  }
   await waitFor(() => expect(target).toHaveFocus())
 })

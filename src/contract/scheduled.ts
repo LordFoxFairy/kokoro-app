@@ -2,6 +2,8 @@
 
 import { z } from "zod"
 
+import { zListScheduledTaskExecutionsResponse, zScheduledTaskExecution } from "@/generated/bff-scheduled-executions/zod.gen"
+
 function isIanaTimezone(value: string): boolean {
   try {
     new Intl.DateTimeFormat("en", { timeZone: value }).format()
@@ -144,3 +146,26 @@ export const scheduledTaskErrorSchema = z
   })
   .strict()
 export type ScheduledTaskError = z.infer<typeof scheduledTaskErrorSchema>
+
+// Wire fields and closed states come from the pinned owner operation; these checks protect browser links.
+function hasValidExecutionReferences(value: z.infer<typeof zScheduledTaskExecution>): boolean {
+  return (value.conversation_id === null) === (value.assistant_message_id === null)
+    && [value.conversation_id, value.assistant_message_id].every(reference => reference === null || reference.length > 0)
+    && (value.project_id === null || projectReferenceSchema.safeParse(value.project_id).success)
+}
+export const scheduledTaskExecutionSchema = zScheduledTaskExecution.refine(
+  hasValidExecutionReferences,
+  "A result link requires both valid Conversation and assistant Message references",
+)
+export type ScheduledTaskExecutionResponse = z.infer<typeof scheduledTaskExecutionSchema>
+export const scheduledTaskExecutionListResponseSchema = zListScheduledTaskExecutionsResponse.shape.data.refine(
+  value => value.executions.every(hasValidExecutionReferences) && value.next_cursor !== "",
+  "Invalid execution references or empty cursor",
+)
+
+export const scheduledTaskListQuerySchema = z.object({ projectId: projectReferenceSchema.optional() }).strict()
+export const scheduledTaskExecutionQuerySchema = scheduledTaskListQuerySchema.extend({
+  taskId: z.string().min(1).optional(),
+  cursor: z.string().min(1).optional(),
+  limit: z.number().int().min(1).max(50).optional(),
+}).strict()

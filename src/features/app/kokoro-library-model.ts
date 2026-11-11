@@ -24,7 +24,7 @@ export const FILTERS: readonly { value: LibraryFilter; key: MessageKey }[] = [
   { value: "other", key: "library.filterOther" },
 ]
 
-export type LibraryArtifactQuery = Readonly<{query: string; type: LibraryFilter}>
+export type LibraryArtifactQuery = Readonly<{ query: string; type: LibraryFilter; favoritesOnly?: boolean }>
 
 export type LibraryUrlState = {
   filter: LibraryFilter

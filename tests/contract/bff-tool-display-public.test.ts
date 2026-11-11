@@ -4,17 +4,37 @@ import { resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { expect, it } from "vitest"
 import YAML from "yaml"
-import { BFF_TOOL_DISPLAY_CODES, BFF_TOOL_DISPLAY_PROVENANCE } from "@/generated/bff-tool-display"
+import { BFF_TOOL_DISPLAY_CODES, BFF_TOOL_DISPLAY_PROVENANCE, selectedResourceRefsWireSchema } from "@/generated/bff-tool-display"
 import { restorePublic27ToolDisplayContract, restorePublic26MessagePartsContract } from "./bff-tool-display-parent"
 import { restorePublic282FileToolDisplayContract } from "./bff-file-tool-display-parent"
+import { restorePublic2824FinalAnswerResourceContract, restorePublic2825LibraryFileDeletionContract, restorePublic2826LibraryFileSearchContract, restorePublic2827LibraryArtifactSourceContract, restorePublic2828LibraryArtifactCommandsContract, restorePublic2829DeliveryDisplayContract, restorePublic2830ProjectWebsitesContract, restorePublic2831AgentConnectionContract, restorePublic2832WorkspaceOutputsContract, restorePublic2833LineConnectionContract, restorePublic2834SlackConnectionContract } from "./bff-message-resource-parent"
 
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex")
+it("pins the whole Public28.24 parent and accepts only an opaque final-answer resource intent", async () => {
+  const raw = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
+  expect(hash(restorePublic2834SlackConnectionContract(raw))).toBe("ea0b6ff7b4ea4a0348a4dd579c2440dca32e58c5958b2374e8555e02b74382a6")
+  expect(hash(restorePublic2833LineConnectionContract(raw))).toBe("03d4add75d31c6c4dd22e7fcb3b4269556ad3ced87d29a5640976bc74f39810f")
+  expect(hash(restorePublic2832WorkspaceOutputsContract(raw))).toBe("e12a8078f5ecaa741c255a3bcec032d398d35309d845d3cf736dc764a0287d33")
+  expect(hash(restorePublic2831AgentConnectionContract(raw))).toBe("9fea8041e3eac479e5ea008e120729fb37637636bb6bf3ad8b94ac161ac8a88c")
+  expect(hash(restorePublic2830ProjectWebsitesContract(raw))).toBe("2e459bd39f73686ac6d458011b777f08ea17b79a1467e563cdbb299e044a3cf9")
+  expect(hash(restorePublic2829DeliveryDisplayContract(raw))).toBe("be6473bfa58332dee9f0417a10f6b21c8320efa79802151fe5b13f93753d4504")
+  expect(hash(restorePublic2828LibraryArtifactCommandsContract(raw))).toBe("495afa65989a1308194910b0b5ece62b4f9db0c84f8dc34e7e0f3b00f7c5294f")
+  expect(hash(restorePublic2827LibraryArtifactSourceContract(raw))).toBe("52b59b49be42bc3c1126b6fc94b1d88c440b7ac911c2631e8a0305f43f96bd08")
+  expect(hash(restorePublic2826LibraryFileSearchContract(raw))).toBe("c80d5aaba1732eca0fb7bc8f32f500adef99e7d884f579cfb7944b8b11e8901a")
+  expect(hash(restorePublic2825LibraryFileDeletionContract(raw))).toBe("008667f501044dc186e615b83370f96a7401de8027f25e7635248724fb165759")
+  expect(hash(restorePublic2824FinalAnswerResourceContract(raw))).toBe("921c4b7273580a5c64cf6a220808472e828239d4abfbc7b5b93138ecc055a429")
+  expect(() => restorePublic2824FinalAnswerResourceContract(raw.replace(", final_answer]", ", unknown]"))).toThrow()
+  const ref = { kind: "final_answer", resource_id: "assistant-message" }
+  expect(selectedResourceRefsWireSchema.parse([ref])).toEqual([ref])
+  for (const extra of [{ text: "body" }, { segment_id: "private" }, { revision: "7" }, { project_ref: "project" }, { sha256: "digest" }])
+    expect(selectedResourceRefsWireSchema.safeParse([{ ...ref, ...extra }]).success).toBe(false)
+})
 it("consumes the complete formal BFF28 once and restores the original whole Public27 and Public26", async () => {
   const raw = await readFile("src/generated/bff-public-openapi.yaml", "utf8")
-  expect(hash(raw)).toBe("ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7")
+  expect(hash(raw)).toBe("a26431d45ad96c4e80e6751d61e66a14b3933ae7c2ffb6f9e7df57fcc7e6808f")
   const spec = YAML.parse(raw)
-  expect(spec.info.version).toBe("28.17.0")
-  expect(BFF_TOOL_DISPLAY_PROVENANCE).toEqual({ ownerCommit: "853ca9a5d8da3500b0c37543c72198a520e46225", sourceSha256: hash(raw), openapiVersion: "28.17.0" })
+  expect(spec.info.version).toBe("28.35.0")
+  expect(BFF_TOOL_DISPLAY_PROVENANCE).toEqual({ ownerCommit: "18dcc30179632eb32a86f160a5f13c71eb1c5d27", sourceSha256: hash(raw), openapiVersion: "28.35.0" })
   expect(BFF_TOOL_DISPLAY_CODES).toEqual(["tool.execution", "tool.file.read", "tool.mcp.discover", "tool.mcp.describe", "tool.mcp.call", "tool.web.search", "tool.web.fetch", "tool.file.write", "tool.file.deliver"])
   expect(spec.components.schemas.RunToolActivity.properties.display_code.enum).toEqual(BFF_TOOL_DISPLAY_CODES)
   expect(hash(restorePublic282FileToolDisplayContract(raw))).toBe("e0bb74069c65fb8d414a6a3cb0d6f4c8d9bcb40bb693c2409a9cbe051b8bac53")

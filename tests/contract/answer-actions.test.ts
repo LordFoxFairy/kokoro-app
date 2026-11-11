@@ -29,7 +29,7 @@ it("restores the entire formal28.9 parent and rejects partial or unrelated28.10 
     raw + "\n",
     raw.replace("getMessageFeedback", "getWrongFeedback"),
     raw.replace("#/components/schemas/RunDisplaySkill", "#/components/schemas/UnknownSkill"),
-    raw.replace("version: 28.17.0", "version: 28.18.0"),
+    raw.replace("  version: 28.35.0\n", "  version: 28.36.0\n"),
   ]) {
     expect(bad).not.toBe(raw)
     expect(() => restorePublic289MessageActionsContract(bad)).toThrow(/drift/)

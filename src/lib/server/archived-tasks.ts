@@ -6,8 +6,6 @@ import {
   validateArchivedTasks,
 } from "@/lib/archived-tasks.schema";
 import { productBffConfig, productBffHeaders } from "./product-bff";
-import { oidcRpConfig } from "./oidc-provider";
-import { currentProductSession } from "./product-session";
 import { requestWithDomain } from "./upstream-http";
 
 export async function archivedTasks(request: Request): Promise<Response> {
@@ -23,9 +21,8 @@ export async function archivedTasks(request: Request): Promise<Response> {
       { error: { code, message: code, retryable: status >= 500 } },
       { status, headers },
     );
-  const config = productBffConfig(),
-    rp = oidcRpConfig(process.env);
-  if (!config || !rp) return fail(503, "archived_tasks_dependency_unavailable");
+  const config = productBffConfig(), tenantId = process.env.KOKORO_TENANT_ID?.trim();
+  if (!config || !tenantId || tenantId.length > 256) return fail(503, "archived_tasks_dependency_unavailable");
   const url = new URL(request.url),
     origin = new URL(config.session.webOrigin);
   if (request.method !== "GET")
@@ -104,17 +101,12 @@ export async function archivedTasks(request: Request): Promise<Response> {
   };
   const operation = async () => {
     check();
-    const session = await currentProductSession(request, config.session);
+
     check();
-    if (
-      !session ||
-      session.accessExpiresAt <= Date.now() ||
-      session.expiresAt <= Date.now()
-    )
-      return fail(401, "session_invalid");
+
     try {
       if (cursor !== undefined)
-        archivedTasksCursor({value:cursor,subject:session.subject,limit:limit,...(rp.tenantId===undefined?{}:{tenant:rp.tenantId})});
+        archivedTasksCursor({value:cursor,subject:undefined,limit:limit,tenant:tenantId});
     } catch {
       return fail(400, "archived_tasks_invalid_request");
     }
@@ -128,7 +120,7 @@ export async function archivedTasks(request: Request): Promise<Response> {
         signal: controller.signal,
         timeoutMs: Math.max(1, Math.ceil(deadline - performance.now())),
         maxResponseBytes: 1_048_576,
-        headers: productBffHeaders(config, session, requestId),
+        headers: productBffHeaders(config, request, requestId),
       },
     );
     if (retired || controller.signal.aborted) {
@@ -176,7 +168,7 @@ export async function archivedTasks(request: Request): Promise<Response> {
       const raw = parseArchivedTasksJson(text);
       output =
         status === 200
-          ? validateArchivedTasks({raw:raw,subject:session.subject,limit:limit,...(cursor===undefined?{}:{cursor:cursor}),...(rp.tenantId===undefined?{}:{tenant:rp.tenantId})})
+          ? validateArchivedTasks({raw:raw,subject:undefined,limit:limit,...(cursor===undefined?{}:{cursor:cursor}),tenant:tenantId})
           : archiveErrors[status]?.parse(raw);
       if (
         !output ||
@@ -189,26 +181,9 @@ export async function archivedTasks(request: Request): Promise<Response> {
     } catch {
       return fail(502, "archived_tasks_response_invalid");
     }
-    const latest = await currentProductSession(request, config.session);
+
     check();
-    if (
-      !latest ||
-      [
-        "id",
-        "generation",
-        "subject",
-        "access",
-        "accessExpiresAt",
-        "expiresAt",
-      ].some(
-        (k) =>
-          latest[k as keyof typeof latest] !==
-          session[k as keyof typeof session],
-      ) ||
-      latest.accessExpiresAt <= Date.now() ||
-      latest.expiresAt <= Date.now()
-    )
-      return fail(401, "session_invalid");
+
     if (status !== 200) {
       const e = output as { error: { code: string; retryable: boolean } };
       output = {

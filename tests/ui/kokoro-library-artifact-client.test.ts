@@ -5,7 +5,7 @@ import { beginLibraryArtifactDownload, getLibraryArtifact, listLibraryArtifacts 
 const item = {
   kind: "artifact", conversation_id: "conversation-1", artifact_id: "artifact-1", asset_id: "asset-1",
   artifact_kind: "document", title: "Report", filename: "report.pdf", mime_type: "application/pdf",
-  size_bytes: "2048", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-09-28T10:00:00Z",
+  size_bytes: "2048", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-09-28T10:00:00Z", favorited: false,
 }
 const page = (items: unknown[], next_cursor: string | null = null) => ({ data: { items, next_cursor }, meta: { request_id: "req-1" } })
 
@@ -20,9 +20,11 @@ it("reads an empty Artifact page with cursor and never calls the old session pat
   expect(fetcher.mock.calls[1]?.[0]).toBe("/api/hub/library?kind=artifact&limit=50&cursor=next-1")
   await listLibraryArtifacts(null, new AbortController().signal, {query:"report & final",type:"documents"})
   expect(fetcher.mock.calls[2]?.[0]).toBe("/api/hub/library?kind=artifact&limit=50&q=report+%26+final&type=documents")
+  await listLibraryArtifacts(null, new AbortController().signal, { query: "", type: "all", favoritesOnly: true })
+  expect(fetcher.mock.calls[3]?.[0]).toBe("/api/hub/library?kind=artifact&limit=50&favorites_only=true")
   const rawQuery = "İ".repeat(200)
   await listLibraryArtifacts(null,new AbortController().signal,{query:rawQuery,type:"all"})
-  const sentQuery = new URL(String(fetcher.mock.calls[3]?.[0]),"http://fixture.local").searchParams.get("q")
+  const sentQuery = new URL(String(fetcher.mock.calls[4]?.[0]),"http://fixture.local").searchParams.get("q")
   expect(sentQuery).toBe(rawQuery)
   expect([...sentQuery!]).toHaveLength(200)
 })
@@ -45,6 +47,25 @@ it("checks two-part detail and preflights before native attachment, without a br
   expect(anchor.download).toBe("report.pdf")
   expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/content"))).toBe(false)
   click.mockRestore()
+})
+
+it("distinguishes omitted, direct and canonical Project source scope on exact detail only", async () => {
+  const projectRef = "project_12345678-1234-1234-1234-123456789abc"
+  const ownerDetail = (data: typeof item & { project_ref?: string | null }) => Response.json({ data, meta: { request_id: "req-1" } })
+  const fetcher = vi.fn().mockResolvedValueOnce(ownerDetail(item))
+    .mockResolvedValueOnce(ownerDetail({ ...item, project_ref: null }))
+    .mockResolvedValueOnce(ownerDetail({ ...item, project_ref: projectRef }))
+    .mockResolvedValueOnce(ownerDetail({ ...item, project_ref: "legacy-project-alias" }))
+    .mockResolvedValueOnce(Response.json(page([item])))
+  vi.stubGlobal("fetch", fetcher)
+  const signal = new AbortController().signal
+  const read = () => getLibraryArtifact(item.conversation_id, item.artifact_id, signal)
+  await expect(read()).resolves.not.toHaveProperty("projectRef")
+  await expect(read()).resolves.toHaveProperty("projectRef", null)
+  await expect(read()).resolves.toMatchObject({ projectRef, sourceRunId: item.source_run_id, contentSha256: item.content_sha256 })
+  await expect(read()).rejects.toThrow("library_artifacts_invalid_response")
+  const list = await listLibraryArtifacts(null, signal, { query: "", type: "all" })
+  expect(list.items[0]).not.toHaveProperty("projectRef")
 })
 
 it("does not launch attachment after a 404 detail, abort or mismatched identity", async () => {
@@ -80,11 +101,16 @@ function previewFetch(metadata = previewItem(), content: Response = previewRespo
   return fetcher
 }
 const selector = { conversationId: "conversation-1", artifactId: "artifact-1" }
+function readCanvasPreview(signal = new AbortController().signal, metadata = previewItem()) {
+  return artifactClient.readLibraryArtifactTextPreview(selector, signal, {
+    assetId: metadata.asset_id, sourceRunId: metadata.source_run_id, mimeType: metadata.mime_type, sizeBytes: metadata.size_bytes,
+  })
+}
 afterEach(() => vi.useRealTimers())
 
 it("previews small UTF8 Markdown only after exact detail and complete size/SHA verification", async () => {
   const fetcher = previewFetch()
-  await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).resolves.toEqual({ kind: "text", text: "# Delivered\n中文正文\n", mimeType: "text/markdown", sizeBytes: String(previewBytes.length) })
+  await expect(readCanvasPreview()).resolves.toEqual({ kind: "text", text: "# Delivered\n中文正文\n", mimeType: "text/markdown", sizeBytes: String(previewBytes.length) })
   expect(fetcher.mock.calls.map(([path]) => path)).toEqual([
     "/api/hub/library/artifacts/conversation-1/artifact-1", "/api/hub/library/artifacts/conversation-1/artifact-1/content",
   ])
@@ -92,15 +118,17 @@ it("previews small UTF8 Markdown only after exact detail and complete size/SHA v
 })
 
 it.each([{ size_bytes: "65537" }, { mime_type: "text/html" }, { mime_type: "image/png" }])("never reads unsupported or over-limit metadata content %j", async overrides => {
-  const fetcher = previewFetch(previewItem(previewBytes, overrides))
-  await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).resolves.toEqual({ kind: "unsupported" })
+  const metadata = previewItem(previewBytes, overrides)
+  const fetcher = previewFetch(metadata)
+  await expect(readCanvasPreview(undefined, metadata)).resolves.toEqual({ kind: "unsupported" })
   expect(fetcher).toHaveBeenCalledTimes(1)
 })
 
 it("accepts exactly 64KiB and an empty verified text file", async () => {
   for (const bytes of [new Uint8Array(65536).fill(97), new Uint8Array()]) {
-    previewFetch(previewItem(bytes), previewResponse(bytes))
-    await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).resolves.toEqual({ kind: "text", text: new TextDecoder().decode(bytes), mimeType: "text/markdown", sizeBytes: String(bytes.length) })
+    const metadata = previewItem(bytes)
+    previewFetch(metadata, previewResponse(bytes))
+    await expect(readCanvasPreview(undefined, metadata)).resolves.toEqual({ kind: "text", text: new TextDecoder().decode(bytes), mimeType: "text/markdown", sizeBytes: String(bytes.length) })
   }
 })
 
@@ -110,27 +138,28 @@ it.each([
   { name: "MIME mismatch", metadata: {}, headers: { "content-type": "text/html" } },
 ])("rejects $name rather than displaying unverified bytes", async ({ metadata, headers }) => {
   previewFetch(previewItem(previewBytes, metadata), previewResponse(previewBytes, headers))
-  await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).rejects.toThrow()
+  await expect(readCanvasPreview()).rejects.toThrow()
 })
 
 it("rejects actual early EOF, a chunk exceeding the hard limit and invalid UTF8 despite a correct hash", async () => {
   previewFetch(previewItem(), previewResponse(previewBytes.slice(0, -1), { "content-length": String(previewBytes.length) }))
-  await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).rejects.toThrow()
+  await expect(readCanvasPreview()).rejects.toThrow()
   previewFetch(previewItem(), previewResponse(new Uint8Array(65537), { "content-length": String(previewBytes.length) }))
-  await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).rejects.toThrow()
+  await expect(readCanvasPreview()).rejects.toThrow()
   const badUtf8 = new Uint8Array([0xff])
-  previewFetch(previewItem(badUtf8), previewResponse(badUtf8))
-  await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).rejects.toThrow()
+  const metadata = previewItem(badUtf8)
+  previewFetch(metadata, previewResponse(badUtf8))
+  await expect(readCanvasPreview(undefined, metadata)).rejects.toThrow()
 })
 
 it("does not request content after rejected identity or owner detail and does not follow a content redirect", async () => {
   for (const response of [Response.json({ data: { ...previewItem(), artifact_id: "foreign" }, meta: { request_id: "r" } }), new Response("", { status: 404 })]) {
     const fetcher = vi.fn().mockResolvedValue(response); vi.stubGlobal("fetch", fetcher)
-    await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).rejects.toThrow()
+    await expect(readCanvasPreview()).rejects.toThrow()
     expect(fetcher).toHaveBeenCalledOnce()
   }
   previewFetch(previewItem(), new Response(null, { status: 302, headers: { location: "https://foreign.test/bytes" } }))
-  await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).rejects.toThrow()
+  await expect(readCanvasPreview()).rejects.toThrow()
 })
 
 it("the one 10s deadline includes a stalled detail; a late detail never dispatches content", async () => {
@@ -138,7 +167,7 @@ it("the one 10s deadline includes a stalled detail; a late detail never dispatch
   let finish!: (response: Response) => void
   const fetcher = vi.fn().mockImplementation(() => new Promise<Response>(resolve => { finish = resolve }))
   vi.stubGlobal("fetch", fetcher)
-  const reading = artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)
+  const reading = readCanvasPreview()
   const rejected = expect(reading).rejects.toThrow()
   await vi.advanceTimersByTimeAsync(10000)
   await rejected
@@ -155,7 +184,7 @@ it("cancels an in-flight body and never resets the deadline after detail headers
   const fetcher = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
     .mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), { headers: { "content-type": "text/markdown", "content-length": String(previewBytes.length) } }))
   vi.stubGlobal("fetch", fetcher)
-  const reading = artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)
+  const reading = readCanvasPreview()
   const rejected = expect(reading).rejects.toThrow()
   await vi.advanceTimersByTimeAsync(9000)
   finish(Response.json({ data: previewItem(), meta: { request_id: "r" } }))
@@ -170,7 +199,7 @@ it("a caller cancel aborts the original shared signal before a late detail can d
   let finish!: (response: Response) => void
   const fetcher = vi.fn().mockImplementation(() => new Promise<Response>(resolve => { finish = resolve }))
   vi.stubGlobal("fetch", fetcher)
-  const reading = artifactClient.readLibraryArtifactTextPreview(selector, abort.signal)
+  const reading = readCanvasPreview(abort.signal)
   const rejected = expect(reading).rejects.toThrow()
   abort.abort()
   await rejected
@@ -186,7 +215,7 @@ it("cancels a late content response body instead of consuming or abandoning it a
   const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ data: previewItem(), meta: { request_id: "r" } }))
     .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve }))
   vi.stubGlobal("fetch", fetcher)
-  const reading = artifactClient.readLibraryArtifactTextPreview(selector, abort.signal)
+  const reading = readCanvasPreview(abort.signal)
   const rejected = expect(reading).rejects.toThrow()
   for (let i = 0; i < 10 && fetcher.mock.calls.length < 2; i++) await Promise.resolve()
   expect(fetcher).toHaveBeenCalledTimes(2)
@@ -197,10 +226,11 @@ it("cancels a late content response body instead of consuming or abandoning it a
 })
 
 it("plain text uses the same verified bounded flow, and a broken stream is never a partial text success", async () => {
-  previewFetch(previewItem(previewBytes, { mime_type: "text/plain" }), previewResponse(previewBytes, { "content-type": "text/plain" }))
-  await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).resolves.toEqual({ kind: "text", text: new TextDecoder().decode(previewBytes), mimeType: "text/plain", sizeBytes: String(previewBytes.length) })
+  const metadata = previewItem(previewBytes, { mime_type: "text/plain" })
+  previewFetch(metadata, previewResponse(previewBytes, { "content-type": "text/plain" }))
+  await expect(readCanvasPreview(undefined, metadata)).resolves.toEqual({ kind: "text", text: new TextDecoder().decode(previewBytes), mimeType: "text/plain", sizeBytes: String(previewBytes.length) })
   previewFetch(previewItem(), new Response(new ReadableStream({ start(controller) { controller.error(new Error("broken body")) } }), { headers: { "content-type": "text/markdown", "content-length": String(previewBytes.length) } }))
-  await expect(artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)).rejects.toThrow()
+  await expect(readCanvasPreview()).rejects.toThrow()
 })
 
 it("SHA verification is inside the original total deadline, including an uncooperative late digest", async () => {
@@ -209,7 +239,7 @@ it("SHA verification is inside the original total deadline, including an uncoope
   let finish!: (bytes: ArrayBuffer) => void
   const digest = vi.fn(() => new Promise<ArrayBuffer>(resolve => { finish = resolve }))
   vi.stubGlobal("crypto", { subtle: { digest } })
-  const reading = artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal)
+  const reading = readCanvasPreview()
   const rejected = expect(reading).rejects.toThrow()
   await vi.advanceTimersByTimeAsync(9000)
   expect(digest).toHaveBeenCalledOnce()
@@ -217,4 +247,20 @@ it("SHA verification is inside the original total deadline, including an uncoope
   await rejected
   finish(new Uint8Array(createHash("sha256").update(previewBytes).digest()).buffer)
   await vi.advanceTimersByTimeAsync(1)
+})
+
+it("reads the complete exact Canvas CSV and does not fetch bytes for a different source Run", async () => {
+  const text = 'City,Note\r\n"New York, NY","said ""hello"""\r\n'
+  const bytes = new TextEncoder().encode(text)
+  const mimeType = "text/csv"
+  const sizeBytes = String(bytes.byteLength)
+  const expected = { assetId: "asset-1", sourceRunId: "run-1", mimeType, sizeBytes }
+  const read = () => artifactClient.readLibraryArtifactTextPreview(selector, new AbortController().signal, expected)
+  const foreign = previewFetch(previewItem(bytes, { mime_type: mimeType, source_run_id: "different-run" }))
+  await expect(read()).rejects.toThrow("library_artifact_preview_metadata_changed")
+  expect(foreign).toHaveBeenCalledOnce()
+
+  const valid = previewFetch(previewItem(bytes, { mime_type: mimeType }), previewResponse(bytes, { "content-type": mimeType }))
+  await expect(read()).resolves.toEqual({ kind: "text", text, mimeType, sizeBytes })
+  expect(valid).toHaveBeenCalledTimes(2)
 })

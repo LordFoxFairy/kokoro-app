@@ -1,7 +1,7 @@
 // Snapshot hydration establishes the current read model; the durable AG-UI
 // watermark then resumes only frames committed after that snapshot.
 
-import type { Delivery, SessionSnapshot } from "@/contract/http"
+import type { PrivateDelivery, SessionSnapshot } from "@/contract/http"
 import {
   createSessionStreamState,
   type AttributedRunFailure,
@@ -13,7 +13,7 @@ import {
 } from "./state"
 
 // snake→camel 的成果投影：live 事件与 snapshot 双源共用同一领域形状。
-export function deliveryFromSnapshot(delivery: Delivery): SessionDelivery {
+export function deliveryFromSnapshot(delivery: PrivateDelivery): SessionDelivery {
   return {
     conversationId: delivery.conversation_id,
     artifactId: delivery.artifact_id,
@@ -24,6 +24,7 @@ export function deliveryFromSnapshot(delivery: Delivery): SessionDelivery {
     size: delivery.size,
     runId: delivery.run_id,
     createdAt: delivery.created_at,
+    ...(delivery.display_path === undefined ? {} : { displayPath: delivery.display_path }),
   }
 }
 
@@ -38,6 +39,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     id: message.message_id,
     role: message.role,
     content: message.content ?? "",
+    ...(message.role === "user" && (message.status === "pending" || message.status === "failed") ? { deliveryStatus: message.status } : {}),
     ...(message.role === "assistant" && !("rendering" in message) && message.status === "completed" ? { textState: "completed" as const } : {}),
     ...("rendering" in message ? { orderedContainer: true } : {}),
     runId: message.run_id ?? message.message_id,

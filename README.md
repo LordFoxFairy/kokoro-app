@@ -1,3 +1,11 @@
+## T-01 标准认证消费者（2026-11-03，本地候选）
+
+固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` / browser-private auth-session1.0.0 的原字节和生成 codec；状态 strict data 只含匿名 false 或真实 subject/tenant/RFC3339 UTC expiry。普通业务不再经 Web 假claims 或前后/me；原生登录/退出/CSRF交互安全、原body/key/CAS/receipt与unknown显式恢复保持。UI寿命和跨标签无秘密失效不成为认证证明。
+
+App显式 `/api/auth/session` GET 默认rolling、逐条透传框架Set-Cookie，RSC明确refresh=false且不写/清Cookie；raw `/iam/get-session` 与query/alias闭集关闭，原生交互仍使用正式relay3。Admin只观察同一状态，不另建CSRF/refresh/store；资格/me仍由当前BFF/IAM政策判定，401/403、身份变化、pagehide与迟到响应退休私有UI，不自动重发写命令。
+
+Root在冻结输入上已完成contract452、architecture50、默认6390/0skip、lint/types/build/posttypes；当前仅候选工程验收，真实BFF/IAM组合、共享浏览器登录/rolling/撤权仍待Root验证，未合并main、部署或声称G1通过。旧测试中专属于已删除假id/generation/access与前后/me的oracle，按同一D0退休；Cookie/BFF错误、取消/有界I/O、UI epoch/ABA与unknown原命令风险由实际边界测试承接，不以删失败断言放宽生产。
+
 ## 2026-10-22 精确模型选价绑定（本地已验）
 
 已固定BFF a77276b／Public23完整原件并同步七生成器和在线Docs；费率必填精确模型修订ID＋摘要，生产同源桥及原身份／预算／恢复规则不变。完整App门4749 PASS／0SKIP、preview108零重试和Docs检查通过，四MCP WIP原字节保留。正常后台与Agent真实结算仍待，详见 [docs/CURRENT.md](docs/CURRENT.md)；以下仅历史。
@@ -37,7 +45,8 @@ Public22.3.0/182固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`，canonical
 # Kokoro User Web
 
 `kokoro`（发布仓库名 `kokoro-app`，package `@kokoro/app`）是 Kokoro 的正式 User Web。
-它拥有页面、浏览器交互状态、Auth.js/OIDC Product Session 和同源 HTTP adapter；不拥有 Conversation、
+它拥有页面、浏览器交互状态与同源 HTTP adapter；第一方登录使用 IAM 签发的原生 HttpOnly Session cookie，
+不再运行历史 Auth.js/OIDC RP。OAuth/OIDC 授权服务器与第三方连接保持独立。它不拥有 Conversation、
 Message、Project、Run、Billing、Capability 等服务端业务事实，也不拥有 PostgreSQL 或 Redis。
 
 ## 边界
@@ -51,8 +60,9 @@ Browser
 
 - 浏览器只访问当前站点的 `/api/*`，不持有服务地址、workload token、runtime JWT、tenant/site
   选择器或内部凭据。
-- Web 以部署侧 `KOKORO_DOMAIN` 生成受信 `Forwarded` 上下文，并在线核验 Product Session 后
-  向 BFF 传递单一 Bearer；旧 sealed cookie 不再参与认证。
+- Web 以部署侧 `KOKORO_DOMAIN` 生成受信 `Forwarded` 上下文；仅将 allowlist 内的 IAM issuer Cookie、
+  配置 Origin 和 Web 服务身份交给 BFF 做在线准入，不把浏览器自报 tenant/subject 当 authority。
+  当前业务认证传递仍待 Task A 标准重设计；已否决的 Session 引用方案不再实施。
 - Web 的同源 API 是 `browser-private` surface，只服务当前 Web，不进入 Developer API 门户。
   对外 Product API 只由 `kokoro-bff` 的 `public` contract 发布。
 - Web 与 BFF 的 Agent 对话事件网络协议只允许 AG-UI。`SessionEvent` 只能作为 Web 内部 reducer

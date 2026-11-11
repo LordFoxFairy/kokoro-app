@@ -12,6 +12,7 @@ type UploadControlsProps = {
   intent: LibraryUploadIntent | null
   onSelect: (file: File) => void
   onSubmit: () => void
+  onCancel: () => void
 }
 
 function errorMessage(code: string, t: ReturnType<typeof useT>): string {
@@ -20,13 +21,13 @@ function errorMessage(code: string, t: ReturnType<typeof useT>): string {
   if (code === "idempotency_conflict") return t("library.uploadConflict")
   if (code === "file_upload_aborted") return t("library.uploadAborted")
   if (code === "library_file_scan_pending" || code === "idempotency_in_progress") return t("library.uploadPending")
-  if (code === "upload_invalid_response" || code === "upload_receipt_mismatch" || code === "upload_network_error")
+  if (code === "upload_invalid_response" || code === "upload_receipt_mismatch" || code === "upload_network_error" || code === "upload_cancelled_unknown")
     return t("library.uploadUnknown")
   return t("library.uploadFailed")
 }
 
 /** One visible file intent; its state is owned by the Library page across Tabs unmounts. */
-export function KokoroLibraryFileUpload({ intent, onSelect, onSubmit }: UploadControlsProps) {
+export function KokoroLibraryFileUpload({ intent, onSelect, onSubmit, onCancel }: UploadControlsProps) {
   const t = useT()
   const uploading = intent?.phase === "uploading"
   return <section className={styles.fileUpload}>
@@ -49,6 +50,9 @@ export function KokoroLibraryFileUpload({ intent, onSelect, onSubmit }: UploadCo
       >
         {intent?.phase === "recoverable" ? t("library.uploadRetry") : uploading ? t("library.uploading") : t("library.uploadSubmit")}
       </Button>
+      {intent?.phase === "selected" || uploading ? (
+        <Button type="button" variant="outline" onClick={onCancel}>{t("firstSite.cancel")}</Button>
+      ) : null}
     </div>
     {intent !== null ? <p className={styles.fileUploadSelection}>{intent.file.name}</p> : null}
     <p className={styles.fileUploadHint}>{t("library.uploadHint")}</p>

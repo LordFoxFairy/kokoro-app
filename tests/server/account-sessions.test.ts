@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-const { session, upstream } = vi.hoisted(() => ({ session: vi.fn(), upstream: vi.fn() }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession: session }))
+const { upstream } = vi.hoisted(() => ({ upstream: vi.fn() }))
+vi.mock("@/lib/server/product-bff", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/product-bff")>()),
+}))
 vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain: upstream }))
 import { accountSessions } from "@/lib/server/account-sessions"
 import * as listRoute from "@/app/api/account/sessions/route"
 import * as revokeRoute from "@/app/api/account/sessions/[sessionId]/route"
 const sid = { session_id: "current", created_at: "2026-10-14T00:00:00.000Z", expires_at: "2026-10-15T00:00:00.000Z" }
-const claims = { id: "opaque", generation: 3, subject: "alice", access: "private-access", accessExpiresAt: Date.now() + 100000, expiresAt: Date.now() + 200000 }
-const request = (path = "/api/account/sessions", init: RequestInit = {}) => new Request(`https://internal.test${path}`, { ...init, headers: { host: "web.test", ...init.headers } })
+
+const request = (path = "/api/account/sessions", init: RequestInit = {}) => new Request(`https://internal.test${path}`, { ...init, headers: {cookie: "kokoro-issuer.session_token=session",  host: "web.test", ...init.headers } })
 const reply = (options: { status?: number; transform?: (raw: { data: { current_session: typeof sid; sessions: (typeof sid)[] }; meta: { request_id: string; next_cursor: null } }) => unknown; headers?: Record<string, string> } = {}) => {
   upstream.mockImplementation(async (_: string, _domain: string, init: { headers: Headers }) => {
     const id = init.headers.get("x-kokoro-request-id")!
@@ -17,16 +19,16 @@ const reply = (options: { status?: number; transform?: (raw: { data: { current_s
 }
 beforeEach(() => {
   vi.stubEnv("KOKORO_BFF_BASE_URL", "https://bff.test"); vi.stubEnv("KOKORO_DOMAIN", "web.test"); vi.stubEnv("KOKORO_WEB_REDIS_URL", "redis://fixture"); vi.stubEnv("KOKORO_WEB_ORIGIN", "https://web.test"); vi.stubEnv("KOKORO_WEB_AUTH_SECRET", "a".repeat(32)); vi.stubEnv("KOKORO_INTERNAL_SECRET_WEB_BFF", "fixture-secret")
-  session.mockReset().mockResolvedValue(claims); upstream.mockReset(); reply()
+   upstream.mockReset(); reply()
 })
 afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers() })
 describe("account session same-origin adapter", () => {
   it("reads a bound owner page with one Bearer and repeats the final session check", async () => {
     const response = await listRoute.GET(request("/api/account/sessions?limit=10&cursor=opaque"))
-    expect(response.status).toBe(200); expect(session).toHaveBeenCalledTimes(2)
+    expect(response.status).toBe(200); expect(upstream).toHaveBeenCalledOnce()
     const [, domain, init] = upstream.mock.calls[0]!
-    expect(domain).toBe("web.test"); expect(init.headers.get("authorization")).toBe("Bearer private-access")
-    expect(init.headers.get("cookie")).toBeNull(); expect(upstream.mock.calls[0]![0]).toBe("https://bff.test/v1/account/sessions?limit=10&cursor=opaque")
+    expect(domain).toBe("web.test"); expect(init.headers.get("authorization")).toBeNull()
+    expect(init.headers.get("cookie")).toBe("kokoro-issuer.session_token=session"); expect(upstream.mock.calls[0]![0]).toBe("https://bff.test/v1/account/sessions?limit=10&cursor=opaque")
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     expect((await response.json()).meta.request_id).toBe(response.headers.get("x-request-id"))
   })
@@ -61,7 +63,7 @@ describe("account session same-origin adapter", () => {
     const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1])); controller.close() } })
     const init: RequestInit & { duplex: "half" } = { method: "DELETE", body, duplex: "half", headers: { origin: "https://web.test", "content-length": "0" } }
     expect((await accountSessions(request("/api/account/sessions/other", init), "other")).status).toBe(400)
-    expect(session).not.toHaveBeenCalled(); expect(upstream).not.toHaveBeenCalled(); expect(body.locked).toBe(false)
+     expect(upstream).not.toHaveBeenCalled(); expect(body.locked).toBe(false)
   })
   it("bounds a hanging incoming DELETE stream and releases its reader before any owner I/O", async () => {
     vi.useFakeTimers(); const cancel = vi.fn(() => new Promise<void>(() => {}))
@@ -69,18 +71,10 @@ describe("account session same-origin adapter", () => {
     const init: RequestInit & { duplex: "half" } = { method: "DELETE", body, duplex: "half", headers: { origin: "https://web.test" } }
     const result = accountSessions(request("/api/account/sessions/other", init), "other")
     await vi.advanceTimersByTimeAsync(10000); expect((await result).status).toBe(503)
-    expect(cancel).toHaveBeenCalled(); expect(body.locked).toBe(false); expect(session).not.toHaveBeenCalled(); expect(upstream).not.toHaveBeenCalled()
+    expect(cancel).toHaveBeenCalled(); expect(body.locked).toBe(false);  expect(upstream).not.toHaveBeenCalled()
   })
-  it.each(["id", "generation", "subject", "access", "accessExpiresAt", "expiresAt"])("rejects final changed %s even under the same session", async (field) => {
-    session.mockResolvedValueOnce(claims).mockResolvedValueOnce({ ...claims, [field]: typeof claims[field as keyof typeof claims] === "number" ? 9 : "changed" })
-    expect((await accountSessions(request())).status).toBe(401)
-  })
-  it("rejects anonymous/expired sessions and storage failure without owner access", async () => {
-    session.mockResolvedValueOnce(null); expect((await accountSessions(request())).status).toBe(401)
-    session.mockResolvedValueOnce({ ...claims, expiresAt: 1 }); expect((await accountSessions(request())).status).toBe(401)
-    session.mockRejectedValueOnce(new Error("private storage URL")); const response = await accountSessions(request()); expect(response.status).toBe(503); expect(await response.text()).not.toContain("private storage")
-    expect(upstream).not.toHaveBeenCalled()
-  })
+
+
   it.each([
     (raw: { data: { current_session: typeof sid; sessions: (typeof sid)[] }; meta: { request_id: string; next_cursor: null } }) => ({ ...raw, token: "secret" }),
     (raw: { data: { current_session: typeof sid; sessions: (typeof sid)[] }; meta: { request_id: string; next_cursor: null } }) => ({ ...raw, data: { ...raw.data, current_session: { ...sid, token: "secret" } } }),
@@ -96,11 +90,10 @@ describe("account session same-origin adapter", () => {
     reply({ status, transform: (raw) => ({ error: { code, message: "private-owner-detail" }, meta: { request_id: raw.meta.request_id } }) })
     const r = await accountSessions(request()); expect(r.status).toBe(status); expect(await r.text()).not.toContain("private-owner-detail")
   })
-  it("has one absolute 10s deadline covering a noncooperating initial and final identity read", async () => {
-    vi.useFakeTimers(); session.mockReturnValueOnce(new Promise(() => {}))
-    let result = accountSessions(request()); await vi.advanceTimersByTimeAsync(10000); expect((await result).status).toBe(503)
-    session.mockResolvedValueOnce(claims).mockReturnValueOnce(new Promise(() => {}))
-    result = accountSessions(request()); await vi.advanceTimersByTimeAsync(10000); expect((await result).status).toBe(503)
+  it("has one absolute 10s deadline covering a noncooperating BFF read", async () => {
+    vi.useFakeTimers(); upstream.mockReturnValueOnce(new Promise(() => {}))
+    const result = accountSessions(request()); await vi.advanceTimersByTimeAsync(10000); expect((await result).status).toBe(503)
+    expect(upstream).toHaveBeenCalledOnce()
   })
   it("bounded route params cannot bypass the same absolute deadline", async () => {
     vi.useFakeTimers(); const result = revokeRoute.DELETE(request("/api/account/sessions/other", { method: "DELETE", headers: { origin: "https://web.test" } }), { params: new Promise(() => {}) })
@@ -136,9 +129,9 @@ describe("account session same-origin adapter", () => {
     await vi.advanceTimersByTimeAsync(0); expect(cancel).toHaveBeenCalled()
   })
   it("caller abort bounds a noncooperating identity read", async () => {
-    session.mockReturnValueOnce(new Promise(() => {})); const control = new AbortController()
+    upstream.mockReturnValueOnce(new Promise(() => {})); const control = new AbortController()
     const result = accountSessions(request(undefined, { signal: control.signal })); control.abort()
-    expect((await result).status).toBe(503); expect(upstream).not.toHaveBeenCalled()
+    expect((await result).status).toBe(503); expect(upstream).toHaveBeenCalledOnce()
   })
 
 })

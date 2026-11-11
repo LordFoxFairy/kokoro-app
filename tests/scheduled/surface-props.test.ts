@@ -8,6 +8,7 @@ import type {
 
 const client: ScheduledTaskClient = {
   listScheduledTasks: async () => [],
+  listScheduledExecutions: async () => ({ executions: [], nextCursor: null }),
   createScheduledTask: async () => ({
     id: "created",
     title: "Created",

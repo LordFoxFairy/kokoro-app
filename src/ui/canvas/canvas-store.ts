@@ -9,16 +9,24 @@ import type { ReactNode } from "react"
 import type {
   SessionDelivery,
   SessionStreamState,
-  WorkspaceFileEntry,
 } from "@/core/state"
 
 // 内容引用（非快照）：渲染时按引用向线程状态解析最新数据（工具结果回流即活更新）。
 // node 槽是通用 ReactNode 插槽——canvas 不绑死任何单一产物类型。
 export type CanvasActivityRef = { kind: "activity"; runId: string; activityId: string; subject: string; generation: number }
 
+export type WorkspaceOutputFile = Readonly<{
+  runId: string
+  versionId: string
+  path: string
+  mime: string
+  bytes: number
+  contentSha256: string
+}>
+
 export type CanvasContentRef =
   | CanvasActivityRef
-  | { kind: "file"; path: string }
+  | { kind: "file"; runId: string; versionId: string; epoch: object }
   | { kind: "delivery"; conversationId: string; artifactId: string }
   | { kind: "node"; title: string; node: ReactNode }
 
@@ -77,7 +85,9 @@ export function canvasSlot(current: CanvasState, key: string | null): CanvasSlot
 
 // 打开内容：换内容即展开（用户点击产物/工具本身就是打开意图，覆盖此前的手动关闭）。
 export function openCanvas(key: string, content: CanvasContentRef): void {
-  patchSlot(key, { content, open: true })
+  // Each explicit selection is a fresh intent, including the same artifact.
+  // Passive metadata/fullscreen updates keep this reference unchanged.
+  patchSlot(key, { content: { ...content }, open: true })
 }
 
 // 手动关闭（唯一记「closed」的路径）：内容留槽，重开入口据此可恢复。
@@ -89,7 +99,7 @@ export function closeCanvas(key: string): void {
 export function reopenCanvas(key: string): void {
   const slot = state.byKey[key]
   if (slot?.content) {
-    patchSlot(key, { open: true })
+    openCanvas(key, slot.content)
   }
 }
 
@@ -108,13 +118,14 @@ export function resetCanvasStore(): void {
 
 export type ResolvedCanvasContent =
   | (CanvasActivityRef & { activity: RunProcessActivity; terminal: boolean })
-  | { kind: "file"; file: WorkspaceFileEntry }
+  | { kind: "file"; file: WorkspaceOutputFile }
   | { kind: "delivery"; delivery: SessionDelivery }
   | { kind: "node"; title: string; node: ReactNode }
 
 export function resolveCanvasContent(
   ref: CanvasContentRef,
   thread: SessionStreamState,
+  files: readonly WorkspaceOutputFile[] = [],
 ): ResolvedCanvasContent | null {
   switch (ref.kind) {
     case "activity": {
@@ -123,9 +134,8 @@ export function resolveCanvasContent(
       return activity ? { ...ref, activity, terminal: thread.runTerminalsById?.[ref.runId] !== undefined } : null
     }
     case "file": {
-      // 清单里未及刷新的新文件以 MIME 兜底构造（路径即入口，不等 filesSync）。
-      const known = thread.files.find((file) => file.path === ref.path)
-      return { kind: "file", file: known ?? { path: ref.path, mime: "text/plain", bytes: 0 } }
+      const file = files.find((entry) => entry.runId === ref.runId && entry.versionId === ref.versionId)
+      return file ? { kind: "file", file } : null
     }
     case "delivery": {
       const delivery = thread.deliveries.find((d) => d.conversationId === ref.conversationId && d.artifactId === ref.artifactId)

@@ -12,7 +12,7 @@ CHAT-1当前：`use-active-archive-state`区分原请求未确认与owner历史�
 
 ## CHAT-1 同标签未决意图（2026-10-24，候选）
 
-`browser-submission-recovery.ts`按已验证subject、scope、conv持有有界sessionStorage记录，复用原请求builder/严格schema；ACK/明确放弃原key退休，晚ACK不删后继。page-clients的主体资格只由原Product Session成功准入授予，marker仅核变化；普通dispose保留，身份切换清前缀。读异常不是空记录；不存owner线程/凭据，不建立跨tab锁或自动POST。
+`browser-submission-recovery.ts`按已验证subject、scope、conv持有有界sessionStorage记录，复用原请求builder/严格schema；ACK/明确放弃原key退休，晚ACK不删后继。page-clients的主体资格只由native admission成功准入授予，marker仅核变化；普通dispose保留，身份切换清前缀。读异常不是空记录；不存owner线程/凭据，不建立跨tab锁或自动POST。
 
 ## 项目与全局 New（2026-10-24）
 
@@ -63,6 +63,7 @@ Web专属thread viewport统一隐藏滚动条槽以匹配Composer阅读轴；共
 - `page-clients.ts`：页面级单例客户端/引擎（`browserEngine` / `browserListClient` / `browserHubClient` / `browserBillingClient` / `browserPricingClient` / `browserTeamClient`）。仅浏览器构造，SSR 为 null；live 还须当前文档可信 subject 与 marker 一致，未准入返回 null。AppFrame 仅在无 lease 时借现 Move 通知唤醒重核，通知本身不授权。
 - `AUTH_INDEX_SUBJECT_KEY` / `readBrowserAuthIndexSubject` / `admitBrowserAuthSessionIndexes`：唯一 UI subject marker key 同时供跨标签事件过滤和可信探针前后身份比较；同 subject 新文档保留索引，不同 subject 只清 `kokoro.web.conversations.` 前缀后更新 marker。marker 仅撤销旧读取，不是认证或授权证明。
 - 域 controller hooks（各自持查询/store/回调）：`useComposerSelectors` / `useDraft` / `useConversationList` / `useConversationReaders` / `useAwaitingNotify` / `useCanvasWorkspace`。Skill source 选择只在 engine 会话内存中，不使用 browser store。
+- `useDraft` 沿 `kokoro.web.drafts` 的原 Conversation、`__pending__` 和 Project 键保存正文及 opaque 附件引用；附件稿只在当前正式准入主体及租户匹配时可见。选择、移除附件、带附件时编辑正文，以及直聊首页显式创作场景的模板、选项和正文编辑同步保存；其余正文编辑沿原防抖，正常 `pagehide` 在捕获阶段保存再退休。旧纯文本不升级为已验证引用，显式身份失效不写回旧稿。unknown 提交仍由原 journal 冻结 key/body，只有确定拒绝才恢复原稿且不覆盖更新。
 
 ## 协作者
 上游：`@/engine`（引擎/快照）。下游：composer/thread/rail/canvas/hitl 各域组件、四大面板、`@/lib/query`、各外部 store。

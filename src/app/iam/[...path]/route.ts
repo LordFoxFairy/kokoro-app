@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto"
 
 import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
-import { filterIssuerCookies, IAM_RELAY_POLICY, resolveBrowserIamGet } from "@/lib/server/iam-relay-policy"
-import { browserAuthorizeResponse, browserIamGetResponse, browserLogoutConfirmationResponse, nativeIamResponse } from "@/lib/server/iam-relay-response"
-import { browserLogoutFailureResponse, browserLogoutStartResponse } from "@/lib/server/iam-logout-response"
-import { oidcLoginRecovery } from "@/lib/server/oidc-login-recovery"
+import { filterIssuerCookies, resolveBrowserIamGet, IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
+import { browserIamGetResponse, nativeIamResponse } from "@/lib/server/iam-relay-response"
 import { requestIamRelay } from "@/lib/server/iam-relay-transport"
 
 export const runtime = "nodejs"
@@ -39,71 +37,11 @@ function safeShortHeader(value: string): boolean {
   return Buffer.byteLength(value) <= 256 && /^[\x20-\x7e]*$/u.test(value)
 }
 
-// Diagnostics intentionally retain only routing shape: the relay Location can
-// carry OIDC state and authorization codes, which must never enter logs.
-function authorizeLocationDiagnostics(value: string | null, webOrigin: string): Record<string, string | number | boolean> {
-  if (value === null) return { location_present: false }
-  try {
-    const target = new URL(value, webOrigin)
-    const rawTarget = `${target.pathname}${target.search}`
-    const path = target.pathname === "/api/auth/callback/kokoro-iam"
-      ? "rp_callback"
-      : IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname)
-        ? "interaction"
-        : resolveBrowserIamGet(`/iam${rawTarget}`, "GET") === null
-          ? "other"
-          : "iam_relay"
-    return {
-      location_present: true,
-      location_relative: value.startsWith("/"),
-      location_same_origin: target.origin === webOrigin,
-      location_path_kind: path,
-      location_query_count: [...target.searchParams.keys()].length,
-    }
-  } catch {
-    return { location_present: true, location_parseable: false }
-  }
-}
-
 function rawPathAndQuery(absoluteUrl: string): string | null {
   const scheme = absoluteUrl.indexOf("://")
   if (scheme < 1) return null
   const pathStart = absoluteUrl.indexOf("/", scheme + 3)
   return pathStart < 0 ? "/" : absoluteUrl.slice(pathStart)
-}
-
-async function readLogoutConfirmationBody(request: Request): Promise<Uint8Array | null> {
-  const declared = request.headers.get("content-length")
-  if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > 1024)) return null
-  if (request.body === null) return null
-  const reader = request.body.getReader()
-  const chunks: Uint8Array[] = []
-  let total = 0
-  let cancelled = false
-  let abortRead!: () => void
-  const aborted = new Promise<never>((_resolve, reject) => { abortRead = () => reject(new Error("logout confirmation body deadline")) })
-  const onAbort = (): void => { cancelled = true; abortRead(); void reader.cancel().catch(() => undefined) }
-  const deadline = setTimeout(onAbort, IAM_RELAY_POLICY.maxDurationMs)
-  request.signal.addEventListener("abort", onAbort, { once: true })
-  try {
-    if (request.signal.aborted) return null
-    while (true) {
-      const result = await Promise.race([reader.read(), aborted])
-      if (result.done) break
-      total += result.value.byteLength
-      if (total > 1024) { cancelled = true; void reader.cancel().catch(() => undefined); return null }
-      chunks.push(result.value)
-    }
-    const bytes = new Uint8Array(total)
-    let offset = 0
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
-    return bytes
-  } catch { return null }
-  finally {
-    clearTimeout(deadline)
-    request.signal.removeEventListener("abort", onAbort)
-    if (!cancelled) reader.releaseLock()
-  }
 }
 
 export async function GET(request: Request, context: RouteContext): Promise<Response> {
@@ -117,64 +55,34 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   if (rawPath !== expectedPath) return errorResponse("iam_relay_route_not_found", 404, id)
   const route = resolveBrowserIamGet(rawTarget, request.method)
   if (route === null) return errorResponse("iam_relay_route_not_found", 404, id)
-  const browserResponse = (response: Response): Response => browserIamGetResponse(
-    route.relativePath === "/oauth2/end-session" ? browserLogoutFailureResponse(request, response) : response, route.relativePath)
+  const response = (value: Response): Response => browserIamGetResponse(value, route.relativePath)
   if (incomingHeaderBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes) {
-    return browserResponse(errorResponse("iam_relay_request_too_large", 413, id))
+    return response(errorResponse("iam_relay_request_too_large", 413, id))
   }
-  if (request.headers.has("authorization")) return browserResponse(errorResponse("iam_relay_credential_rejected", 403, id))
+  if (request.headers.has("authorization")) return response(errorResponse("iam_relay_credential_rejected", 403, id))
   const config = iamRelayConfig(process.env)
-  if (config === null) return browserResponse(errorResponse("iam_relay_unavailable", 503, id))
-  const opaqueAuthorizeNavigation = route.relativePath === "/oauth2/authorize" &&
-    request.headers.get("host") === config.webHost && request.headers.get("origin") === "null"
-  if (!matchesCanonicalWebRequest(request, config, "GET") && !opaqueAuthorizeNavigation) {
-    return browserResponse(errorResponse("iam_relay_origin_rejected", 403, id))
+  if (config === null) return response(errorResponse("iam_relay_unavailable", 503, id))
+  if (!matchesCanonicalWebRequest(request, config, "GET")) {
+    return response(errorResponse("iam_relay_origin_rejected", 403, id))
   }
-  if (route.relativePath === "/oauth2/end-session") {
-    const query = new URLSearchParams(route.query)
-    const clientId = process.env.KOKORO_OIDC_CLIENT_ID?.trim()
-    if (!clientId || [...query.keys()].length !== 2 || query.getAll("client_id").length !== 1 ||
-      query.getAll("post_logout_redirect_uri").length !== 1 || query.get("client_id") !== clientId ||
-      query.get("post_logout_redirect_uri") !== `${config.webOrigin}/auth/sign-in`) {
-      return browserResponse(errorResponse("iam_logout_query_rejected", 400, id))
-    }
-  }
-  const origin = request.headers.get("origin")
   const contentLength = request.headers.get("content-length")
-  if (
-    request.headers.has("transfer-encoding") || request.body !== null ||
-    (contentLength !== null && contentLength !== "0")
-  ) return browserResponse(errorResponse("iam_relay_body_rejected", 400, id))
+  if (request.headers.has("transfer-encoding") || request.body !== null || (contentLength !== null && contentLength !== "0"))
+    return response(errorResponse("iam_relay_body_rejected", 400, id))
 
   const cookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
-  if (cookie === null) return browserResponse(errorResponse("iam_relay_cookie_invalid", 400, id))
-
+  if (cookie === null) return response(errorResponse("iam_relay_cookie_invalid", 400, id))
   const headers = new Headers()
   const accept = request.headers.get("accept")
   if (accept !== null) {
-    if (!safeShortHeader(accept)) return browserResponse(errorResponse("iam_relay_header_invalid", 400, id))
+    if (!safeShortHeader(accept)) return response(errorResponse("iam_relay_header_invalid", 400, id))
     headers.set("accept", accept)
   }
+  const origin = request.headers.get("origin")
   if (origin === config.webOrigin) headers.set("origin", origin)
   if (cookie !== "") headers.set("cookie", cookie)
   headers.set(SERVICE_HEADER, SERVICE_VALUE)
   headers.set(INTERNAL_SECRET_HEADER, config.secret)
   headers.set("x-request-id", id)
-
-  // Only an already-admitted top-level authorize navigation leaves the
-  // technical URL. API callers and rejected requests keep their contract;
-  // successful owner redirects still pass through unchanged.
-  const authorizeResult = (response: Response): Response => {
-    if (route.relativePath === "/oauth2/authorize" && response.status >= 400 &&
-      request.headers.get("sec-fetch-mode") === "navigate" && request.headers.get("sec-fetch-dest") === "document") {
-      const recovery = oidcLoginRecovery(request)
-      if (recovery) {
-        recovery.headers.set("x-request-id", response.headers.get("x-request-id") ?? id)
-        return browserResponse(recovery)
-      }
-    }
-    return browserResponse(response)
-  }
 
   try {
     const upstream = await requestIamRelay({
@@ -185,74 +93,74 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
       maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes,
       maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,
     })
-    const response = route.relativePath === "/oauth2/authorize"
-      ? browserAuthorizeResponse(upstream, config.webOrigin, config.secureCookies, id)
-      : route.relativePath === "/oauth2/end-session"
-        ? browserLogoutStartResponse(request, upstream, config.webOrigin, config.secureCookies, id)
-        : nativeIamResponse(upstream, config.webOrigin, config.secureCookies, id, route.relativePath)
-    if (response === null && route.relativePath === "/oauth2/authorize") {
-      console.error("Kokoro IAM authorize relay rejected", {
-        status: upstream.status,
-        content_type: upstream.headers.get("content-type") ?? "none",
-        has_location: upstream.headers.has("location"),
-        set_cookie_names: upstream.setCookies.map((cookie) => cookie.split("=", 1)[0] ?? "").join(","),
-        body_bytes: upstream.body.byteLength,
-        ...authorizeLocationDiagnostics(upstream.headers.get("location"), config.webOrigin),
-      })
-    }
-    return authorizeResult(response
-      ?? errorResponse("iam_relay_response_invalid", 502, id))
+    return response(
+      nativeIamResponse(upstream, config.webOrigin, config.secureCookies, id, route.relativePath) ?? errorResponse("iam_relay_response_invalid", 502, id),
+    )
   } catch {
-    return authorizeResult(errorResponse("iam_relay_unavailable", 503, id))
+    return response(errorResponse("iam_relay_unavailable", 503, id))
   }
 }
 
-async function confirmLogout(request: Request, context: RouteContext): Promise<Response> {
+async function nativeSignOut(request: Request, context: RouteContext): Promise<Response> {
   const id = requestId(request)
   const path = (await context.params).path
   const rawTarget = rawPathAndQuery(request.url)
-  if (request.method !== "POST" || path.join("/") !== "oauth2/end-session/confirm" ||
-    rawTarget !== "/iam/oauth2/end-session/confirm") return rejectMethod(request)
+  if (request.method !== "POST" || path.join("/") !== "sign-out" || rawTarget !== "/iam/sign-out") return rejectMethod(request)
   const config = iamRelayConfig(process.env)
   if (config === null) return errorResponse("iam_relay_unavailable", 503, id)
   if (!matchesCanonicalWebRequest(request, config, "POST")) return errorResponse("iam_relay_origin_rejected", 403, id)
-  if (request.headers.has("authorization") || incomingHeaderBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes) {
+  if (
+    request.headers.has("authorization") ||
+    request.headers.has(SERVICE_HEADER) ||
+    request.headers.has(INTERNAL_SECRET_HEADER) ||
+    incomingHeaderBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes
+  ) {
     return errorResponse("iam_relay_credential_rejected", 403, id)
   }
-  if (request.headers.get("content-type") !== "application/x-www-form-urlencoded") {
-    return errorResponse("iam_logout_form_rejected", 400, id)
+  if (request.headers.has("transfer-encoding") || (request.headers.has("content-length") && request.headers.get("content-length") !== "0")) {
+    return errorResponse("iam_relay_body_rejected", 400, id)
   }
-  const bytes = await readLogoutConfirmationBody(request)
-  if (bytes === null) return errorResponse("iam_logout_form_rejected", 400, id)
-  const body = new TextDecoder().decode(bytes)
-  const form = new URLSearchParams(body)
-  if ([...form.keys()].length !== 1 || form.getAll("action").length !== 1 || form.get("action") !== "confirm") {
-    return errorResponse("iam_logout_form_rejected", 400, id)
+  if (request.body !== null) {
+    try {
+      if ((await request.arrayBuffer()).byteLength !== 0) return errorResponse("iam_relay_body_rejected", 400, id)
+    } catch {
+      return errorResponse("iam_relay_body_rejected", 400, id)
+    }
   }
-  const cookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies, true)
-  if (cookie === null || !cookie.includes(`${config.secureCookies ? "__Secure-" : ""}kokoro-issuer.session_token.oauth_logout_confirmation=`)) {
-    return errorResponse("iam_logout_confirmation_required", 403, id)
-  }
-  const headers = new Headers({ origin: config.webOrigin, cookie, "content-type": "application/x-www-form-urlencoded",
-    "x-kokoro-service": SERVICE_VALUE, [INTERNAL_SECRET_HEADER]: config.secret, "x-request-id": id })
+  const cookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
+  if (cookie === null) return errorResponse("iam_relay_cookie_invalid", 400, id)
+  const headers = new Headers({
+    "content-type": "application/json",
+    origin: config.webOrigin,
+    [SERVICE_HEADER]: SERVICE_VALUE,
+    [INTERNAL_SECRET_HEADER]: config.secret,
+    "x-request-id": id,
+  })
+  if (cookie !== "") headers.set("cookie", cookie)
   try {
-    const upstream = await requestIamRelay({ url: `${config.bffOrigin}/iam/oauth2/end-session/confirm`, method: "POST",
-      body: bytes, headers, signal: request.signal, timeoutMs: IAM_RELAY_POLICY.maxDurationMs,
-      maxRequestBytes: 1024, maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes,
-      maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes })
-    return browserLogoutConfirmationResponse(upstream, config.webOrigin, config.secureCookies, id)
-      ?? errorResponse("iam_relay_response_invalid", 502, id)
-  } catch { return errorResponse("iam_relay_unavailable", 503, id) }
+    const upstream = await requestIamRelay({
+      url: `${config.bffOrigin}/iam/sign-out`,
+      method: "POST",
+      body: new TextEncoder().encode("{}"),
+      headers,
+      signal: request.signal,
+      timeoutMs: IAM_RELAY_POLICY.maxDurationMs,
+      maxRequestBytes: 2,
+      maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes,
+      maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,
+    })
+    return nativeIamResponse(upstream, config.webOrigin, config.secureCookies, id, "/sign-out") ?? errorResponse("iam_relay_response_invalid", 502, id)
+  } catch {
+    return errorResponse("iam_relay_unavailable", 503, id)
+  }
 }
 
 export async function POST(request: Request, context: RouteContext): Promise<Response> {
-  const response = await confirmLogout(request, context)
-  return request.method === "POST" && rawPathAndQuery(request.url) === "/iam/oauth2/end-session/confirm"
-    ? browserLogoutFailureResponse(request, response) : response
+  return nativeSignOut(request, context)
 }
 
 function rejectMethod(request: Request): Response {
-  return errorResponse("iam_relay_method_not_allowed", 405, requestId(request), { allow: "GET" })
+  return errorResponse("iam_relay_method_not_allowed", 405, requestId(request), { allow: "GET, POST" })
 }
 
 export const PUT = rejectMethod

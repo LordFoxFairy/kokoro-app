@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react"
-import { ChevronLeft, ChevronRight, Plus, Puzzle, SlidersHorizontal } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Puzzle, SlidersHorizontal, Paperclip, Library, History } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -63,15 +63,17 @@ function InstalledSkills({ client, canAct, onSelect, onManage, onAdd }: {
 
 /** A single picker for both the resources button and a typed slash. It reads
  * existing installed metadata; the shell owns the exact draft selection. */
-export function ComposerSkillsMenu({ skills, enabled, open, openFromSlash, onOpenChange, onSelect, onManage, onAdd, triggerRef, onCloseAutoFocus }: {
+export function ComposerSkillsMenu({ skills, enabled, skillsEnabled = true, open, openFromSlash, onOpenChange, onSelect, onManage, onAdd, onResourceSource, triggerRef, onCloseAutoFocus }: {
   skills: ComposerSkills | undefined
   enabled: boolean
+  skillsEnabled?: boolean
   open: boolean
   openFromSlash: boolean
   onOpenChange: (open: boolean) => void
   onSelect: (skill: SkillCard) => boolean
   onManage: () => void
   onAdd: () => void
+  onResourceSource?: (source: "upload" | "library" | "recent") => void
   triggerRef: RefObject<HTMLButtonElement | null>
   onCloseAutoFocus: (event: Event) => void
 }) {
@@ -133,7 +135,12 @@ export function ComposerSkillsMenu({ skills, enabled, open, openFromSlash, onOpe
       else onCloseAutoFocus(event)
     }}>
       <div className={styles.root}>
-        <button type="button" className={styles.row} aria-expanded={page === "skills"} onClick={() => { if (canAct()) setPage("skills") }} onKeyDown={event => { if (event.key === "ArrowRight" && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && canAct()) { event.preventDefault(); setPage("skills") } }}><Puzzle aria-hidden="true" />{t("rail.navSkills")}<ChevronRight className={styles.chevron} aria-hidden="true" /></button>
+        {onResourceSource ? <>
+          <button type="button" className={styles.row} onClick={() => manage(() => onResourceSource("upload"))}><Paperclip aria-hidden="true" />{t("firstSite.addLocalFile")}</button>
+          <button type="button" className={styles.row} onClick={() => manage(() => onResourceSource("library"))}><Library aria-hidden="true" />{t("composer.resourcesLibrary")}</button>
+          <button type="button" className={styles.row} onClick={() => manage(() => onResourceSource("recent"))}><History aria-hidden="true" />{t("composer.resourcesRecent")}</button>
+        </> : null}
+        <button type="button" className={styles.row} disabled={!skillsEnabled} aria-expanded={page === "skills"} onClick={() => { if (canAct()) setPage("skills") }} onKeyDown={event => { if (event.key === "ArrowRight" && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && canAct()) { event.preventDefault(); setPage("skills") } }}><Puzzle aria-hidden="true" />{t("rail.navSkills")}<ChevronRight className={styles.chevron} aria-hidden="true" /></button>
       </div>
       {page === "skills" && skills ? <div className={styles.picker}>
         <button type="button" className={`${styles.row} ${styles.back}`} onClick={() => setPage("root")}><ChevronLeft aria-hidden="true" />{t("rail.navSkills")}</button>

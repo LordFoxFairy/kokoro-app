@@ -9,7 +9,6 @@ import type {
   SessionToolCall,
   SessionTodo,
 } from "./state"
-import { normalizeRunTerminals } from "./state"
 import type { RunProcessActivity } from "@/contract/chat"
 
 // An active progress affordance belongs only to the exact current started Run.
@@ -57,7 +56,6 @@ function withRestoredTextSteps(
 }
 
 export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
-  state = normalizeRunTerminals(state)
   const items: ThreadItem[] = []
   const renderedRuns = new Set<string>()
   let i = 0
@@ -148,17 +146,16 @@ export type Segment = {
   activities: RunProcessActivity[]
 }
 
-// Live safe activities share the text steps' real sequence. Only consecutive
-// activities form a process group; unanchored snapshot values retain fallback.
+// Live safe activities share the text steps' real sequence. Only activities
+// anchored by an ordered step form a process group; unanchored snapshot values
+// are omitted rather than assigned a synthetic history position.
 export function groupSegments(
   steps: SessionStep[],
-  activities: readonly RunProcessActivity[] = [],
   messagesById: Readonly<Record<string, SessionMessage>> = {},
 ): Segment[] {
   // ordered 保留首次出现顺序；byId 仅做去重定位，二者指向同一对象。
   const ordered: Segment[] = []
   const byId = new Map<string, Segment>()
-  const anchoredActivities = new Set<string>()
   let activityGroup: Segment | null = null
   const segmentFor = (id: string): Segment => {
     const existing = byId.get(id)
@@ -174,7 +171,6 @@ export function groupSegments(
     if (step.kind === "activity") {
       activityGroup ??= segmentFor(step.segmentId)
       activityGroup.activities.push(step.activity)
-      anchoredActivities.add(step.activity.activity_id)
       continue
     }
     const message = step.kind === "text" ? messagesById[step.segmentId] : undefined
@@ -191,11 +187,6 @@ export function groupSegments(
       segment.subagents.push(step.subagent)
     }
     // text 步骤只标记该段存在；正文从 messagesById 取。
-  }
-  for (const activity of activities) {
-    if (anchoredActivities.has(activity.activity_id)) continue
-    const segmentId = activity.activity === "skill" ? `skill:${activity.preflight_id}` : activity.segment_id
-    segmentFor(segmentId).activities.push(activity)
   }
   return ordered
 }

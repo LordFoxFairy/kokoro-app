@@ -5,8 +5,7 @@ export const LAST_EVENT_ID_HEADER = "last-event-id"
 
 // IDs and hashes are opaque path segments. Encode them at the shared contract
 // boundary so a value containing `/`, `?`, `#`, or `%` cannot change the
-// upstream route shape. Hierarchical file paths are encoded by their caller
-// one segment at a time and remain intentionally separate from this helper.
+// upstream route shape. Virtual file paths are display only.
 function opaquePathSegment(value: string): string {
   return encodeURIComponent(value)
 }
@@ -20,17 +19,14 @@ export function snapshotPath(sessionId: string): string {
 export function eventsPath(sessionId: string): string {
   return `/sessions/${opaquePathSegment(sessionId)}/events`
 }
-export function filePath(sessionId: string, path: string): string {
-  return `/sessions/${opaquePathSegment(sessionId)}/files/${path}`
+export function workspaceOutputContentPath(sessionId: string, runId: string, versionId: string): string {
+  return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/workspace-outputs/${opaquePathSegment(versionId)}/content`
 }
 export function controlPath(sessionId: string, runId: string): string {
   return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/control`
 }
 export function runProcessPath(sessionId: string, runId: string): string {
   return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/process`
-}
-export function controlReceiptPath(sessionId: string, runId: string, commandId: string): string {
-  return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/control/${opaquePathSegment(commandId)}`
 }
 export function sessionsPath(): string {
   return `/sessions`
@@ -67,6 +63,10 @@ export function scheduledTaskPath(taskId: string): string {
 }
 export function scheduledTaskRetryPath(taskId: string): string {
   return `${scheduledTaskPath(taskId)}/retry`
+}
+
+export function scheduledTaskExecutionsPath(): string {
+  return `${scheduledTasksPath()}/executions`
 }
 
 export function messagePartsPath(sessionId: string, messageId: string): string {

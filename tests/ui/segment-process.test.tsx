@@ -55,7 +55,8 @@ it("before any process or token there is one accessible forming state, preservin
 })
 
 it("a process-only Run retains explicit queued, stopping and reconnect status without adding an answer placeholder", () => {
-  const props = { sessionId: "process-status", steps: [], messagesById: {}, activities: [{ activity: "tool" as const, activity_id: `act_${"5".repeat(64)}`, segment_id: `seg_${"6".repeat(64)}`, status: "completed" as const, display_code: "tool.file.deliver" as const }], isLive: true, mode: "fast" as const, stagedDecisions: {}, hitlActive: false, controlError: null }
+  const activity = { activity: "tool" as const, activity_id: `act_${"5".repeat(64)}`, segment_id: `seg_${"6".repeat(64)}`, status: "completed" as const, display_code: "tool.file.deliver" as const }
+  const props = { sessionId: "process-status", steps: [{ kind: "activity" as const, seq: "1", segmentId: activity.segment_id, activity }], messagesById: {}, isLive: true, mode: "fast" as const, stagedDecisions: {}, hitlActive: false, controlError: null }
   const { rerender } = render(<LocaleProvider><AssistantTurn {...props} /></LocaleProvider>)
   expect(screen.queryByText("Composing an answer")).not.toBeInTheDocument()
   for (const [phase, label] of [["queued", "Queued, waiting to execute"], ["resuming", "Resuming execution; decisions submitted"], ["cancelling", "Stopping, waiting for execution to finish"]] as const) {
@@ -69,9 +70,9 @@ it("a process-only Run retains explicit queued, stopping and reconnect status wi
 })
 
 it("HITL 卡独立于可收起的过程，手动收起不会隐藏决策入口", () => {
+  const hitlActivities = [{ activity: "tool" as const, activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running" as const, display_code: "tool.execution" as const }, { activity: "tool" as const, activity_id: `act_${"9".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "completed" as const, display_code: "tool.file.read" as const }]
   render(<LocaleProvider><AssistantTurn sessionId="session_1"
-    steps={[]}
-    activities={[{ activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.execution" }, { activity: "tool", activity_id: `act_${"9".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "completed", display_code: "tool.file.read" }]}
+    steps={hitlActivities.map((activity, index) => ({ kind: "activity" as const, seq: String(index + 1), segmentId: activity.segment_id, activity }))}
     messagesById={{}} isLive mode="thinking" stagedDecisions={{}} hitlActive controlError={null} onToolDecision={() => {}}
     interaction={makeInteractionState("tool_1", ["tool_1"], { description: "需要批准写入文件" })} executionPhase="waiting" /></LocaleProvider>)
   const summary = document.querySelector<HTMLButtonElement>('[data-slot="collapsible-trigger"]')
@@ -229,7 +230,6 @@ it.each([
 ] as const)("%s survives snapshot and reopened ordered history as a category, not assistant text", (display_code, label) => {
   const activity = { activity: "tool", activity_id: `act_${"c".repeat(64)}`, segment_id: `seg_${"d".repeat(64)}`, status: "completed", display_code, display_detail: { kind: "file", name: "published-output.md" } }
   const owner = { message_id: "file-owner", run_id: "file-run", role: "assistant", content: "public answer", status: "completed", created_at: "now" }
-  const snapshot = parseSessionSnapshot({ ...makeSnapshot(), messages: [owner], execution_process: { run_id: "file-run", todos: null, activities: [activity], next_cursor: null } })
   const props = { sessionId: "session", isStreaming: false, isReconnecting: false, hasFailed: false, canRetryPendingSubmission: false, creditRejected: false, onOpenBilling: vi.fn(), onOpenPricing: vi.fn(), onRetry: vi.fn(), mode: "fast" as const, stagingByRun: {}, hitlRunId: null, controlError: null }
   const show = (thread: ReturnType<typeof stateFromSnapshot>) => render(<LocaleProvider><ConversationThread {...props} thread={thread} /></LocaleProvider>)
   const revealCategory = () => {
@@ -237,11 +237,6 @@ it.each([
     expect(screen.getByText(label)).toBeVisible()
     expect(screen.getByText("published-output.md").parentElement).toHaveAttribute("title", "published-output.md")
   }
-  const view = show(stateFromSnapshot(snapshot))
-  revealCategory()
-  expect(screen.getByText("public answer")).toBeVisible()
-  view.unmount()
-
   const reopened = parseSessionSnapshot({ ...makeSnapshot(), messages: [{ ...owner, content: null, rendering: { mode: "ordered", format_version: 1, revision: "3", event_watermark: null, parts_cursor: "opaque" } }] })
   const text = (id: string, value: string, seq: string) => ({ kind: "text", part_id: id, segment_id: id, first_sequence: seq, latest_sequence: seq, text: value, offset: "0", end: String(value.length), total_scalars: String(value.length), completed: true })
   const page = messagePartsPageSchema.parse({ session_id: "session", message_id: owner.message_id, run_id: owner.run_id, format_version: 1, revision: "3", event_watermark: null, items: [

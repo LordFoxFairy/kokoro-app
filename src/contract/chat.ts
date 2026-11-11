@@ -1,10 +1,10 @@
-import { selectedCustomApiProfilesWireSchema } from "@/generated/bff-tool-display"
+import { selectedCustomApiProfilesWireSchema, selectedResourceRefsWireSchema } from "@/generated/bff-tool-display"
 // Canonical v1 runtime contract. Keep these schemas synchronized with the checked-in API documentation and contract tests.
 
 import { z } from "zod"
 import { eventCursorSchema, runProcessActivitySchema, runTodoSchema } from "./agui-events"
 import { resumeDecisionSchema, interactionStateSchema } from "./control"
-import { deliverySchema, workspaceFileSchema } from "./artifacts"
+import { deliverySchema, privateDeliverySchema, workspaceFileSchema } from "./artifacts"
 import { agentFailureProfileSchema } from "./agent-failure"
 import { BFF_PRIVATE_CANCELLED_STATUS } from "@/generated/bff-agent-failure"
 
@@ -40,6 +40,10 @@ const selectedSkillSourceRefsSchema = z
       context.addIssue({ code: z.ZodIssueCode.custom, message: "Skill source refs exceed 4096 JSON bytes" })
     }
   })
+
+/** Opaque message intent decoded from the fixed BFF canonical schema. */
+export const selectedResourceRefsSchema = selectedResourceRefsWireSchema
+export type SelectedResourceRef = z.infer<typeof selectedResourceRefsSchema>[number]
 
 export const messageRecordSchema = z
   .object({
@@ -193,7 +197,16 @@ export const selectedMcpConnectionIdsSchema = z
 
 export const selectedCustomApiProfilesSchema = selectedCustomApiProfilesWireSchema
 
-export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({ messages: z.array(chatMessageReadSchema).optional(), execution_process: runExecutionProcessSchema.nullable(), composer_selection: z.object({ source_message_id: z.string().min(1), selected_mcp_connection_ids: selectedMcpConnectionIdsSchema, selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional() }).strict().optional() }).strict()
+export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({
+  messages: z.array(chatMessageReadSchema).optional(),
+  deliveries: z.array(privateDeliverySchema),
+  execution_process: runExecutionProcessSchema.nullable(),
+  composer_selection: z.object({
+    source_message_id: z.string().min(1),
+    selected_mcp_connection_ids: selectedMcpConnectionIdsSchema,
+    selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional(),
+  }).strict().optional(),
+}).strict()
 export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>
 
 export function parseSessionSnapshot(input: unknown): SessionSnapshot {
@@ -207,7 +220,9 @@ export const messageCreateParamsSchema = z
     model: z.string().min(1).optional(),
     agent: z.string().min(1).optional(),
     thinking: z.boolean().optional(),
+    interrupt_run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u).optional(),
     selected_skill_source_refs: selectedSkillSourceRefsSchema.optional(),
+    selected_resource_refs: selectedResourceRefsSchema.optional(),
     selected_mcp_connection_ids: selectedMcpConnectionIdsSchema.optional(),
     selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional(),
     // Opaque project ownership for a project's first task. Tenant/site
@@ -236,6 +251,7 @@ export type RunControlBody = z.infer<typeof runControlBodySchema>
 export const runControlReceiptSchema = z.object({
   run_id: z.string().min(1),
   command_id: z.string().min(1),
+  message_id: z.string().min(1).optional(),
   request_digest: z.string().min(1),
   status: z.enum(["pending", "succeeded", "failed"]),
   error_code: z.string().min(1).nullable().optional(),
@@ -254,8 +270,6 @@ export type RenameSessionReceipt = z.infer<typeof renameSessionReceiptSchema>
 export const shareReceiptSchema = z.object({ share_id: z.string().min(1) }).strict()
 export type ShareReceipt = z.infer<typeof shareReceiptSchema>
 
-export const controlReceiptViewSchema = z.object({ command_id: z.string().min(1), status: z.enum(["pending", "succeeded", "failed"]), replayed: z.boolean().optional() }).strict()
-export type ControlReceiptView = z.infer<typeof controlReceiptViewSchema>
 
 export const deleteSessionReceiptSchema = z.object({ status: z.string().min(1) }).strict()
 export type DeleteSessionReceipt = z.infer<typeof deleteSessionReceiptSchema>

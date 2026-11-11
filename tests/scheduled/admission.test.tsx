@@ -76,6 +76,7 @@ it("keeps the same actor's list stable while admission is frozen, then revalidat
   const list = vi.fn().mockResolvedValue([task])
   const client: ScheduledTaskClient = {
     listScheduledTasks: list,
+    listScheduledExecutions: unavailable,
     createScheduledTask: unavailable,
     updateScheduledTask: unavailable,
     retryScheduledTask: unavailable,

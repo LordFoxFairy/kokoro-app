@@ -21,7 +21,7 @@ export default defineConfig({
   parser: {
     filters: {
       operations: {
-        include: ["PATCH /v1/account/profile"],
+        include: ["GET /v1/account/profile", "PATCH /v1/account/profile"],
       },
       orphans: false,
     },

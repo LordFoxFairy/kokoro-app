@@ -5,20 +5,27 @@ import { iamSignInCsrfCookieName } from "@/lib/server/iam-interaction-csrf"
 import { contentSecurityPolicy } from "@/lib/server/security-headers"
 
 const { issueIamInteractionCsrf, readIamSignInFlow, createIamSignInFlow, retireObservedSignInCsrf } = vi.hoisted(() => ({
-  issueIamInteractionCsrf: vi.fn(), readIamSignInFlow: vi.fn(), createIamSignInFlow: vi.fn(), retireObservedSignInCsrf: vi.fn(),
+  issueIamInteractionCsrf: vi.fn(),
+  readIamSignInFlow: vi.fn(),
+  createIamSignInFlow: vi.fn(),
+  retireObservedSignInCsrf: vi.fn(),
 }))
 
 vi.mock("@/lib/server/iam-interaction-csrf", async (original) => ({
-  ...(await original<typeof import("@/lib/server/iam-interaction-csrf")>()), issueIamInteractionCsrf, retireObservedSignInCsrf,
+  ...(await original<typeof import("@/lib/server/iam-interaction-csrf")>()),
+  issueIamInteractionCsrf,
+  retireObservedSignInCsrf,
 }))
 
-vi.mock("@/lib/server/iam-sign-in-flow", async original => ({
-  ...(await original<typeof import("@/lib/server/iam-sign-in-flow")>()), readIamSignInFlow, createIamSignInFlow,
+vi.mock("@/lib/server/iam-sign-in-flow", async (original) => ({
+  ...(await original<typeof import("@/lib/server/iam-sign-in-flow")>()),
+  readIamSignInFlow,
+  createIamSignInFlow,
 }))
 const FLOW = "f".repeat(24)
 const SHORT_QUERY = `?flow=${FLOW}`
 const ORIGIN = "https://web.example.test:4433"
-const QUERY = "?sig=%2BAb"
+const QUERY = "?native=1&return_to=%2Fapp"
 const TOKEN = "a".repeat(43)
 const ENV = {
   KOKORO_WEB_ORIGIN: ORIGIN,
@@ -39,10 +46,12 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
     retireObservedSignInCsrf.mockReset().mockResolvedValue([])
     issueIamInteractionCsrf.mockReset().mockResolvedValue({
       token: TOKEN,
-      cookie: `${iamSignInCsrfCookieName(QUERY, TOKEN)}=${TOKEN}; Path=/auth/sign-in; Max-Age=300; HttpOnly; SameSite=Lax`,
+      cookie: `${iamSignInCsrfCookieName(QUERY, TOKEN)}=${TOKEN}; Path=/auth/sign-in; Max-Age=300; HttpOnly; SameSite=Lax; Secure`,
     })
   })
-  afterEach(() => { for (const key of Object.keys(ENV)) delete process.env[key] })
+  afterEach(() => {
+    for (const key of Object.keys(ENV)) delete process.env[key]
+  })
 
   it("redirects the protocol entry to a short browser-bound form address before rendering", async () => {
     const { proxy } = await import("@/proxy")
@@ -60,9 +69,14 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
     expect(response.status).toBe(200)
     expect(response.headers.get("x-middleware-rewrite")).toBe(`${ORIGIN}/auth/sign-in/form${SHORT_QUERY}`)
     expect(response.headers.get("cache-control")).toContain("no-store")
-    expect(issueIamInteractionCsrf).toHaveBeenCalledWith(expect.objectContaining({
-      webOrigin: ORIGIN, path: "/auth/sign-in", method: "POST", query: QUERY,
-    }))
+    expect(issueIamInteractionCsrf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webOrigin: ORIGIN,
+        path: "/auth/sign-in",
+        method: "POST",
+        query: QUERY,
+      }),
+    )
   })
 
   it("uses the verified public origin when Next normalizes request.url to its internal listener", async () => {
@@ -78,7 +92,7 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
 
   it("rejects a new render at its visible proof budget without deleting existing forms", async () => {
     const { proxy } = await import("@/proxy")
-    const cookie = ["a", "b", "c", "d"].map(letter => `${iamSignInCsrfCookieName(QUERY, letter.repeat(43))}=proof`).join("; ")
+    const cookie = ["a", "b", "c", "d"].map((letter) => `${iamSignInCsrfCookieName(QUERY, letter.repeat(43))}=proof`).join("; ")
     const response = await proxy(request(`/auth/sign-in${SHORT_QUERY}`, { cookie }))
     expect(response.status).toBe(429)
     expect(response.headers.get("set-cookie")).toBeNull()
@@ -88,55 +102,45 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
   it("clears already-retired observed proofs even when issuing the replacement fails", async () => {
     const { proxy } = await import("@/proxy")
     const name = iamSignInCsrfCookieName(QUERY, TOKEN, FLOW)!
-    retireObservedSignInCsrf.mockImplementation(async (_input, onRetired) => { onRetired(name); return [name] })
+    retireObservedSignInCsrf.mockImplementation(async (_input, onRetired) => {
+      onRetired(name)
+      return [name]
+    })
     issueIamInteractionCsrf.mockRejectedValue(new Error("Redis unavailable"))
     const result = await proxy(request(`/auth/sign-in${SHORT_QUERY}`, { cookie: `${name}=${TOKEN}` }))
     expect(result.status).toBe(503)
-    expect(result.headers.getSetCookie()).toEqual([`${name}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax`])
+    expect(result.headers.getSetCookie()).toEqual([`${name}=; Path=/auth/sign-in; Max-Age=0; HttpOnly; SameSite=Lax; Secure`])
   })
 
   it("rejects direct form requests even when a browser forges internal headers", async () => {
     const { proxy } = await import("@/proxy")
-    const response = await proxy(request(`/auth/sign-in/form${QUERY}`, {
-      "x-kokoro-sign-in-query": QUERY,
-      "x-kokoro-sign-in-csrf": TOKEN,
-      "x-kokoro-sign-in-proof": "b".repeat(43),
-    }))
+    const response = await proxy(
+      request(`/auth/sign-in/form${QUERY}`, {
+        "x-kokoro-sign-in-query": QUERY,
+        "x-kokoro-sign-in-csrf": TOKEN,
+        "x-kokoro-sign-in-proof": "b".repeat(43),
+      }),
+    )
 
     expect(response.status).toBe(404)
     expect(issueIamInteractionCsrf).not.toHaveBeenCalled()
   })
 
-  it("restarts an expired signed sign-in navigation before issuing a new form proof", async () => {
+  it("rejects a legacy signed sign-in navigation before issuing a new form proof", async () => {
     const { proxy } = await import("@/proxy")
     const response = await proxy(request("/auth/sign-in?exp=1&sig=%2BAb"))
 
-    expect(response.status).toBe(303)
-    expect(response.headers.get("location")).toBe(`${ORIGIN}/login`)
-    expect(response.headers.get("cache-control")).toContain("no-store")
+    expect(response.status).toBe(404)
     expect(issueIamInteractionCsrf).not.toHaveBeenCalled()
   })
 })
 
-
-describe("signed sign-in expiration boundary", () => {
-  afterEach(() => vi.restoreAllMocks())
-
-  it.each([
-    ["?exp=0&sig=%2BAb", true],
-    ["?exp=999&sig=%2BAb", true],
-    ["?exp=1000&sig=%2BAb", true],
-    ["?exp=1001&sig=%2BAb", false],
-    ["?sig=%2BAb", false],
-    ["?exp=1&exp=2000&sig=%2BAb", false],
-    ["?exp=01&sig=%2BAb", false],
-    ["?exp=-1&sig=%2BAb", false],
-    ["?exp=invalid&sig=%2BAb", false],
-  ])("checks canonical expiry without changing signed bytes (%s)", async (query, expired) => {
-    vi.spyOn(Date, "now").mockReturnValue(1_000_999)
-    const { isIamSignInExpired, rawIamSignInQuery } = await import("@/lib/server/iam-sign-in-target")
-    expect(isIamSignInExpired(query)).toBe(expired)
-    expect(rawIamSignInQuery(`${ORIGIN}/auth/sign-in${query}`)).toBe(query)
+describe("native sign-in query boundary", () => {
+  it("preserves only the fixed native marker and return target", async () => {
+    const { nativeIamSignInTarget, rawIamSignInQuery } = await import("@/lib/server/iam-sign-in-target")
+    expect(nativeIamSignInTarget(QUERY)).toBe("/app")
+    expect(rawIamSignInQuery(`${ORIGIN}/auth/sign-in${QUERY}`)).toBe(QUERY)
+    expect(rawIamSignInQuery(`${ORIGIN}/auth/sign-in?native=1&return_to=%2Funknown`)).toBeNull()
   })
 })
 
@@ -155,7 +159,11 @@ describe("development local upload CSP boundary", () => {
     const response = await proxy(new NextRequest(`${webOrigin}/app/skills`, { headers: { host: "127.0.0.1:3311" } }))
     const policy = response.headers.get("content-security-policy")!
     const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
-    expect(policy).toBe(contentSecurityPolicy(nonce, true).replace("connect-src 'self' https: wss:", `connect-src 'self' https: wss: ${uploadOrigin}`).replace("img-src 'self' data: blob: https:", `img-src 'self' data: blob: https: ${uploadOrigin}`))
+    expect(policy).toBe(
+      contentSecurityPolicy(nonce, true)
+        .replace("connect-src 'self' https: wss:", `connect-src 'self' https: wss: ${uploadOrigin}`)
+        .replace("img-src 'self' data: blob: https:", `img-src 'self' data: blob: https: ${uploadOrigin}`),
+    )
     expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(policy)
     expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0")
     expect(response.headers.get("vary")).toBe("Cookie")
@@ -163,17 +171,21 @@ describe("development local upload CSP boundary", () => {
 
   it("uses the configured Host when Next normalizes the listener URL to localhost", async () => {
     const { proxy } = await import("@/proxy")
-    const response = await proxy(new NextRequest("http://localhost:3311/app/skills", {
-      headers: { host: "127.0.0.1:3311", origin: webOrigin },
-    }))
+    const response = await proxy(
+      new NextRequest("http://localhost:3311/app/skills", {
+        headers: { host: "127.0.0.1:3311", origin: webOrigin },
+      }),
+    )
     expect(response.headers.get("content-security-policy")).toContain(`connect-src 'self' https: wss: ${uploadOrigin};`)
   })
 
   it("keeps the source blocked when Origin conflicts with the configured Host", async () => {
     const { proxy } = await import("@/proxy")
-    const response = await proxy(new NextRequest("http://localhost:3311/app/skills", {
-      headers: { host: "127.0.0.1:3311", origin: "http://evil.test:3311" },
-    }))
+    const response = await proxy(
+      new NextRequest("http://localhost:3311/app/skills", {
+        headers: { host: "127.0.0.1:3311", origin: "http://evil.test:3311" },
+      }),
+    )
     const policy = response.headers.get("content-security-policy")!
     const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
     expect(policy).toBe(contentSecurityPolicy(nonce, true))
@@ -191,10 +203,15 @@ describe("development local upload CSP boundary", () => {
   it("ignores browser-supplied upload policy values when trusted configuration is absent", async () => {
     vi.stubEnv("KOKORO_WEB_LOCAL_UPLOAD_ORIGIN", undefined)
     const { proxy } = await import("@/proxy")
-    const response = await proxy(new NextRequest(`${webOrigin}/app/skills`, { headers: {
-      "x-kokoro-web-local-upload-origin": uploadOrigin, "origin": uploadOrigin,
-      "content-security-policy": `connect-src http: ${uploadOrigin}`,
-    } }))
+    const response = await proxy(
+      new NextRequest(`${webOrigin}/app/skills`, {
+        headers: {
+          "x-kokoro-web-local-upload-origin": uploadOrigin,
+          origin: uploadOrigin,
+          "content-security-policy": `connect-src http: ${uploadOrigin}`,
+        },
+      }),
+    )
     const policy = response.headers.get("content-security-policy")!
     const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
     expect(policy).toBe(contentSecurityPolicy(nonce, true))
@@ -202,21 +219,28 @@ describe("development local upload CSP boundary", () => {
 
   it("does not use Origin or forwarded headers to turn a different Host into the configured page", async () => {
     const { proxy } = await import("@/proxy")
-    const response = await proxy(new NextRequest("http://evil.test:3311/app/skills", { headers: {
-      "host": "evil.test:3311", "origin": webOrigin,
-      "x-forwarded-host": "127.0.0.1:3311", "x-forwarded-proto": "http",
-    } }))
+    const response = await proxy(
+      new NextRequest("http://evil.test:3311/app/skills", {
+        headers: {
+          host: "evil.test:3311",
+          origin: webOrigin,
+          "x-forwarded-host": "127.0.0.1:3311",
+          "x-forwarded-proto": "http",
+        },
+      }),
+    )
     const policy = response.headers.get("content-security-policy")!
     const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
     expect(policy).toBe(contentSecurityPolicy(nonce, true))
   })
 })
 
-
 describe("trusted actual product target projection", () => {
   const target = "/app/project/project_00000000-0000-4000-8000-000000000301?conversation=conv_00000000-0000-4000-8000-000000000302"
   const header = "x-kokoro-product-return-target"
-  beforeEach(() => { for (const [key, value] of Object.entries(ENV)) vi.stubEnv(key, value) })
+  beforeEach(() => {
+    for (const [key, value] of Object.entries(ENV)) vi.stubEnv(key, value)
+  })
   afterEach(() => vi.unstubAllEnvs())
   it("rebuilds from the actual canonical GET and never publishes a public target header", async () => {
     const { proxy } = await import("@/proxy")
@@ -227,9 +251,11 @@ describe("trusted actual product target projection", () => {
   it("preserves canonical Host projection when Next normalizes the listener origin", async () => {
     const { proxy } = await import("@/proxy")
     vi.stubEnv("KOKORO_WEB_ORIGIN", "http://127.0.0.1:3311")
-    const response = await proxy(new NextRequest(`http://localhost:3311${target}`, {
-      headers: { host: "127.0.0.1:3311", origin: "http://127.0.0.1:3311", [header]: "/app/skills" },
-    }))
+    const response = await proxy(
+      new NextRequest(`http://localhost:3311${target}`, {
+        headers: { host: "127.0.0.1:3311", origin: "http://127.0.0.1:3311", [header]: "/app/skills" },
+      }),
+    )
     expect(response.headers.get(`x-middleware-request-${header}`)).toBe(target)
   })
   it.each([
@@ -241,9 +267,12 @@ describe("trusted actual product target projection", () => {
     ["unknown query", ORIGIN, "web.example.test:4433", null, "GET", "/app?return_to=%2Fapp"],
   ])("strips forged projection on %s", async (_name, origin, host, suppliedOrigin, method, path) => {
     const { proxy } = await import("@/proxy")
-    const response = await proxy(new NextRequest(`${origin}${path}`, {
-      method, headers: { host, [header]: target, ...(suppliedOrigin ? { origin: suppliedOrigin } : {}) },
-    }))
+    const response = await proxy(
+      new NextRequest(`${origin}${path}`, {
+        method,
+        headers: { host, [header]: target, ...(suppliedOrigin ? { origin: suppliedOrigin } : {}) },
+      }),
+    )
     expect(response.headers.get(`x-middleware-request-${header}`)).toBeNull()
   })
   it("strips supplied projection without canonical configuration", async () => {
@@ -253,13 +282,25 @@ describe("trusted actual product target projection", () => {
   })
 })
 
-
-describe("authorize document privacy at the final Proxy boundary", () => {
-  it.each(["/iam/oauth2/authorize", "/api/auth/signin/kokoro-iam", "/api/auth/callback/kokoro-iam"])("uses a proxy-owned nonce and restrictive document policy for %s", async path => {
+describe("native interaction privacy at the final Proxy boundary", () => {
+  it.each([
+    ["/api/agents/connections/line/continue", "POST"],
+    ["/api/agents/connections/slack/callback?code=private-fixture&state=fixture", "GET"],
+  ])("keeps the exact provider continuation opaque at the final Proxy boundary", async (path, method) => {
     const { proxy } = await import("@/proxy")
-    const response = await proxy(request(`${path}?state=private`, {
-      "x-nonce": "browser_forged_nonce", "content-security-policy": "default-src *",
-    }))
+    const response = await proxy(new NextRequest(ORIGIN + path, { method, headers: { origin: ORIGIN } }))
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.get("cache-control")).toContain("no-store")
+    expect(response.headers.get("x-middleware-request-x-kokoro-product-return-target")).toBeNull()
+  })
+  it.each(["/auth/select-tenant", "/iam/interactions/select-tenant"])("uses a proxy-owned nonce and restrictive document policy for %s", async (path) => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(
+      request(`${path}?state=private`, {
+        "x-nonce": "browser_forged_nonce",
+        "content-security-policy": "default-src *",
+      }),
+    )
     expect(response.headers.get("referrer-policy")).toBe("no-referrer")
     const nonce = response.headers.get("x-middleware-request-x-nonce")
     expect(nonce).not.toBe("browser_forged_nonce")
@@ -267,7 +308,7 @@ describe("authorize document privacy at the final Proxy boundary", () => {
     expect(response.headers.get("content-security-policy")).toContain(`style-src 'nonce-${nonce}'`)
     expect(response.headers.get("content-security-policy")).not.toMatch(/unsafe-inline|unsafe-eval/u)
   })
-  it.each(["/iam/oauth2/authorize-more", "/iam/oauth2/authorize/", "/api/auth/callback/kokoro-iam/", "/api/auth/session"])("does not change the generic policy for %s", async path => {
+  it.each(["/auth/select-tenant-more", "/auth/select-tenant/", "/api/auth/session"])("does not change the generic policy for %s", async (path) => {
     const { proxy } = await import("@/proxy")
     const response = await proxy(request(path))
     expect(response.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin")

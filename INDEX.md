@@ -1,3 +1,15 @@
+### A‑08 当前消息资源接线（2026‑11‑09，未提交候选）
+
+`ui/composer/composer-resource-picker.tsx` 复用现文件上传/列表与 artifact 客户端，`AppFrameComposer` 在同一加号显示三类资源。打开最近任务才读一次同 scope 的私有 snapshot；无任何交付的任务可选择 owner 已标记的最终答复，仅发送 opaque Message ID，不读取正文。原 `useDraft` 按准入主体/租户恢复未发送的正文与 opaque refs；Project 首发仍在 fresh Conversation 分配后提交选择，未确认命令用原 journal。无第二 engine、store、路由或答案复制。真实浏览器验收由 Root 串行交付。
+
+### A‑12 定时执行记录接线（2026‑11‑08，未提交候选）
+
+`features/scheduled-tasks` 继续唯一拥有自动化界面，新增 `use-scheduled-executions.ts` / `scheduled-execution-list.tsx` 承接 BFF 正式分页读投影和普通 Conversation 结果链接；`scheduled-task-project-filter.tsx` 复用现 Project 目录。显式 `filter_project_id` 仅筛选，保原 `project_id` 创建上下文。`contract/scheduled.ts` 与同源 scheduled adapter 保严格执行读边界；现周期/时区逻辑保持。正式来源 pin、主控真实浏览器和提交由 Root 串行完成。
+
+## T-07 当前 Public28.18 provenance（2026-11-01）
+
+唯一 `src/generated/bff-public-openapi.yaml` 保持 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9` 的完整原字节；12 个既有 public generator 统一消费该来源，派生物仍由原 `--write` 入口生成。`tests/contract/bff-account-profile-read-parent.ts` 只在测试链首证明完整28.18→28.17，再进入原 Custom API／后续父链；不提供运行时降级或第二 snapshot。当前验证见 `docs/CURRENT.md`，下方版本段均保留其历史语境。
+
 ## Project resource item consumer (candidate)
 
 `src/features/app/project-resource-row.tsx` / `project-resource-detail.tsx`负责资源行、fresh metadata和显式永久删除确认；`use-project-resource-actions.ts`持document-local原命令及actor/project/route fence，`use-project-resources.ts`持ACK后精确负事实与fresh列表。`project-resource-access.ts`仅走same-origin固定生成decoder；原生attachment仅报告started、无inlineHTML/SVG。固定契约与实际验证见本轮收据，不将候选称正常已生效。
@@ -333,7 +345,7 @@ Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下
 | `src/i18n/context.tsx`、`src/ui/theme/theme-context.tsx` | 浏览器 locale/theme 偏好 Provider；存储拒绝时分别回到既有语言协商/系统主题，写失败只保留内存选择，不拥有认证事实 |
 | `src/features/app/kokoro-app-surface.tsx` | mounted surface 路由投影 |
 | `src/features/app/kokoro-skills-surface.tsx` | 技能广场的搜索／分类由正式目录查询，资源与追加 cursor 绑定同一筛选和准入 client；默认目录保留共享预热 key |
-| `src/components/blocks/app-frame/app-frame.tsx`、`app-frame-main-surface.tsx` | 桌面 shell 组合；准入期间只呈现无数据占位，并遵守路由的独立页面／会话及标题标志，不挂私有 Runtime |
+| `src/components/blocks/app-frame/app-frame.tsx`、`app-frame-main-surface.tsx` | 桌面 shell 组合；准入期间只呈现无数据占位，并遵守路由的独立页面／会话及标题标志，不挂私有 Runtime；项目指令入口与历史读取复用同一能力开关 |
 | `src/components/blocks/workspace-header/workspace-header.tsx` | 工作区导航入口；移动端标签与展开状态只读取抽屉状态，开关不修改桌面侧栏偏好 |
 | `src/components/blocks/app-frame/use-app-frame-navigation.ts` | URL归属与水合派生状态；终态错误不被错路由loading遮蔽，重试保留原深链 |
 | `src/app/api/session/[...path]/route.ts` | Chat JSON/SSE/二进制的同源 BFF adapter；只转发显式 `Idempotency-Key` header，不从 JSON body 提升旧 key |
@@ -357,6 +369,7 @@ Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下
 | `src/features/app/kokoro-library-file-state.ts`、`src/features/app/kokoro-library-files.tsx` | 个人文件的局部分页/取消/错误状态、GET 权威 Asset 列表及现有卡片的下载/取消/重试 |
 | `src/features/app/kokoro-library-file-upload-{client,state}.ts`、`kokoro-library-file-upload.tsx` | 原生 multipart 整体限额/同源 POST、跨页签 File/key 意图与 shadcn 单文件上传 UI；只在 CLEAN 回执后触发 GET |
 | `src/contract/project-create.ts`、`src/features/app/project-create.ts`、`src/components/blocks/app-frame/use-app-frame-project.ts` | 固定 BFF ProjectResponse consumer 校验、同源 POST 与正式/预览创建意图区分；仅 canonical id 导航 |
+| `src/features/app/use-project-list.ts` | 冷打开并行读取准确 Project 和侧栏；已加载的同身份 Project 不重复读详情；同页重读保留已确认投影，缺失／拒权立即清除 |
 | `src/contract/agui-events.ts` | 严格解析 AG-UI wire frame；不拥有 reducer 投影 |
 | `src/contract/agent-failure.ts` | 从 generated owner tuple 派生唯一 safe Agent failure schema/type；不维护第二码表 |
 | `src/core/chat-projection-event.ts` | Web 内部 Chat 投影事件 schema；不是 wire contract |

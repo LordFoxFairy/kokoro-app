@@ -5,6 +5,7 @@ import {
   answerRegenerationReceiptWireSchema,
   runDisplaySkillWireSchema,
   runDisplayWireSchema,
+  runWorkspaceOutputVersionWireSchema,
   runToolFactWireSchema,
   runActivityDetailWireSchema,
   safeVirtualPathWireSchema,
@@ -63,6 +64,13 @@ export const runActivityDetailSchema = runActivityDetailWireSchema.superRefine((
   }
 })
 export type RunActivityDetail = z.infer<typeof runActivityDetailSchema>
+export const workspaceOutputVersionIdSchema = runWorkspaceOutputVersionWireSchema.shape.version_id
+export const workspaceOutputMimeSchema = runWorkspaceOutputVersionWireSchema.shape.mime_type
+function isSafeWorkspaceOutputPath(value: string) {
+  return safeVirtualPathSchema.safeParse(value).success &&
+    !value.slice(1).split("/").some(segment => segment.startsWith(".")) &&
+    [...value.split("/").at(-1)!].length <= 255
+}
 export const runDisplaySchema = runDisplayWireSchema
   .extend({
     display_skills: z.array(runDisplaySkillSchema).max(16),
@@ -72,6 +80,8 @@ export const runDisplaySchema = runDisplayWireSchema
   })
   .superRefine((value, ctx) => {
     if (
+      (value.workspace_outputs !== undefined && (new Set(value.workspace_outputs.map(v => v.version_id)).size !== value.workspace_outputs.length ||
+        value.workspace_outputs.some(v => !isSafeWorkspaceOutputPath(v.virtual_path)))) ||
       new Set(value.display_skills.map((v) => v.source_ref)).size !== value.display_skills.length ||
       new Set(value.tool_paths.map((v) => v.activity_id)).size !== value.tool_paths.length ||
       new Set(value.tool_facts.map((v) => v.activity_id)).size !== value.tool_facts.length ||

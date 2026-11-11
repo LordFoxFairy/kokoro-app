@@ -1,3 +1,26 @@
+> D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
+
+## A‑08：资源选择复用原草稿与提交（2026‑11‑09）
+
+仅在原 engine/Project Overview draft 保存 ≤16 个 kind/resource_id 引用；filename 只作当前 picker RAM 标签。原 PendingSubmission 与现 browser journal 冻结同一原请求引用，unknown 显式原 key/body 恢复，不新增存储或另写附件事实。未提交上传的 File/key 仅在当前组件作用域内存存活，身份/路由退休后不复活；Storage/Artifact 事实仍属原 owner，不复制文件正文、答案、hash 或下载凭据。
+
+## T-01 标准认证状态与本地退休（2026-11-02，本地消费者候选）
+
+本轮沿 Root 唯一计划 §3.6 和已通过 D0 实施，不新增认证 owner、Schema、依赖或认证存储。具体固定来源见 `contract/bff-auth-session-source.json`；生成器只消费本仓 vendor 的原字节，不导入 sibling 源码。普通业务一次同源/BFF派发，当前权限仍由 BFF/IAM 与业务 owner 判断。
+
+- **唯一事实 owner**：IAM Better Auth 拥有登录 Session、HttpOnly Cookie、真实 expiresAt、active tenant 和撤销；BFF 在认证边缘建立真实 principal，业务 owner 拥有当前资源及授权不变量。App 不建 Session 表／Redis 投影、token/refresh store、SessionRef、认证票据或共享认证 SDK，不复制框架 Session。
+- **安全 RAM 视图**：App 只持 BFF 正式 browser-private `GET /browser/v1/auth/session` 的安全观察：authenticated 状态及真实 subject／tenant_id／RFC 3339 UTC expires_at。layout的完整首观察仅作候选；SSR/client首帧一致且未准入，effect核现有marker与无秘密失效hint后消费。无冲突且无hint时零额外GET；冲突、过期、失效或hint读取失败时fresh GET，不清新身份的草稿或unknown原命令。历史hint未清除时保守多一次安全GET，不充当第二认证协议。expires_at 不是允许缓存，不用 now+TTL、空 access、假 session id 或 generation=0 补字段；公开 `/v1/me` 的三字段不变。
+- **Cookie 与有效期**：同一 BFF 状态 GET 的 generated query `refresh` 默认 true，浏览器正常状态 GET 可原生 rolling，多个 `Set-Cookie` 完整经边界传给浏览器。RSC 明确 `refresh=false`，BFF 映射官方 `disableCookieCache=true`、`disableRefresh=true` 鲜读但不 rolling；RSC 不写／清浏览器 Cookie，失效 Cookie 由后续正常状态 GET 清理。该 query 仅为状态读取的传输选项，纯业务检查不 rolling，不扩业务 adapter 参数。App 不自制期限、续期记录或每业务 `/me` snapshot。
+- **本地寿命不是凭据**：UI request/data epoch、abort 和当前 subject＋tenant 仅管理读／展示寿命，保留 ABA、pagehide/pageshow、同主体 tenant 变化及跨标签无秘密失效事件。持久 marker 只使旧观察失效，不能授准入，不保存 raw Session／token／Session id/ref；另一枚仍有效 Cookie 的切换依靠 UI 失效与页面寿命退休迟到响应，不伪称原请求鲜验已观察浏览器新 Cookie。
+- **既有用户数据保护**：身份退休按现有归属清理旧索引／私有投影；同一可信身份的常规检查不无故清草稿。原 draft、submission journal、CAS 和 unknown 命令保原 subject／tenant／scope 绑定及原 key/body，不因 GET 恢复而自动重放、换 key 或造 ACK。设备管理和 Chat 资源 session_id 仍是业务 locator，不是登录凭据。
+- **Admin**：同源 `/manage` 只消费相同登录及安全 GET 状态，不新增独立 Session/refresh/CSRF 存储；管理员 false 与依赖不可用分开，管理权限不是浏览器缓存事实。其原命令恢复记录不扩为认证记录。
+
+本地候选已随固定 owner 合同及 generated artifact 删除旧假 claims／refresh 形状；后继仍须核真实 expiry、rolling、身份／tenant 退休与未知命令保护；尚无新 schema、迁移或真实浏览器验收证明。
+
+## T-07 Public28.18 provenance修复（2026-11-01，无数据变化）
+
+本轮只同步既有单一BFF public snapshot的生成器来源与测试pin，原28.18 snapshot保持逐字不变；账户资料仍由IAM／BFF提供现有只读投影，App不新增账户事实、表、缓存、迁移或浏览器store。完整28.18→28.17逆差仅存在于 `tests/contract/`，用于保留旧父全文hash及操作顺序证明，不进入运行时；private artifact与独立download policy3不变。下方数据方案保留历史语境。
+
 ## Custom API草稿选择（复用原安全提交意图，无新owner表）
 
 仅现engine／Project draft的profile/version引用，≤32且profileID唯一，换会话/actor退休，不落Conversation账号偏好。发送时深冻结到原PendingSubmission，现browser sessionStorage journal v1仅增加可选正式safe-ref字段，原无字段记录仍按原body/key恢复；不保存指令、env名称/值或凭据，不新增store／Schema／迁移。未知结果只显式原K/body恢复，后续目录刷新或UI选择不改旧意图。已接受选择由原owner private snapshot投影，App无第二选择事实源；当前CAS不符只排除恢复，不能替换原CAS。原MCP/Skills与父会话权限保持。
@@ -137,11 +160,15 @@ reserve 原子保旧，failure 只单调收紧、晚到400/412不清掉 unknown 
 
 不新增持久业务事实或Schema。Try只创建现浏览器草稿、写入现草稿提示词并设置engine瞬态exact Connection选择；不写账号enabled或替owner创建连接/授权。草稿文本沿既有持久策略，选择沿既有New/select/主体退休规则，不声称刷新后仍持久选中。route/subject/generation动作寿命只用于拒绝迟到回调，非第二套授权或任务状态机。
 
+## A‑03：打断偏好与拒绝恢复
+
+打断偏好沿既有本机对话偏好键，默认队列，未上报服务端。未决请求继续用现有版本 1 记录保存目标 Run；已确认拒绝时，先在同主体／同会话同步保存并读回原草稿，再退休原请求记录；不覆盖另一段新草稿。无 Schema 或跨设备存储变化。
+
 ## CHAT-1：浏览器未决提交记录（2026-10-24，实施设计）
 
 新增仅App-owned同标签sessionStorage恢复数据；独立前缀按已验证subject、direct/project scope及conv分键。版本化严格记录保原session、optimistic ID、原idempotency key及唯一builder产出的冻结请求；pending可带公开失败码，ACK保存exact receipt，明确放弃保存退休态。主体由原Product Session准入授予、marker只核变更；无服务端身份/会话/Run/账本真源。单记录1MiB，超限/配额/读写拒绝不截断、不腾空他人数据、不发送。
 
-ACK/退休按原key比较更新，不擦后继意图；没有精确回执时不按正文或404判成功/未执行。主体切换清理当前tab恢复前缀，scope独立，普通dispose保留；tab关闭遵循sessionStorage寿命，无跨设备承诺。损坏记录闭锁而不是空记录；ACK持久化失败不能伪造恢复成功。原Conversation索引、localDraft退休键及BFF durable ledger保持唯一职责，无SQL/Schema/owner变化。
+首发和运行中 FIFO 复用同一会话未决记录；未确认前下一草稿不覆盖它。ACK/退休按原 key 比较更新，不擦后继意图；没有精确回执时不按正文或 404 判成功/未执行。主体切换清理当前tab恢复前缀，scope独立，普通dispose保留；tab关闭遵循sessionStorage寿命，无跨设备承诺。损坏记录闭锁而不是空记录；ACK持久化失败不能伪造恢复成功。原Conversation索引、localDraft退休键及BFF durable ledger保持唯一职责，无SQL/Schema/owner变化。
 
 ## CHAT-1：本地New来源与不可回退的来源退休（2026-10-24）
 

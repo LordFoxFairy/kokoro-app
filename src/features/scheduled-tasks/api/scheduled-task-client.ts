@@ -10,6 +10,10 @@ import {
   scheduledTaskErrorSchema,
   scheduledTaskPatchRequestSchema,
   scheduledTasksPath,
+  scheduledTaskExecutionsPath,
+  scheduledTaskExecutionListResponseSchema,
+  scheduledTaskExecutionQuerySchema,
+  scheduledTaskListQuerySchema,
   type ScheduledTaskRecordResponse,
   type ScheduledTaskDetailsResponse,
 } from "@/contract/http"
@@ -18,6 +22,7 @@ import type {
   ScheduledTaskDraft,
   ScheduledTaskPatch,
   ScheduledTaskRecord,
+  ScheduledExecution,
 } from "../model/scheduled-task"
 
 export type ScheduledTaskClientFailureReason = "network" | "http" | "parse"
@@ -68,6 +73,15 @@ function toRecord(task: ScheduledTaskRecordResponse): ScheduledTaskRecord {
 
 function toDetails(task: ScheduledTaskDetailsResponse): ScheduledTaskRecord {
   return { ...toRecord(task), schedulingState: task.scheduling_state }
+}
+
+function readPath(path: string, query: { projectId?: string | undefined; taskId?: string | undefined; cursor?: string | undefined; limit?: number | undefined }): string {
+  const params = new URLSearchParams()
+  if (query.projectId !== undefined) params.set("project_id", query.projectId)
+  if (query.taskId !== undefined) params.set("task_id", query.taskId)
+  if (query.cursor !== undefined) params.set("cursor", query.cursor)
+  if (query.limit !== undefined) params.set("limit", String(query.limit))
+  return params.size ? `${path}?${params}` : path
 }
 
 function parseRequest<T>(parse: () => T): T {
@@ -310,15 +324,27 @@ export function createScheduledTaskClient(
   const commandIdentities = new Map<string, CommandIdentity>()
   const creates = new Map<string, ScheduledTaskDraft>()
   const client: ScheduledTaskClient = {
-    listScheduledTasks: async () => {
+    listScheduledTasks: async ({ signal, ...options } = {}) => {
+      const query = parseRequest(() => scheduledTaskListQuerySchema.parse(options))
       const response = await request(
         fetcher,
-        scheduledTasksPath(),
+        readPath(scheduledTasksPath(), query),
         scheduledTaskListResponseSchema,
-        undefined,
+        signal === undefined ? undefined : { signal },
         admission,
       )
       return response.tasks.map(toDetails)
+    },
+    listScheduledExecutions: async ({ signal, ...options } = {}) => {
+      const query = parseRequest(() => scheduledTaskExecutionQuerySchema.parse(options))
+      const response = await request(fetcher, readPath(scheduledTaskExecutionsPath(), query),
+        scheduledTaskExecutionListResponseSchema, signal === undefined ? undefined : { signal }, admission)
+      const executions: ScheduledExecution[] = response.executions.map(item => ({
+        id: item.execution_id, taskId: item.task_id, taskTitle: item.task_title, occurrenceAt: item.occurrence_at,
+        state: item.state, conversationId: item.conversation_id, projectId: item.project_id,
+        runId: item.run_id, assistantMessageId: item.assistant_message_id, completedAt: item.completed_at,
+      }))
+      return { executions, nextCursor: response.next_cursor }
     },
     createScheduledTask: (input) => createTask(fetcher, commandIdentities, creates, admission, input),
     updateScheduledTask: async (taskId, patch) => {

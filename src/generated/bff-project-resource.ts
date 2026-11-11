@@ -2,9 +2,9 @@
 import { z } from "zod"
 
 export const BFF_PROJECT_RESOURCE_PROVENANCE = {
-  "ownerCommit": "853ca9a5d8da3500b0c37543c72198a520e46225",
-  "sourceSha256": "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7",
-  "openapiVersion": "28.17.0"
+  "ownerCommit": "18dcc30179632eb32a86f160a5f13c71eb1c5d27",
+  "sourceSha256": "a26431d45ad96c4e80e6751d61e66a14b3933ae7c2ffb6f9e7df57fcc7e6808f",
+  "openapiVersion": "28.35.0"
 } as const
 export const BFF_PROJECT_RESOURCE_MAX_BYTES = 1073741824
 export const projectResourceAssetIdSchema = z.string().min(1).max(191).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$", "u"))

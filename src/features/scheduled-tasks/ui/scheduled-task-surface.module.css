@@ -159,7 +159,10 @@
 
 .taskContent {
   width: min(calc(100% - 3rem), 48rem);
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   margin: 0 auto;
   padding: 6.5rem 0 4rem;
 }
@@ -241,6 +244,24 @@
 .mutationError { color: var(--destructive); font-size: 0.75rem; line-height: 1rem; }
 .taskCard[aria-busy="true"] { opacity: 0.78; }
 
+.embeddedEmpty { padding-top: 2rem; text-align: center; }
+.projectFilter { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; padding-block: 1rem; font-size: 0.8125rem; }
+.projectFilter label { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+.projectFilter select { min-height: 2.75rem; max-width: 100%; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--background); padding-inline: 0.625rem; color: var(--foreground); }
+.projectFilter > span { color: var(--muted-foreground); }
+.projectFilter button { min-height: 2.75rem; color: var(--foreground); text-decoration: underline; cursor: pointer; }
+.projectFilter select:focus-visible,
+.projectFilter button:focus-visible,
+.resultLink:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.executionList { display: grid; gap: 1rem; padding-top: 1rem; }
+.executionActions { display: flex; justify-content: flex-end; }
+.executionRows { display: grid; gap: 0.625rem; margin: 0; padding: 0; list-style: none; }
+.executionRow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border: 1px solid var(--border); border-radius: 0.875rem; background: var(--card); padding: 0.875rem 1rem; }
+.executionRow time,
+.resultUnavailable { color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.25rem; }
+.executionRow[data-state="failed"] .taskDetails > span { color: var(--destructive); }
+.resultLink { display: inline-flex; flex: 0 0 auto; min-height: 2.75rem; align-items: center; border-radius: 0.5rem; padding-inline: 0.75rem; font-size: 0.875rem; text-decoration: underline; }
+
 @media (max-height: 40rem) and (min-width: 40rem) {
   .taskContent { padding-top: 5.25rem; }
   .content { padding-bottom: 2rem; }
@@ -254,6 +275,8 @@
   .listCreate { align-self: flex-start; }
   .taskCard { grid-template-columns: 1.5rem minmax(0, 1fr) auto; }
   .nextRun { grid-column: 2; }
+  .executionRow { align-items: flex-start; flex-direction: column; gap: 0.5rem; }
+  .resultLink { align-self: flex-start; }
 }
 
 @media (prefers-reduced-motion: reduce) {

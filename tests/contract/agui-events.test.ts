@@ -14,6 +14,7 @@ const AGENT_FAILURE_CODES = [
   "dependency_unavailable",
   "model_access_denied",
   "model_settlement_pending",
+  "context_window_exceeded",
 ] as const
 
 const AGENT_FAILURE_TUPLES = [

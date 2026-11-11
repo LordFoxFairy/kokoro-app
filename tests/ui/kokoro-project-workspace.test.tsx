@@ -35,7 +35,7 @@ function contextCard(container: HTMLElement, kind: string): HTMLElement {
 }
 
 beforeEach(() => window.localStorage.setItem("kokoro.locale", "zh"))
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.removeItem("kokoro.web.auth-index-subject") })
 
 it("项目右栏使用固定的 75×64 空态插图且不进入读屏名称", () => {
   const { container } = render(
@@ -50,7 +50,6 @@ it("项目右栏使用固定的 75×64 空态插图且不进入读屏名称", ()
   )
 
   for (const src of [
-    "/site-assets/project-website.webp",
     "/site-assets/project-skills.svg",
     "/site-assets/project-scheduled-tasks.svg",
   ]) {
@@ -280,7 +279,8 @@ it("不可恢复的幂等冲突不提供同键重试，提示重新选择文件"
   expect(within(dialog).getByRole("list", { name: "文件和资源" })).not.toHaveTextContent("conflict.txt")
 })
 
-it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
+it("项目指令历史按 owner 当前标记选中同毫秒版本，并可切换历史正文", () => {
+  const timestamp = new Date("2026-08-29T10:31:00Z").getTime()
   const { container } = render(
     <LocaleProvider>
       <KokoroProjectWorkspace preview
@@ -289,8 +289,8 @@ it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
         onPrompt={vi.fn()}
         projectInstructions="当前规则"
         projectInstructionHistory={[
-          { id: "current", instruction: "当前规则", updatedAt: new Date("2026-08-29T10:31:00Z").getTime(), actorName: "Kokoro", current: true },
-          { id: "previous", instruction: "上一版规则", updatedAt: new Date("2026-08-28T09:15:00Z").getTime(), actorName: "Kokoro" },
+          { id: "previous", instruction: "上一版规则", updatedAt: timestamp, actorName: "Kokoro", current: false },
+          { id: "current", instruction: "当前规则", updatedAt: timestamp, actorName: "Kokoro", current: true },
         ]}
         workspaceCapabilities={capabilities}
       />
@@ -306,11 +306,18 @@ it("项目指令历史使用双栏版本 Dialog 并可切换正文", () => {
   fireEvent.click(screen.getByRole("button", { name: "历史记录" }))
 
   const historyDialog = screen.getByRole("dialog", { name: "项目指令历史" })
-  expect(historyDialog).toHaveTextContent("当前版本")
+  expect(within(historyDialog).getAllByText("当前版本")).toHaveLength(1)
   expect(historyDialog).toHaveTextContent("当前规则")
+  expect(historyDialog).not.toHaveTextContent("上一版规则")
   const revisions = within(within(historyDialog).getByRole("list")).getAllByRole("button")
   expect(revisions).toHaveLength(2)
-  fireEvent.click(at(revisions, 1, "previous instruction revision"))
+  const previous = at(revisions, 0, "previous instruction revision")
+  const current = at(revisions, 1, "current instruction revision")
+  expect(previous).toHaveAttribute("aria-pressed", "false")
+  expect(current).toHaveAttribute("aria-pressed", "true")
+  expect(current).toHaveTextContent("当前版本")
+  fireEvent.click(previous)
+  expect(previous).toHaveAttribute("aria-pressed", "true")
   expect(historyDialog).toHaveTextContent("上一版规则")
 })
 
@@ -509,41 +516,112 @@ it("未知默认命令跨重核只显式重放原 key/body，ACK 后回读失败
   expect(screen.getByRole("checkbox", { name: "默认使用 Project Skill" })).not.toBeChecked() // fresh GET, not the old acknowledged selection
 })
 
-it("网站入口打开项目级选择弹窗而不是向 Composer 注入提示词", () => {
+const websitesUrl = `/api/hub/projects/${skillProjectId}/websites`
+const websiteBoundary = { admitted: true, subject: "website-owner", tenant: "website-tenant", generation: 1 }
+const websiteWorkspace = (onPrompt = vi.fn(), boundary = websiteBoundary, preview = false, task = false) => <LocaleProvider>
+  <KokoroProjectWorkspace preview={preview} composer={<div>composer</div>} onPrompt={onPrompt} workspaceCapabilities={capabilities}
+    projectRef={skillProjectId} projectDetail={{ status: "ready", data: skillProject }} projectReadBoundary={boundary}
+    {...(task ? { projectConversationContent: <div>task</div> } : {})} />
+</LocaleProvider>
+
+it("真实项目网站入口回读关联，取消零写，保存和解除携带正式版本而不向 Composer 注入内容", async () => {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", websiteBoundary.subject)
+  const prior = "https://before.example/a"
+  const next = "https://next.example/"
+  let websites = [prior], version = "1"
+  const writes: unknown[] = []
   const onPrompt = vi.fn()
-  render(
-    <LocaleProvider>
-      <KokoroProjectWorkspace preview brandName="Kokoro" composer={<div>composer</div>} onPrompt={onPrompt} workspaceCapabilities={capabilities} />
-    </LocaleProvider>,
-  )
-
-  const addButtons = screen.getAllByRole("button", { name: "新增" })
-  fireEvent.click(at(addButtons, -2, "website add button"))
-
-  expect(screen.getByRole("dialog", { name: "新增网站至当前项目" })).toBeInTheDocument()
-  expect(screen.getByRole("textbox", { name: "搜索网站" })).toBeInTheDocument()
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) !== websitesUrl) return skillReply({}, 404)
+    if (init?.method === "PUT") {
+      const body = JSON.parse(String(init.body)) as { websites: string[]; expected_state_version: string }
+      writes.push(body); websites = body.websites; version = String(Number(version) + 1)
+    }
+    return skillReply({ data: { project_id: skillProjectId, websites, state_version: version } })
+  }))
+  const view = render(websiteWorkspace(onPrompt))
+  const open = async (visible: string) => {
+    fireEvent.click(within(contextCard(view.container, "websites")).getByRole("button", { name: "新增" }))
+    const dialog = within(screen.getByRole("dialog", { name: "新增网站至当前项目" }))
+    await dialog.findByText(visible)
+    return dialog
+  }
+  let dialog = await open(prior)
+  fireEvent.change(dialog.getByRole("textbox", { name: "搜索网站" }), { target: { value: "not-a-match" } })
+  expect(dialog.queryByText(prior)).not.toBeInTheDocument()
+  fireEvent.change(dialog.getByRole("textbox", { name: "网站网址" }), { target: { value: "https://@next.example" } })
+  fireEvent.click(dialog.getByRole("button", { name: "添加网站网址" }))
+  expect(dialog.getByRole("alert")).toHaveTextContent(/有效 HTTP/u)
+  expect(dialog.getByRole("button", { name: "保存" })).toBeDisabled()
+  const add = () => {
+    fireEvent.change(dialog.getByRole("textbox", { name: "网站网址" }), { target: { value: "HTTPS://NEXT.EXAMPLE" } })
+    fireEvent.click(dialog.getByRole("button", { name: "添加网站网址" }))
+  }
+  add()
+  fireEvent.click(dialog.getByRole("button", { name: "取消" }))
+  expect(writes).toEqual([])
+  dialog = await open(prior)
+  expect(dialog.queryByText(next)).not.toBeInTheDocument()
+  add()
+  fireEvent.click(dialog.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  dialog = await open(next)
+  fireEvent.click(dialog.getByRole("button", { name: `解除 ${next}` }))
+  fireEvent.click(dialog.getByRole("button", { name: "保存" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(writes).toEqual([{ websites: [prior, next], expected_state_version: "1" }, { websites: [prior], expected_state_version: "2" }])
   expect(onPrompt).not.toHaveBeenCalled()
 })
 
-it("网站选择器可以搜索、选择并保存合成网站", async () => {
-  render(
-    <LocaleProvider>
-      <KokoroProjectWorkspace preview brandName="Kokoro" composer={<div>composer</div>} onPrompt={vi.fn()} workspaceCapabilities={capabilities} />
-    </LocaleProvider>,
-  )
-
-  const addButtons = screen.getAllByRole("button", { name: "新增" })
-  fireEvent.click(at(addButtons, -2, "website add button"))
-  const dialog = screen.getByRole("dialog", { name: "新增网站至当前项目" })
-  const search = within(dialog).getByRole("textbox", { name: "搜索网站" })
-  fireEvent.change(search, { target: { value: "Kokoro" } })
-  const website = within(dialog).getByRole("button", { name: /Kokoro 产品网站/ })
-  fireEvent.click(website)
-  expect(website).toHaveAttribute("aria-pressed", "true")
-  const save = within(dialog).getByRole("button", { name: "保存" })
-  expect(save).toBeEnabled()
-  fireEvent.click(save)
-  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+it("项目会话中的过期和未知网站保存先回读，失败重试只读；租户换代隔离迟到结果", async () => {
+  window.localStorage.setItem("kokoro.web.auth-index-subject", websiteBoundary.subject)
+  const stored = "https://other-tab.example/", wanted = "https://wanted.example/"
+  const methods: string[] = []
+  const fault = (status: number, code: string) => skillReply({ error: { code, message: code }, meta: { request_id: "project-skills-ui" } }, status)
+  let reads = 0, writes = 0, finishRetiredRead: (value: Response) => void = () => {}
+  let retiredReadSignal: AbortSignal | null | undefined
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input) !== websitesUrl) return skillReply({}, 404)
+    methods.push(init?.method ?? "GET")
+    if (init?.method === "PUT") {
+      if (++writes === 1) return fault(412, "project_websites_precondition_failed")
+      throw new Error("owner outcome not received")
+    }
+    ++reads
+    if (reads === 1) return skillReply({ data: { project_id: skillProjectId, websites: [], state_version: "1" } })
+    if (reads === 2) return skillReply({ data: { project_id: skillProjectId, websites: [stored], state_version: "2" } })
+    if (reads === 3) return fault(503, "business_store_unavailable")
+    retiredReadSignal = init?.signal
+    return new Promise<Response>(resolve => { finishRetiredRead = resolve })
+  }))
+  const onPrompt = vi.fn()
+  const view = render(websiteWorkspace(onPrompt, websiteBoundary, true, true))
+  expect(view.container.querySelector('[data-context-kind="websites"]')).not.toBeInTheDocument()
+  view.rerender(websiteWorkspace(onPrompt, websiteBoundary, false, true))
+  fireEvent.click(within(contextCard(view.container, "websites")).getByRole("button", { name: "新增" }))
+  const dialog = within(screen.getByRole("dialog", { name: "新增网站至当前项目" }))
+  const save = dialog.getByRole("button", { name: "保存" })
+  const add = () => {
+    fireEvent.change(dialog.getByRole("textbox", { name: "网站网址" }), { target: { value: wanted } })
+    fireEvent.click(dialog.getByRole("button", { name: "添加网站网址" }))
+    fireEvent.click(save)
+  }
+  await dialog.findByText("暂无网站")
+  add()
+  await dialog.findByText(stored)
+  expect(dialog.queryByText(wanted)).not.toBeInTheDocument()
+  expect(save).toBeDisabled()
+  expect(methods).toEqual(["GET", "PUT", "GET"])
+  add()
+  expect(await dialog.findByRole("alert")).toHaveTextContent("保存结果未确认")
+  expect(save).toBeDisabled()
+  fireEvent.click(dialog.getByRole("button", { name: "重试" }))
+  expect(methods).toEqual(["GET", "PUT", "GET", "PUT", "GET", "GET"])
+  view.rerender(websiteWorkspace(onPrompt, { ...websiteBoundary, tenant: "other-tenant" }, false, true))
+  expect(retiredReadSignal?.aborted).toBe(true)
+  await act(async () => { finishRetiredRead(skillReply({ data: { project_id: skillProjectId, websites: [wanted], state_version: "3" } })) })
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  expect(writes).toBe(2)
 })
 
 it("定时任务入口打开选择弹窗和编辑器，并提交项目级任务", async () => {

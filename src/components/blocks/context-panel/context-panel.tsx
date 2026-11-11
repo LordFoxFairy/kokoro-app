@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react"
 
 import { CanvasPanel, type CanvasPanelProps } from "@/ui/canvas/canvas-panel"
 import { useOverlayClose } from "@/ui/shell/use-overlay-close"
@@ -47,12 +47,12 @@ function resolveReturnTarget(scope: ParentNode, recorded: HTMLElement | null, ac
 }
 
 /** Optional second view of a site workspace, rendered as a side-by-side Web panel. */
-export function ContextPanel(props: CanvasPanelProps) {
+export function ContextPanel(props: CanvasPanelProps & { isCurrentOpening?: () => boolean }) {
   const { onClose } = props
   // AppFrame can be embedded more than once on a host page. Keep all fallback
   // focus recovery inside that shell; document-wide queries can otherwise
   // return another site's canvas opener or sidebar trigger.
-  const { focusScopeRef, ...canvasProps } = props
+  const { focusScopeRef, isCurrentOpening, ...canvasProps } = props
   // Canvas is controlled by the shell and has no trigger of its own. Capture
   // the invoking control before the panel opens so closing it restores focus.
   const returnFocusRef = useRef<HTMLElement | null>(null)
@@ -88,17 +88,31 @@ export function ContextPanel(props: CanvasPanelProps) {
     }
   }, [])
   const completeClose = useCallback(() => {
+    if (isCurrentOpening && !isCurrentOpening()) return
     closingRef.current = true
     onClose()
     const recorded = pendingDesktopTargetRef.current
     pendingDesktopTargetRef.current = null
     focusReturnTimerRef.current = window.setTimeout(() => {
       focusReturnTimerRef.current = null
-      if (focusScopeRef && !focusScopeRef.current) return
+      if ((isCurrentOpening && !isCurrentOpening()) || (focusScopeRef && !focusScopeRef.current)) return
       resolveReturnTarget(focusScopeRef?.current ?? document, recorded, activityId)?.focus({ preventScroll: true })
     }, 0)
-  }, [activityId, focusScopeRef, onClose])
-  const { open, requestClose } = useOverlayClose(completeClose, 220)
+  }, [activityId, focusScopeRef, isCurrentOpening, onClose])
+  const { open, requestClose, cancelClose, reopenRevision } = useOverlayClose(completeClose, 220)
+  const previousOpeningRef = useRef(isCurrentOpening)
+  useLayoutEffect(() => {
+    if (previousOpeningRef.current === isCurrentOpening) return
+    previousOpeningRef.current = isCurrentOpening
+    if (!cancelClose()) return
+    closingRef.current = false
+    pendingDesktopTargetRef.current = null
+    if (focusReturnTimerRef.current !== null) {
+      window.clearTimeout(focusReturnTimerRef.current)
+      focusReturnTimerRef.current = null
+    }
+    returnFocusRef.current = getFocusableReturnTarget(focusScopeRef?.current ?? document)
+  }, [cancelClose, focusScopeRef, isCurrentOpening])
 
   const handleClose = () => {
     if (focusReturnTimerRef.current !== null) {
@@ -123,8 +137,15 @@ export function ContextPanel(props: CanvasPanelProps) {
       // focus hand-off. It must not remain discoverable by screen readers or
       // keyboard navigation while it is visually gone.
       inert={!open ? true : undefined}
+      onKeyDown={event => {
+        if (!open || event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing) return
+        event.preventDefault()
+        event.stopPropagation()
+        handleClose()
+      }}
     >
-      <CanvasPanel {...canvasProps} onClose={handleClose} />
+      {/* Only an interrupted exit needs a fresh body, including same-artifact reopen. */}
+      <CanvasPanel key={reopenRevision} {...canvasProps} onClose={handleClose} />
     </div>
   )
 }

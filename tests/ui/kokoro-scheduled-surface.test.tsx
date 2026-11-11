@@ -43,6 +43,7 @@ function scheduledTaskClient(
   };
   return {
     listScheduledTasks: unavailable,
+    listScheduledExecutions: unavailable,
     createScheduledTask: unavailable,
     updateScheduledTask: unavailable,
     retryScheduledTask: unavailable,

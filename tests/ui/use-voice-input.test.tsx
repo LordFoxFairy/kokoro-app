@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useVoiceInput } from "@/ui/composer/use-voice-input"
 
 type ResultEvent = Event & {
-  results: ArrayLike<{ 0: { transcript: string } }>
+  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>
 }
 
 type ErrorEvent = Event & { error?: string }
@@ -29,7 +29,7 @@ class FakeSpeechRecognition extends EventTarget {
 
   emitResult(...transcripts: string[]) {
     this.onresult?.(Object.assign(new Event("result"), {
-      results: transcripts.map((transcript) => ({ 0: { transcript } })),
+      results: transcripts.map((transcript) => ({ isFinal: true, 0: { transcript } })),
     }))
   }
 
@@ -160,15 +160,21 @@ describe("useVoiceInput", () => {
 
     act(() => recognition?.emitResult("first", "second"))
     expect(result.current.state).toBe("transcribing")
-    expect(props.onDraftChange).toHaveBeenCalledWith("existing first second")
+    expect(props.onDraftChange).not.toHaveBeenCalled()
 
-    act(() => recognition?.emitEnd())
+    act(() => {
+      recognition?.emitResult("first", "second")
+      recognition?.emitEnd()
+      recognition?.emitEnd()
+    })
     expect(result.current.state).toBe("idle")
+    expect(props.onDraftChange).toHaveBeenCalledExactlyOnceWith("existing first second")
 
     unmount()
   })
 
-  it("真实 recognition error 会进入 error，并忽略之后的 end/result", () => {
+  it.each([["not-allowed", "permission"], ["service-not-allowed", "recognizer"], ["network", "recognizer"]] as const)(
+    "classifies native %s without applying late text", (event, error) => {
     vi.stubGlobal("SpeechRecognition", FakeSpeechRecognition)
     const { result, props, unmount } = renderVoiceInput()
 
@@ -176,8 +182,9 @@ describe("useVoiceInput", () => {
     const recognition = FakeSpeechRecognition.latest
     expect(recognition).not.toBeNull()
 
-    act(() => recognition?.emitError("not-allowed"))
+    act(() => recognition?.emitError(event))
     expect(result.current.state).toBe("error")
+    expect(result.current.error).toBe(error)
 
     act(() => {
       recognition?.emitEnd()
@@ -229,6 +236,81 @@ describe("useVoiceInput", () => {
     expect(props.onDraftChange).not.toHaveBeenCalled()
 
     unmount()
+  })
+
+  it.each(["kokoro:surface-navigation", "pagehide", "kokoro:auth-invalidated"])(
+    "retires capture before a late native result after %s", (event) => {
+    vi.stubGlobal("SpeechRecognition", FakeSpeechRecognition)
+    const original = vi.fn()
+    const next = vi.fn()
+    const options = { preview: false, previewTranscript: "" }
+    const { result, rerender } = renderHook(
+      ({ draft, onDraftChange }) => useVoiceInput({ ...options, draft, onDraftChange }),
+      { initialProps: { draft: "first task", onDraftChange: original } },
+    )
+    act(() => result.current.toggle())
+    const recognition = FakeSpeechRecognition.latest
+    expect(recognition?.start).toHaveBeenCalledOnce()
+
+    act(() => window.dispatchEvent(new Event(event)))
+    rerender({ draft: "second task", onDraftChange: next })
+    act(() => {
+      recognition?.emitResult("old microphone result")
+      recognition?.emitEnd()
+    })
+    expect(next).not.toHaveBeenCalled()
+    expect(original).not.toHaveBeenCalled()
+    expect(recognition?.abort).toHaveBeenCalledOnce()
+  })
+
+  it("does not apply a final transcript if the user cancels before recognition ends", () => {
+    vi.stubGlobal("SpeechRecognition", FakeSpeechRecognition)
+    const { result, props } = renderVoiceInput()
+
+    act(() => result.current.toggle())
+    const recognition = FakeSpeechRecognition.latest
+    act(() => recognition?.emitResult("pending final"))
+    expect(result.current.state).toBe("transcribing")
+    act(() => result.current.cancel())
+    act(() => recognition?.emitEnd())
+    expect(result.current.state).toBe("idle")
+    expect(recognition?.abort).toHaveBeenCalledOnce()
+    expect(props.onDraftChange).not.toHaveBeenCalled()
+  })
+
+  it("silence ends without writing a transcript or claiming denied permission", () => {
+    vi.stubGlobal("SpeechRecognition", FakeSpeechRecognition)
+    const { result, props } = renderVoiceInput()
+    act(() => result.current.toggle())
+    act(() => {
+      FakeSpeechRecognition.latest?.emitError("no-speech")
+      FakeSpeechRecognition.latest?.emitEnd()
+    })
+    expect(result.current.state).toBe("idle")
+    expect(result.current.error).toBeNull()
+    expect(props.onDraftChange).not.toHaveBeenCalled()
+  })
+
+  it("retires a replaced trusted draft scope even at the same URL", () => {
+    vi.stubGlobal("SpeechRecognition", FakeSpeechRecognition)
+    const original = vi.fn()
+    const next = vi.fn()
+    const { result, rerender } = renderHook(
+      ({ scope, onDraftChange }) => useVoiceInput({ draft: "existing", onDraftChange, scope, preview: false, previewTranscript: "" }),
+      { initialProps: { scope: {}, onDraftChange: original } },
+    )
+
+    act(() => result.current.toggle())
+    const recognition = FakeSpeechRecognition.latest
+    rerender({ scope: {}, onDraftChange: next })
+    act(() => {
+      recognition?.emitResult("old owner result")
+      recognition?.emitEnd()
+    })
+    expect(result.current.state).toBe("idle")
+    expect(recognition?.abort).toHaveBeenCalledOnce()
+    expect(original).not.toHaveBeenCalled()
+    expect(next).not.toHaveBeenCalled()
   })
 
   it("unmount 会清理 preview timer，避免卸载后追加转写", () => {

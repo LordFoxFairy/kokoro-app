@@ -6,6 +6,7 @@ import { z } from "zod"
 import { interactionStateSchema } from "@/contract/control"
 import { agentFailureProfileSchema } from "@/contract/agent-failure"
 import { runProcessActivitySchema } from "@/contract/agui-events"
+import { deliveredArtifactDisplayPathSchema } from "@/contract/artifacts"
 
 const todoSchema = z
   .object({
@@ -108,6 +109,7 @@ const deliveryCreatedPayload = z
     artifact_kind: z.enum(["document", "code", "image", "audio", "video", "data", "archive", "other"]),
     tool_call_id: z.string().min(1),
     path: z.string().min(1),
+    display_path: deliveredArtifactDisplayPathSchema.optional(),
     title: z.string().min(1),
     mime: z.string().min(1),
     size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
@@ -115,6 +117,9 @@ const deliveryCreatedPayload = z
     note: z.string().optional(),
   })
   .strict()
+  .refine(value => value.display_path === undefined || value.display_path === value.path, {
+    path: ["display_path"], message: "Delivery display path must equal its attested source path",
+  })
 
 const todoUpdatedPayload = z
   .object({

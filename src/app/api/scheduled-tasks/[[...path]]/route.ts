@@ -7,7 +7,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { sameOriginOk } from "@/lib/server/same-origin"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { InvalidBrowserCookieError, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -57,14 +57,10 @@ async function proxyScheduledTaskRequest(
   if (config.bffBaseUrl == null) return errorResponse("scheduled_tasks_not_configured", 503)
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) return errorResponse("forbidden_origin", 403)
 
-  let claims
-  try {
-    claims = await admittedProductSession(request, config)
-  } catch {
-    return errorResponse("session_unavailable", 503)
-  }
-  if (claims === null) return errorResponse("unauthenticated", 401)
   const path = (await context.params).path ?? []
+  if (path[0] === "executions" && (path.length !== 1 || request.method !== "GET")) {
+    return errorResponse("invalid_scheduled_task_path", 404)
+  }
   if (path.length > 2 || (path.length === 2 && path[1] !== "retry") || path.some((segment) => segment.length === 0)) {
     return errorResponse("invalid_scheduled_task_path", 404)
   }
@@ -72,12 +68,6 @@ async function proxyScheduledTaskRequest(
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
   const suffix = path.length === 0 ? "" : `/${path.map((segment) => encodeURIComponent(segment)).join("/")}`
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/scheduled-tasks${suffix}${new URL(request.url).search}`
-  const headers = productBffHeaders(config, claims, requestId)
-  for (const name of FORWARD_HEADERS) {
-    const value = request.headers.get(name)
-    if (value !== null) headers.set(name, value)
-  }
-
   let body: ArrayBuffer | undefined
   if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "DELETE") {
     try {
@@ -92,13 +82,19 @@ async function proxyScheduledTaskRequest(
 
   let upstream: Response
   try {
+    const headers = productBffHeaders(config, request, requestId)
+    for (const name of FORWARD_HEADERS) {
+      const value = request.headers.get(name)
+      if (value !== null) headers.set(name, value)
+    }
     upstream = await requestWithDomain(target, config.domain, {
       method: request.method,
       headers: Object.fromEntries(headers.entries()),
       ...(body !== undefined ? { body } : {}),
       signal: request.signal,
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof InvalidBrowserCookieError) return errorResponse("invalid_browser_cookie", 400)
     return errorResponse("scheduled_tasks_unreachable", 502)
   }
 

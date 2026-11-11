@@ -1,3 +1,5 @@
+2026-11-04 T‑09：ConversationThread 显示 Public 28.19 的非重试超窗终态，保留已生成正文，不重发原请求。
+
 2026-10-28：`use-run-display.ts` 在同scope终态补读被卸载取消后解除读取占用，保留既有事实并允许重新可见时读取；不重置终态补读资格、不重试HTTP失败。`tool-action-presentation.ts` 同时拥有行动行与Canvas状态文案，MCP completed仅表述“调用已结束”，业务失败仍优先显示。
 
 2026-10-28 整轮过程：`completed-turn-sections.ts`只按正式 final 引用与完整正文划分；`turn-process.tsx`拥有整轮披露与可访问隐藏，原相邻动作组及正文顺序保持。未取得 final、partial、在途、HITL、取消/失败继续原可读布局；最终答复和状态反馈在披露外。参考入口实测14px/20px、4px gap、16px chevron，未有可靠耗时不造时长。正常激活和同任务浏览器验收仍待。
@@ -32,6 +34,8 @@ AnswerActions：独立回答操作栏只持复制与短反馈；重新生成／�
 
 具体动作摘要第一阶段（2026-10-27，Root 已核 D0，完整对象消费待正式发行）：`SegmentProcess` 单项直接呈现安全活动行，多项才提供类别组成摘要和真实调用／活动次数；同一 Collapsible／forceMount 内容树保 1→2 节点身份与原 segment disclosure 偏好，公开正文边界不改。`tool-action-presentation.ts` 是九类 label／icon 的唯一纯 UI 映射，不是 wire DTO；完成小勾配读屏状态，失败与运行仍有文字，混合失败包含 Skill／Subagent。同一行的继续处理 cue 只由 AssistantTurn 原 Run／尾锚／连接／HITL 事实派生且所有活动已落定，不改工具状态或叠加 forming。`targetText` 暂为显式 UI-only prop，不读取 activity 未发布字段；完整 metadata／分享隔离与正常验收仍依赖正式 owner 后继，不以本阶段称整片完成。
 
+已读私有 RunDisplay 的 `workspace_outputs` 为精确过程文件版本。原 Process 展开复用现 Run reader，文件入口打开现 Canvas；无新历史预取、轮询、并行缓存或匿名 Share 字段。路径仅显示，不参与读取。
+
 文件工具类别（2026-10-27，Public28.3消费者）：ToolCallRow新增正式 `tool.file.write`／`tool.file.deliver` 的九语言中性操作标签，完成与失败仍沿原status。live／snapshot／ordered重开共用原activity schema；不读raw名称、文件路径或参数，不将类别冒成功或Artifact关联。消费者候选验收与正常配对由Root分别记录。
 
 工具类别（2026-10-26，源码候选）：`ToolCallRow` 只按正式 Public28 的安全 `display_code` 穷尽映射本地标签；旧 generic、状态行及稳定节点不变，不读取 raw名称/参数或猜 Skill/网页标题、phase、时长。唯一activity schema与生成来源见技术设计，正常组合由Root另验。
@@ -42,6 +46,8 @@ AnswerActions：独立回答操作栏只持复制与短反馈；重新生成／�
 过程样式（2026-10-25，局部候选）：沿已归档Manus完成态将普通过程入口收为14px／20px、常规字重的muted内容宽度披露；去外框、静态Sparkles、主体底色与嵌套滚动，普通Tool／Skill／Subagent行仅在`processBody`内去胶囊，随主聊天滚动。保Collapsible、inert、手动开合、键盘焦点、窄端44px触达和减少动态；不改独立HITL、错误footer、Forming、正文或Canvas，不造时长／浏览语义。运行态未有参考，本片不重新设计；跨段顺序、连续分组及正常视觉组合由Root另验。
 
 CHAT-1（2026-10-24，候选）：`UnconfirmedSubmissionFeedback`与依赖未就绪共用中性恢复排版，但明确区分未确认admission和owner执行失败；原文/原请求人工恢复，不把已完成Run误说失败，不自动POST。
+
+Task A A‑03：ConversationThread 单独读取 AppFrame 投影的消息提交失败，复用同一「重试原请求」入口，当前 Run 正执行或等审批时也可按 engine 资格显式重试。提交结果不取代当前 Run、工具决策或已生成内容；反馈出现不移动焦点，点击重试仍沿原 Composer 回焦。402 和 owner Run 终态保持原语义。
 
 ## 2026-10-20 执行未就绪反馈
 
@@ -86,8 +92,8 @@ MCP 详情阅读：`activity-result.tsx` 将已验证预览分为无外部资源
 
 2026-10-28 回焦修正：可打开的 ToolCallRow 暴露 opaque activity identity，由 ContextPanel 在关闭后重解析当前 shell 内同一可见行；不依赖鼠标激活是否获得焦点，不按同名/末行选择。
 
-- `completed-turn-sections.ts`：正式 final 优先；只读 display 旁证需 exact Run／唯一完整 parts／确认 revision／真实正文身份，不进入 durable merge。
-- `assistant-turn.tsx`：历史成功轮外层可见时沿原 scope reader 单次取证；折叠区内部是否展开不决定首次读。焦点、旧失败与时间顺序保持。
+- `completed-turn-sections.ts`：只从 canonical terminal final 引用及同 Run 的已确认 ordered parts 划分过程与正文，不从历史正文或只读详情推断 final。
+- `assistant-turn.tsx`：整轮可见不触发 RunDisplay 请求；具名活动需要事实或用户查看详情时，由 `SegmentProcess` 沿同 scope/Run reader 读取。焦点、失败态与时间顺序保持。
 
 过程摘要计数（2026-10-28）：同一 passage 每项活动计一次，包括混合组的 MCP 发现/说明；计数表示观察到的尝试，不表示成功或唯一资源。摘要不再隐去准备次数，原时间顺序、相邻分组、披露与 activity identity 不变。
 

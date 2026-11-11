@@ -9,10 +9,11 @@ import { type AppFrameActionsOptions, useAppFrameActions } from "@/components/bl
 import { useDraft } from "@/ui/shell/use-draft"
 import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
 const target = { connectionId: "exact-runtime-connection", name: "QA MCP" }
+const emptyDraft = { text: "", refs: [] }
 function show(engine: SessionEngine, options: Partial<AppFrameActionsOptions> = {}) {
   return renderHook((extra: Partial<AppFrameActionsOptions>) => useAppFrameActions({ engine, preview: false, readBoundary: { admitted: true, subject: "alice", generation: 1 },
     projectWorkspace: false, standaloneSurface: false, chatHref: "/app", activeId: engine.getSnapshot().store?.activeId ?? null,
-    draft: "", clearDraft: vi.fn(), updateDraft: vi.fn(), setDeploymentIntent: vi.fn(), syncConversationUrl: vi.fn(),
+    readDraft: () => emptyDraft, clearDraft: vi.fn(), updateDraft: vi.fn(), setDeploymentIntent: vi.fn(), syncConversationUrl: vi.fn(),
     setConversationRouteId: vi.fn(), focusComposer: vi.fn(), closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null }, ...extra }),
   { initialProps: options, wrapper: ({children}: {children: ReactNode}) => <LocaleProvider>{children}</LocaleProvider> })
 }

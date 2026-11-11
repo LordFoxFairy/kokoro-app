@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 
 import {
   controlPath,
-  controlReceiptPath,
   eventsPath,
   messagesPath,
   renameSessionPath,
@@ -12,17 +11,15 @@ import {
 } from "@/contract/http"
 
 describe("opaque HTTP path segments", () => {
-  it("encodes session, run, command, and share references exactly once", () => {
+  it("encodes session, run, and share references exactly once", () => {
     const sessionId = "session/a?b#c%20"
     const runId = "run/a?b#c%20"
-    const commandId = "command/a?b#c%20"
 
     expect(messagesPath(sessionId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/messages")
     expect(snapshotPath(sessionId)).toBe("/sessions/session%2Fa%3Fb%23c%2520")
     expect(eventsPath(sessionId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/events")
     expect(renameSessionPath(sessionId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/title")
     expect(controlPath(sessionId, runId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/runs/run%2Fa%3Fb%23c%2520/control")
-    expect(controlReceiptPath(sessionId, runId, commandId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/runs/run%2Fa%3Fb%23c%2520/control/command%2Fa%3Fb%23c%2520")
     expect(sharePath(sessionId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/share")
     expect(sharedSnapshotPath("share/a?b#c%20")).toBe("/shared/share%2Fa%3Fb%23c%2520")
   })

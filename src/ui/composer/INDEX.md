@@ -23,7 +23,7 @@ AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户
 - Enter 发送 / Shift+Enter 换行；IME 合成期 Enter 只确认候选词不发送。
 - 首条消息后模式/模型/agent 锁定（`modeLocked`）：由 shell 传入，组件不自持锁态。
 
-- Send 的可见性只由运行态与非空 draft 决定；disabled 消费上游 engine admission，非空但暂不可提交时保留按钮与草稿，Stop 不受该判定阻断。
+- Send 的可见性只由运行态与非空 draft 决定；disabled 消费上游 engine admission，非空但暂不可提交时保留按钮与草稿，Stop 不受该判定阻断。 有活动 Run 时，按实际提交路径显示「添加到队列」「发送但不中断」或「打断并发送」。针对当前 Run 的操作只在其已开始且目标精确匹配时启用，不把 FIFO 称为插话。
 ## 显式技能选择
 
 `SelectedSkillPill` 仅显示 shell 传入的真实选择名称并提供键盘/触屏移除入口；不管理安装或 source 授权。清除只影响未来消息，不修改 engine 已冻结的未知提交。选择名不写入提示词充当能力身份。
@@ -44,4 +44,8 @@ AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户
 
 Composer 仅报告新输入的 slash 范围；成功选择仅移除该范围，保留原文、原会话和光标，不自动 Send。IME、paste、URL/path 与选区替换不打开命令；菜单键盘/Esc 不落入原 Enter-submit。真正 source 选择与首次 Send 承接仍由 `useAppFrameSkillTrial` 单一生命周期持有，旧 actor/scope/route 的结果和迟到 focus 不复活。`SelectedSkillPill` 原样复用，当前仍为 textarea＋controls pill，不冒称行内不可编辑 token 已一比一。
 
-2026-10-29实测修正：Manus首页与项目的连接器列表在前、添加和管理固定底部，不随上下placement逆序；删除原placement监听与反转，键盘首次进入真实首个选择项、Esc回焦。已发送选择由私有snapshot提供候选，Engine保护新提交／手选，controller完整重新核验目录后CAS恢复。加号仍缺真实文件／资料库／最近任务上下文链，不将本节现Skills实现视作完整资源菜单。
+2026-10-29实测修正：Manus首页与项目的连接器列表在前、添加和管理固定底部，不随上下placement逆序；删除原placement监听与反转，键盘首次进入真实首个选择项、Esc回焦。已发送选择由私有snapshot提供候选，Engine保护新提交／手选，controller完整重新核验目录后CAS恢复。
+
+## 当前草稿的资源选择（A‑08，实施候选）
+
+`composer-resource-picker.tsx` / `.module.css` 承接现加号的显式本地上传、Library CLEAN files/FINAL artifacts 与当前 scope 最近任务。最近任务只在打开时读原私有 snapshot；无任何交付且有 durable final 标记才显示“最终答复”，用 opaque Message ID，不读正文。存在交付仍沿原 artifact 分页；Project 仅保当前 Conversation 归属。引用只报告 kind/resource_id，≤16、可移除，上传/选择/关闭不发送；未知上传保原 File/key，身份/路由/页面退休 abort 并忽略迟到结果。真实浏览器/正式组合验收归 Root。

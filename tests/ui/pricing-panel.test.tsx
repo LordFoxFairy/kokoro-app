@@ -20,7 +20,6 @@ const PLAN = {
 function makeClient(over: Partial<PricingClient> = {}): PricingClient {
   return {
     plans: async () => ({ plans: [PLAN] }),
-    checkout: async () => ({ status: "unavailable" }),
     ...over,
   }
 }
@@ -51,26 +50,18 @@ describe("PricingPanel", () => {
     expect(screen.queryByTestId("pricing-card")).toBeNull()
   })
 
-  it("disables the first nonempty catalog purchase without checkout", async () => {
-    const checkout = vi.fn(async () => ({ status: "ok" as const, checkout_url: "https://pay.invalid" }))
-    renderPanel(makeClient({ checkout }))
+  it("disables purchase for the first nonempty catalog", async () => {
+    renderPanel(makeClient())
     const card = await screen.findByTestId("pricing-card")
     const buy = card.querySelector("button")!
     expect(buy).toBeDisabled()
-    fireEvent.click(buy)
-    fireEvent.keyDown(buy, { key: "Enter" })
-    fireEvent.keyUp(buy, { key: "Enter" })
-    expect(checkout).not.toHaveBeenCalled()
     expect(screen.getByRole("alert")).toHaveTextContent("Payments aren't set up yet")
   })
   it("keeps embedded catalog prices readable with purchases disabled", async () => {
-    const checkout = vi.fn()
-    render(<PricingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({ checkout })} embedded />, { wrapper: LocaleProvider })
+    render(<PricingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient()} embedded />, { wrapper: LocaleProvider })
     const card = await screen.findByTestId("pricing-card")
     expect(screen.getByText("49.00")).toBeInTheDocument()
     expect(card.querySelector("button")).toBeDisabled()
-    fireEvent.click(card.querySelector("button")!)
-    expect(checkout).not.toHaveBeenCalled()
   })
 
   it("preserves the canonical empty catalog without invented offers", async () => {
@@ -91,8 +82,7 @@ describe("PricingPanel", () => {
 
   it("keeps failed reads quiet without fake empty offers; reopening reads again", async () => {
     const plans = vi.fn().mockRejectedValueOnce(new Error("read failure")).mockResolvedValueOnce({ plans: [PLAN] })
-    const checkout = vi.fn()
-    const client = makeClient({ plans, checkout })
+    const client = makeClient({ plans })
     const mounted = renderPanel(client)
     await screen.findByText("Failed to load plans")
     expect(screen.queryByRole("alert")).toBeNull()
@@ -104,7 +94,6 @@ describe("PricingPanel", () => {
     renderPanel(client)
     await screen.findByTestId("pricing-card")
     expect(plans).toHaveBeenCalledTimes(2)
-    expect(checkout).not.toHaveBeenCalled()
   })
 
 })
@@ -234,12 +223,11 @@ it("SET26 unmount aborts its noncooperative catalog and ignores late completion"
   expect(plans).toHaveBeenCalledOnce();
 });
 
-it("plan detail previews filter actual billing periods without inventing discounts or starting checkout", async () => {
+it("plan detail previews filter actual billing periods without inventing discounts", async () => {
   const annual = { ...PLAN, id: "annual", name: "Annual offer", billing_interval: "year" as const, amount_minor: "39900" };
   const once = { ...PLAN, id: "once", name: "One-time offer", billing_interval: "once" as const, amount_minor: "700" };
   const plans = vi.fn().mockResolvedValue({ plans: [PLAN, annual, once] });
-  const checkout = vi.fn();
-  renderPanel(makeClient({ plans, checkout }));
+  renderPanel(makeClient({ plans }));
   await screen.findByText("Studio Bundle");
   const period = screen.getByRole("combobox", { name: "Billing period" });
   expect(period.tagName).toBe("BUTTON");
@@ -263,14 +251,12 @@ it("plan detail previews filter actual billing periods without inventing discoun
   fireEvent.click(await screen.findByRole("option", { name: "one-time" }));
   expect(screen.getByText("One-time offer")).toBeVisible();
   expect(plans).toHaveBeenCalledTimes(1);
-  expect(checkout).not.toHaveBeenCalled();
 });
 
 it("reopening a confirmed empty catalog displays only the newly returned offer", async () => {
   let finish!: (value: { plans: typeof PLAN[] }) => void;
   const plans = vi.fn().mockResolvedValueOnce({ plans: [] }).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
-  const checkout = vi.fn();
-  const client = makeClient({ plans, checkout });
+  const client = makeClient({ plans });
   const mounted = renderPanel(client);
   await screen.findByText("No plans available to purchase");
   expect(plans).toHaveBeenCalledOnce();
@@ -292,6 +278,5 @@ it("reopening a confirmed empty catalog displays only the newly returned offer",
   expect(buy).toBeDisabled();
   expect(buy).toHaveAccessibleDescription(/Payments aren't set up yet/);
   fireEvent.click(buy);
-  expect(checkout).not.toHaveBeenCalled();
   expect(plans).toHaveBeenCalledTimes(2);
 });

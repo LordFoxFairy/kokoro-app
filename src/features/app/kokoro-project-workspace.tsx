@@ -7,20 +7,26 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MouseEven
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { projectWebsitesProjectIdSchema } from "@/generated/bff-project-websites"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import type { ProjectInstructionRequest, ProjectInstructionSaveError } from "@/components/blocks/app-frame/app-frame.types"
 import { useLocale } from "@/i18n/context"
 import { cn } from "@/lib/utils"
+import { readBrowserInvalidationHint } from "@/ui/auth/use-session-state"
+import { readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
 import { ProjectResourceUploadError } from "./project-resource-upload"
 
 import { ProjectContextCard } from "./project-context-card"
 import { ProjectIdentity } from "./project-identity"
+import { ProjectTodoSection, type ProjectTodoClient } from "./project-todo-section"
+import { liveProjectTodoClient } from "./project-todo-client"
 import { ProjectConversations } from "./project-conversations"
 import { ProjectContextComposition } from "./project-context-composition"
 import { ProjectContextDialogs } from "./project-context-dialogs"
 import contextStyles from "./project-context-composition.module.css"
 import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
-import { previewScheduledTasks, previewWebsites, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
+import { ProjectWebsitesDialog } from "./project-websites-dialog"
+import { previewScheduledTasks, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
 import { useProjectComposerClearance } from "./use-project-composer-clearance"
 import { useProjectResourceActions } from "./use-project-resource-actions"
 import { useProjectResources } from "./use-project-resources"
@@ -33,7 +39,7 @@ type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
   | "projectInstructionRequest" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable" | "projectReadBoundary" | "projectMcpRecommendations" | "projectConversationContent" | "projectContextVisible" | "onCloseProjectContext"
->
+> & { projectTodoClient?: ProjectTodoClient }
 
 type InstructionEditorState = {
   draftInitialized: boolean
@@ -91,6 +97,7 @@ export function KokoroProjectWorkspace({
   projectReadBoundary,
   projectMcpRecommendations,
   onCreateProjectScheduledTask,
+  projectTodoClient = liveProjectTodoClient,
 }: ProjectWorkspaceProps) {
   const { locale, t } = useLocale()
   const { surfaceRef, composerRef } = useProjectComposerClearance(projectConversationContent === undefined)
@@ -104,6 +111,28 @@ export function KokoroProjectWorkspace({
   useLayoutEffect(() => { activePresentation.current = { active: contextActive, token: presentationToken } }, [contextActive, presentationToken])
   const presentationCurrent = () => activePresentation.current.active && activePresentation.current.token === presentationToken && projectContextRoute() === presentationRoute
   const capabilities = workspaceCapabilities
+  const websiteSubject = projectReadBoundary?.subject ?? null
+  const websiteTenant = projectReadBoundary?.tenant
+  const websiteGeneration = projectReadBoundary?.generation
+  const websiteHint = projectReadBoundary?.authInvalidationHint
+  const websiteProject = !preview && contextActive && capabilities?.websites === true && projectReadBoundary?.admitted === true &&
+    websiteSubject !== null && projectDetail?.status === "ready" && projectDetail.data.id === projectRef &&
+    projectWebsitesProjectIdSchema.safeParse(projectRef).success ? projectRef ?? null : null
+  const websiteScope = useMemo(() => ({ project: websiteProject, route: presentationRoute, subject: websiteSubject,
+    tenant: websiteTenant, generation: websiteGeneration, hint: websiteHint }),
+  [websiteProject, presentationRoute, websiteSubject, websiteTenant, websiteGeneration, websiteHint])
+  const liveWebsiteScope = useRef<typeof websiteScope | null>(null)
+  useLayoutEffect(() => {
+    liveWebsiteScope.current = websiteScope
+    return () => { if (liveWebsiteScope.current === websiteScope) liveWebsiteScope.current = null }
+  }, [websiteScope])
+  const websiteScopeCurrent = useCallback(() => {
+    if (liveWebsiteScope.current !== websiteScope || websiteScope.project === null || projectContextRoute() !== websiteScope.route) return false
+    try {
+      return readBrowserAuthIndexSubject() === websiteScope.subject &&
+        (websiteScope.hint === undefined || readBrowserInvalidationHint() === websiteScope.hint)
+    } catch { return false }
+  }, [websiteScope])
   const instructionsAvailable = Boolean(capabilities?.instructions) && (preview ||
     (projectReadBoundary === undefined || projectReadBoundary.admitted && projectReadBoundary.subject !== null)
     && (projectDetail === undefined || projectDetail.status === "ready" && projectDetail.data.id === projectRef))
@@ -213,10 +242,7 @@ export function KokoroProjectWorkspace({
   }, [resourceContext, resourcesOpen])
   const resourceInputRef = useRef<HTMLInputElement | null>(null)
   const resourceSearchRef = useRef<HTMLInputElement | null>(null)
-  const [websitesOpen, setWebsitesOpen] = useState(false)
-  const [websiteQuery, setWebsiteQuery] = useState("")
-  const [selectedWebsiteId, setSelectedWebsiteId] = useState<string | null>(null)
-  const [linkedWebsiteId, setLinkedWebsiteId] = useState<string | null>(null)
+  const [websiteDialogScope, setWebsiteDialogScope] = useState<typeof websiteScope | null>(null)
   const [scheduledOpen, setScheduledOpen] = useState(false)
   const [scheduledQuery, setScheduledQuery] = useState("")
   const [scheduledItems, setScheduledItems] = useState<readonly ProjectScheduledPreview[]>(preview ? previewScheduledTasks : [])
@@ -269,6 +295,10 @@ export function KokoroProjectWorkspace({
     setOpen(open)
     if (!open) restoreContextOpener()
   }, [restoreContextOpener])
+  const closeWebsites = useCallback((restoreFocus = true) => {
+    setWebsiteDialogScope(current => current === websiteScope ? null : current)
+    if (restoreFocus && websiteScopeCurrent()) restoreContextOpener()
+  }, [restoreContextOpener, websiteScope, websiteScopeCurrent])
 
   const openResources = (event: MouseEvent<HTMLButtonElement>, kind: ResourceKind = "all") => {
     const scope = resourceScope.current
@@ -293,11 +323,6 @@ export function KokoroProjectWorkspace({
     const queryMatches = resourceQuery.trim().length === 0
       || `${resource.name} ${resource.detail}`.toLocaleLowerCase().includes(resourceQuery.trim().toLocaleLowerCase())
     return queryMatches && (resourceKind === "all" || resource.kind === resourceKind)
-  })
-
-  const filteredWebsites = previewWebsites.filter((website) => {
-    const query = websiteQuery.trim().toLocaleLowerCase()
-    return query.length === 0 || `${website.name} ${website.detail}`.toLocaleLowerCase().includes(query)
   })
 
   const filteredScheduledTasks = scheduledItems.filter((task) => {
@@ -405,7 +430,7 @@ export function KokoroProjectWorkspace({
           projectHistoryStatus={projectHistoryStatus} projectHistoryRetryable={projectHistoryRetryable} onRetryProjectRead={onRetryProjectRead}
           onOpenSettings={onOpenSettings} projectMcpRecommendations={projectMcpRecommendations} instructionsAvailable={instructionsAvailable}
           onInstructions={openInstructions} onResources={openResources} onUpload={openResourceUpload}>
-          {!task && capabilities?.websites ? (
+          {websiteProject !== null ? (
             <ProjectContextCard
               kind="websites"
               title={t("firstSite.websites")}
@@ -423,9 +448,9 @@ export function KokoroProjectWorkspace({
               }
               footerAction={{ label: t("firstSite.add"), icon: Plus }}
               onClick={(event) => {
+                if (!websiteScopeCurrent()) return
                 rememberContextOpener(event)
-                setWebsiteQuery("")
-                setWebsitesOpen(true)
+                setWebsiteDialogScope(websiteScope)
               }}
             />
           ) : null}
@@ -461,6 +486,10 @@ export function KokoroProjectWorkspace({
             />
           ) : null}
         </ProjectContextComposition>
+        {!task && !preview && projectRef && projectReadBoundary?.admitted && projectReadBoundary.subject &&
+          projectDetail?.status === "ready" && projectDetail.data.id === projectRef ?
+          <ProjectTodoSection projectId={projectDetail.data.id} subject={projectReadBoundary.subject}
+            generation={projectReadBoundary.generation} client={projectTodoClient} /> : null}
         {!task && capabilities?.projectConversations ? <ProjectConversations
           projectConversations={projectConversations}
           projectConversationsLoading={projectConversationsLoading}
@@ -525,17 +554,10 @@ export function KokoroProjectWorkspace({
         {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
         onContextDialogChange={onContextDialogChange}
       />
+      {websiteProject !== null && websiteDialogScope === websiteScope ? <ProjectWebsitesDialog
+        projectId={websiteProject} isCurrent={websiteScopeCurrent} onClose={closeWebsites} /> : null}
       <ProjectWorkspaceDialogs preview={preview}
         {...(brandName === undefined ? {} : { brandName })}
-        websitesOpen={!task && websitesOpen}
-        setWebsitesOpen={setWebsitesOpen}
-        websiteQuery={websiteQuery}
-        setWebsiteQuery={setWebsiteQuery}
-        selectedWebsiteId={selectedWebsiteId}
-        setSelectedWebsiteId={setSelectedWebsiteId}
-        linkedWebsiteId={linkedWebsiteId}
-        setLinkedWebsiteId={setLinkedWebsiteId}
-        filteredWebsites={filteredWebsites}
         scheduledOpen={!task && scheduledOpen}
         setScheduledOpen={setScheduledOpen}
         scheduledQuery={scheduledQuery}

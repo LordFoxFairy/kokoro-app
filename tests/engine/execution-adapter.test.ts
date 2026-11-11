@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { ResumeDecision } from "@/contract/control"
+import { messageCreateParamsSchema } from "@/contract/chat"
 import { createExecutionAdapter } from "@/engine/execution-adapter"
 
 import { makeEvent } from "../core/fixtures"
@@ -38,6 +39,37 @@ describe("session execution adapter", () => {
         },
       },
     ])
+  })
+
+  it("只把选择的 opaque resource refs 送入消息 wire", async () => {
+    const client = createFakeClient()
+    const adapter = createExecutionAdapter({ client, scope: { kind: "direct" } })
+    await adapter.createMessage({
+      sessionId: "session_1",
+      content: "引用这个资料",
+      idempotencyKey: "resource_1",
+      options: {
+        mode: "fast",
+        model: null,
+        selectedSkillSourceRefs: [],
+        selectedResourceRefs: [{ kind: "asset", resource_id: "asset_1" }],
+      },
+    })
+    expect(client.createCalls[0]?.body).toMatchObject({
+      selected_resource_refs: [{ kind: "asset", resource_id: "asset_1" }],
+    })
+    expect(client.createCalls[0]?.body).not.toHaveProperty("url")
+    expect(client.createCalls[0]?.body).not.toHaveProperty("content_sha256")
+    expect(client.createCalls[0]?.body).not.toHaveProperty("user_id")
+  })
+
+  it("rejects resource ref payloads that carry content or duplicate identities", () => {
+    const base = { idempotency_key: "resource_invalid", content: "引用" }
+    expect(messageCreateParamsSchema.safeParse({ ...base, selected_resource_refs: [{ kind: "asset", resource_id: "asset_1", version_id: "v1" }] }).success).toBe(false)
+    expect(messageCreateParamsSchema.safeParse({ ...base, selected_resource_refs: [{ kind: "asset", resource_id: "asset_1", url: "https://example.test" }] }).success).toBe(false)
+    expect(messageCreateParamsSchema.safeParse({ ...base, selected_resource_refs: [
+      { kind: "asset", resource_id: "asset_1" }, { kind: "asset", resource_id: "asset_1" },
+    ] }).success).toBe(false)
   })
 
   it("sends selected Connection IDs as execution input and omits an empty MCP selection", async () => {

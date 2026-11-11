@@ -13,7 +13,7 @@ import {
   upstreamResponseHeaders,
   webErrorResponse,
 } from "@/lib/server/bff-response"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { InvalidBrowserCookieError, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -27,27 +27,20 @@ export async function POST(request: Request): Promise<Response> {
   const config = productBffConfig()
   if (config === null) return webErrorResponse("auth_not_configured", 503, requestId)
   if (!sameOriginOk(request)) return webErrorResponse("forbidden_origin", 403, requestId)
-  let claims
-  try {
-    claims = await admittedProductSession(request, config)
-  } catch {
-    return webErrorResponse("session_unavailable", 503, requestId)
-  }
-  if (claims === null) return webErrorResponse("unauthenticated", 401, requestId)
+
   if (config.bffBaseUrl == null) return webErrorResponse("business_bff_not_configured", 503, requestId)
 
   const parsed = checkoutRequestSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return webErrorResponse("invalid_body", 400, requestId)
 
-  const headers = productBffHeaders(config, claims, requestId)
-  headers.set("content-type", "application/json")
-  headers.set(
-    "idempotency-key",
-    request.headers.get("idempotency-key")?.trim() || `web-checkout:${crypto.randomUUID()}`,
-  )
-
   let upstream: Response
   try {
+    const headers = productBffHeaders(config, request, requestId)
+    headers.set("content-type", "application/json")
+    headers.set(
+      "idempotency-key",
+      request.headers.get("idempotency-key")?.trim() || `web-checkout:${crypto.randomUUID()}`,
+    )
     upstream = await fetchWithDomain(`${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/billing/checkout`, config.domain, {
       method: "POST",
       headers,
@@ -55,7 +48,8 @@ export async function POST(request: Request): Promise<Response> {
       cache: "no-store",
       signal: request.signal,
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof InvalidBrowserCookieError) return webErrorResponse("invalid_browser_cookie", 400, requestId)
     return webErrorResponse("billing_unreachable", 502, requestId)
   }
   const raw: unknown = await upstream.json().catch(() => null)

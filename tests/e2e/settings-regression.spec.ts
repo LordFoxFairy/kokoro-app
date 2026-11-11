@@ -779,7 +779,7 @@ test("service detail previews and resource categories remain readable without fa
   for (const name of ["Send without interrupting", "Interrupt and send"]) {
     await expect(choices.getByRole("option", { name, exact: true })).toBeDisabled();
   }
-  await expect(choices).toContainText("require owner service support");
+  await expect(choices).toContainText("Preview does not change your delivery preference.");
   await page.keyboard.press("Escape");
   await expect(choices).toHaveCount(0);
   await expect(settings).toBeVisible();

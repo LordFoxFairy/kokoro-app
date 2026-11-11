@@ -47,7 +47,7 @@ const cursorSchema = z
   .strict();
 export function sharedTasksCursor(
   value: string,
-  subject: string,
+  subject: string | undefined,
   limit: number,
   tenant?: string,
 ) {
@@ -68,7 +68,7 @@ export function sharedTasksCursor(
   }).decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
   const cursor = cursorSchema.parse(parseSharedTasksJson(text));
   if (
-    cursor.subjectId !== subject ||
+    (subject !== undefined && cursor.subjectId !== subject) ||
     cursor.limit !== limit ||
     (tenant !== undefined && cursor.tenantId !== tenant)
   )
@@ -85,7 +85,7 @@ export function compareSharedTasks(a: SharedTask, b: SharedTask) {
 }
 export function validateSharedTasks(
   raw: unknown,
-  subject: string,
+  subject: string | undefined,
   limit: number,
   cursor?: string,
   tenant?: string,

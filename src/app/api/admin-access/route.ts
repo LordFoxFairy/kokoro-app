@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { bffErrorEnvelopeSchema, bffSuccessEnvelopeSchema, requestIdForRequest, webErrorResponse } from "@/lib/server/bff-response"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -19,18 +19,20 @@ export async function GET(request: Request): Promise<Response> {
   const requestId = requestIdForRequest(request)
   const config = productBffConfig()
   if (config === null) return webErrorResponse("admin_access_unavailable", 503, requestId)
-  const claims = await admittedProductSession(request, config).catch(() => null)
-  if (claims === null) return webErrorResponse("unauthenticated", 401, requestId)
+
   let upstream: Response
   try {
     upstream = await fetchWithDomain(`${config.bffBaseUrl}/v1/me`, config.domain, {
-      method: "GET", headers: productBffHeaders(config, claims, requestId), cache: "no-store", signal: request.signal,
+      method: "GET", headers: productBffHeaders(config, request, requestId), cache: "no-store", signal: request.signal,
     })
   } catch { return webErrorResponse("admin_access_unavailable", 503, requestId) }
+  if (upstream.status === 401) return webErrorResponse("unauthenticated", 401, requestId)
+  if (upstream.status === 403) return webErrorResponse("session_forbidden", 403, requestId)
+  if (upstream.status === 429) return webErrorResponse("session_rate_limited", 429, requestId)
   const raw: unknown = await upstream.json().catch(() => null)
   if (!upstream.ok || bffErrorEnvelopeSchema.safeParse(raw).success) return webErrorResponse("admin_access_unavailable", 503, requestId)
   const parsed = currentUserSchema.safeParse(raw)
-  if (!parsed.success || parsed.data.data.user_id !== claims.subject) return webErrorResponse("admin_access_unavailable", 503, requestId)
+  if (!parsed.success) return webErrorResponse("admin_access_unavailable", 503, requestId)
   return NextResponse.json({
     platform_admin: parsed.data.data.platform_admin,
     user_id: parsed.data.data.user_id,

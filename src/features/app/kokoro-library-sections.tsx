@@ -1,15 +1,16 @@
-import { Archive, ChevronDown, Download, SlidersHorizontal, SquarePen, Star } from "lucide-react"
+import { Archive, ChevronDown, Download, SlidersHorizontal, SquarePen, Star, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import type { LibraryArtifact } from "./kokoro-library-artifact-client"
+import type { ArtifactDeletionOutcome, LibraryArtifact } from "./kokoro-library-artifact-client"
 import { useLocale, useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
@@ -113,14 +114,18 @@ export function LibraryToolbar({ filter, updateUrlState }: ToolbarProps) {
 
 type ResultsProps = {
   onPrompt?: EmptyStateProps["onPrompt"]
-  onOpenSession?: EmptyStateProps["onOpenSession"]
+  onOpenSource?: (artifact: LibraryArtifact) => Promise<void>
+  sourceState: { key: string; status: "loading" | "unavailable" | "error" } | null
   filteredArtifacts: readonly LibraryArtifact[]
   view: LibraryUrlState["view"]
   favoritesOnly: boolean
-  favoriteIds: ReadonlySet<string>
   hasActiveContentFilter: boolean
   downloadState: Record<string, "loading" | "error" | "started">
-  toggleFavorite: (artifact: LibraryArtifact) => void
+  favoriteState: { key: string; status: "pending" | "error" } | null
+  toggleFavorite?: (artifact: LibraryArtifact) => Promise<void>
+  onOpenDelete?: (artifact: LibraryArtifact, trigger: HTMLButtonElement) => void
+  lockedDeletionKey: string | null
+  deletionBlocked: boolean
   download: (artifact: LibraryArtifact) => Promise<void>
   onOpenDetail: (artifact: LibraryArtifact, trigger: HTMLElement) => void
   showLoading: boolean
@@ -134,7 +139,7 @@ type ResultsProps = {
   clearFilters: () => void
 }
 
-export function LibraryResults({ filteredArtifacts, view, favoritesOnly, favoriteIds, hasActiveContentFilter, downloadState, toggleFavorite, download, onOpenDetail, showLoading, showError, queryPending, showPagination, loadMoreError, loadingMore, reload, loadMore, clearFilters, onPrompt, onOpenSession }: ResultsProps) {
+export function LibraryResults({ filteredArtifacts, view, favoritesOnly, hasActiveContentFilter, downloadState, favoriteState, toggleFavorite, onOpenDelete, lockedDeletionKey, deletionBlocked, download, onOpenDetail, showLoading, showError, queryPending, showPagination, loadMoreError, loadingMore, reload, loadMore, clearFilters, onPrompt, onOpenSource, sourceState }: ResultsProps) {
   const t = useT()
   const { locale } = useLocale()
   const noMatch = filteredArtifacts.length === 0 && hasActiveContentFilter
@@ -154,11 +159,42 @@ export function LibraryResults({ filteredArtifacts, view, favoritesOnly, favorit
       const Icon = artifactIcon(kind)
       const key = JSON.stringify([artifact.conversationId, artifact.artifactId])
       const state = downloadState[key]
-      const isFavorite = favoriteIds.has(key)
-      return <Card key={key} className={cn(styles.artifactCard, "gap-0 p-0")} role="listitem" data-artifact-type={kind}><CardContent className={cn(styles.cardContent, "p-0")}><div className={styles.cardActionRow}><Button type="button" variant="ghost" className={styles.artifactMain} data-library-artifact-key={key} onClick={event => onOpenDetail(artifact, event.currentTarget)} aria-label={t("library.detailAria", { title: artifact.title })}><span className={styles.typeIcon} aria-hidden="true"><Icon /></span><span className={styles.cardBody}><span className={styles.cardTitle}>{artifact.title}</span><span className={styles.meta}>{t(FILTERS.find((candidate) => candidate.value === kind)?.key ?? "library.filterOther")} · {formatBytes(Number(artifact.sizeBytes))} · {formatDeliveryTime(artifact.deliveredAt, locale)}</span>{state === "loading" ? <span className={styles.downloadStatus}>{t("library.downloading")}</span> : null}{state === "started" ? <span className={styles.downloadStatus} role="status">{t("library.downloadStarted")}</span> : null}{state === "error" ? <span className={styles.downloadError} role="alert">{t("library.downloadFailed")}</span> : null}</span></Button><Button type="button" variant="ghost" size="icon-sm" className={styles.downloadCard} onClick={() => void download(artifact)} disabled={state === "loading"} aria-busy={state === "loading"} aria-label={t(state === "error" ? "library.retryDownloadAria" : "library.downloadAria", { title: artifact.title })}><Download aria-hidden="true" /></Button><Button type="button" variant="ghost" size="icon-sm" className={styles.favoriteCard} aria-label={`${t("library.favorites")}: ${artifact.title}`} aria-pressed={isFavorite} data-state={isFavorite ? "on" : "off"} onClick={() => toggleFavorite(artifact)}><Star aria-hidden="true" /></Button></div></CardContent>{onOpenSession ? <CardFooter className={cn(styles.cardFooter, "p-0")}><Button type="button" variant="link" className={styles.source} onClick={() => onOpenSession(artifact.conversationId)}>{t("library.openSource")}</Button></CardFooter> : null}</Card>
+      const sourceStatus = sourceState?.key === key ? sourceState.status : undefined
+      const favoritePending = favoriteState?.key === key && favoriteState.status === "pending"
+      return <Card key={key} className={cn(styles.artifactCard, "gap-0 p-0")} role="listitem" data-artifact-type={kind}><CardContent className={cn(styles.cardContent, "p-0")}><div className={styles.cardActionRow}><Button type="button" variant="ghost" className={styles.artifactMain} data-library-artifact-key={key} onClick={event => onOpenDetail(artifact, event.currentTarget)} aria-label={t("library.detailAria", { title: artifact.title })}><span className={styles.typeIcon} aria-hidden="true"><Icon /></span><span className={styles.cardBody}><span className={styles.cardTitle}>{artifact.title}</span><span className={styles.meta}>{t(FILTERS.find((candidate) => candidate.value === kind)?.key ?? "library.filterOther")} · {formatBytes(Number(artifact.sizeBytes))} · {formatDeliveryTime(artifact.deliveredAt, locale)}</span>{state === "loading" ? <span className={styles.downloadStatus}>{t("library.downloading")}</span> : null}{state === "started" ? <span className={styles.downloadStatus} role="status">{t("library.downloadStarted")}</span> : null}{state === "error" ? <span className={styles.downloadError} role="alert">{t("library.downloadFailed")}</span> : null}{sourceStatus === "unavailable" ? <span role="status">{t("library.sourceUnavailable")}</span> : null}{sourceStatus === "error" ? <span className={styles.downloadError} role="alert">{t("library.sourceLoadError")}</span> : null}{favoriteState?.key === key && favoriteState.status === "error" ? <span className={styles.downloadError} role="alert">{t("library.artifactFavoriteError")}</span> : null}</span></Button><Button type="button" variant="ghost" size="icon-sm" className={styles.downloadCard} onClick={() => void download(artifact)} disabled={state === "loading"} aria-busy={state === "loading"} aria-label={t(state === "error" ? "library.retryDownloadAria" : "library.downloadAria", { title: artifact.title })}><Download aria-hidden="true" /></Button><Button type="button" variant="ghost" size="icon-sm" className={styles.favoriteCard} aria-label={`${t("library.favorites")}: ${artifact.title}`} aria-pressed={artifact.favorited} data-state={artifact.favorited ? "on" : "off"} disabled={!toggleFavorite || favoriteState?.status === "pending"} aria-busy={favoritePending} onClick={() => void toggleFavorite?.(artifact)}><Star aria-hidden="true" /></Button>{onOpenDelete ? <Button type="button" variant="ghost" size="icon-sm" className={styles.downloadCard} aria-label={t("library.artifactDeleteAria", { title: artifact.title })} disabled={deletionBlocked || (lockedDeletionKey !== null && lockedDeletionKey !== key)} onClick={event => onOpenDelete(artifact, event.currentTarget)}><Trash2 aria-hidden="true" /></Button> : null}</div></CardContent>{onOpenSource ? <CardFooter className={cn(styles.cardFooter, "p-0")}><Button type="button" variant="link" className={styles.source} disabled={sourceStatus === "loading"} aria-busy={sourceStatus === "loading"} onClick={() => void onOpenSource(artifact)}>{t("library.openSource")}</Button></CardFooter> : null}</Card>
     })}</section> : null}
     {!showLoading && !showError && showPagination ? <div className={styles.pagination} data-testid="library-pagination">{loadMoreError ? <Alert variant="destructive" className={cn(styles.errorState, styles.loadMoreError)}><AlertDescription><span>{t("library.loadMoreError")}</span><Button type="button" variant="outline" size="sm" disabled={loadingMore} aria-busy={loadingMore} onClick={() => void loadMore()}>{t("library.retryLoadMore")}</Button></AlertDescription></Alert> : <Button type="button" variant="outline" size="sm" disabled={loadingMore} aria-busy={loadingMore} onClick={() => void loadMore()}>{loadingMore ? t("library.loading") : t("library.loadMore")}</Button>}</div> : null}
   </>
+}
+
+export function LibraryArtifactDeleteDialog({ open, title, phase, onClose, onSubmit, onReturnFocus }: {
+  open: boolean
+  title: string
+  phase: "confirm" | "pending" | Exclude<ArtifactDeletionOutcome, "confirmed"> | undefined
+  onClose: () => void
+  onSubmit: () => Promise<void>
+  onReturnFocus: () => void
+}) {
+  const t = useT()
+  return <AlertDialog open={open} onOpenChange={next => { if (!next) onClose() }}>
+    <AlertDialogContent onEscapeKeyDown={event => { if (phase === "pending") event.preventDefault() }}
+      onCloseAutoFocus={event => { event.preventDefault(); onReturnFocus() }}>
+      <AlertDialogHeader>
+        <AlertDialogTitle>{t("library.artifactDeleteTitle")}</AlertDialogTitle>
+        <AlertDialogDescription className="break-words">{t("library.artifactDeleteDescription", { title })}</AlertDialogDescription>
+      </AlertDialogHeader>
+      {phase === "pending" ? <p role="status">{t("library.artifactDeleting")}</p> : null}
+      {phase === "unknown" || phase === "auth_required" || phase === "rejected" ? <p role="alert">
+        {t(phase === "unknown" ? "library.artifactDeleteUnknown" : phase === "auth_required" ? "library.artifactDeleteAuth" : "library.artifactDeleteRejected")}
+      </p> : null}
+      <AlertDialogFooter>
+        <AlertDialogCancel disabled={phase === "pending"}>{t(phase === "confirm" ? "firstSite.cancel" : "library.fileDeleteClose")}</AlertDialogCancel>
+        <Button type="button" variant="destructive" disabled={phase !== "confirm" && phase !== "unknown"} onClick={() => void onSubmit()}>
+          {t(phase === "unknown" ? "library.fileDeleteRetry" : "library.artifactDeleteTitle")}
+        </Button>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 }
 
 function useResizeObserver(ref: React.RefObject<HTMLElement | null>, callback: () => void): void {

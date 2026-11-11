@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { publicationIdSchema, publicationReceiptRequestSchema, publicationErrorSchema, mcpPublicationInputSchema, parseMcpPublicationAck, parseMcpPublicationPage, type McpPublicationIdentity } from "@/hub/mcp-project-publication.schema";
 import { parseMcpConnectorJson } from "@/hub/mcp-connector-json";
 import { sameOriginOk } from "./same-origin";
-import { admittedProductSession, productBffConfig, productBffHeaders } from "./product-bff";
+import { productBffConfig, productBffHeaders } from "./product-bff";
 import { readBoundedRequestBody, requestWithDomain, UpstreamTimeoutError, UpstreamRequestTooLargeError } from "./upstream-http";
 
 /** Narrow browser-private definition publication. No owner URL, credentials or retries in the browser. */
@@ -35,11 +35,9 @@ export async function proxyMcpProjectPublication(request: Request, path: readonl
     signal.throwIfAborted();
     const config = productBffConfig();
     if (!config?.bffBaseUrl) return fail(503, "product_tenant_not_configured", true);
-    let claims;
-    try { claims = await within(admittedProductSession(request, config)); }
-    catch { signal.throwIfAborted(); return fail(503, "iam_admission_unavailable", true); }
+
     signal.throwIfAborted();
-    if (claims === null) return fail(401, "session_authentication_required");
+
     let body: ArrayBuffer;
     try { body = await within(readBoundedRequestBody(request, 65_536, signal)); }
     catch (error) {
@@ -62,7 +60,7 @@ export async function proxyMcpProjectPublication(request: Request, path: readonl
         }
       } catch { return fail(400, "mcp_project_publication_request_invalid"); }
     } else if (body.byteLength) return fail(400, "mcp_project_publication_request_invalid");
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     if (mutation) { headers.set("idempotency-key", key!); headers.set("content-type", "application/json"); }
     signal.throwIfAborted();
     upstream = await within(requestWithDomain(`${config.bffBaseUrl.replace(/\/+$/, "")}/browser/v1/${path.map(encodeURIComponent).join("/")}${url.search}`, config.domain, {

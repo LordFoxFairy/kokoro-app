@@ -1,11 +1,13 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { createSessionEngine } from "@/engine/machine"
-import type { CreateMessageArgs } from "@/engine/execution-adapter"
+import type { PendingSubmission } from "@/engine/submission-recovery"
 import { addConversation, type ConversationStore } from "@/core/conversations"
 import { SessionClientError } from "@/engine/client"
-import { createFakeClient, createMemoryStorage, settle } from "./fakes"
+import type { SelectedResourceRef } from "@/contract/chat"
+import { makeEvent, makeSnapshot } from "../core/fixtures"
+import { createFakeClient, createMemoryStorage, makeReceipt, settle } from "./fakes"
 
-type Intent = CreateMessageArgs & { optimisticUserId: string }
+type Intent = PendingSubmission
 function journal() {
   let pending: { submission: Intent; failureCode: string | null } | null = null
   return {
@@ -69,6 +71,115 @@ describe("first submission survives document recreation without dispatching", ()
   })
 })
 
+it("retries a lost FIFO receipt with the same intent without interrupting the current run", async () => {
+  const client = createFakeClient()
+  const recovery = journal()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(), submissionRecovery: recovery })
+  try {
+    expect(engine.submit("start the current run")).toBe(true)
+    await settle()
+    const activeRun = engine.getSnapshot().machine.runId
+    const stream = client.lastStream()
+    expect(activeRun).not.toBeNull()
+    const todos = [{ content: "Original progress", status: "in_progress" as const }]
+    stream.emit([makeEvent("todo.updated", { todos }, { run_id: activeRun! })])
+    await settle()
+    expect(engine.getSnapshot().thread.todos).toEqual(todos)
+
+    let savedBeforePost = false
+    client.nextCreate = () => {
+      savedBeforePost = recovery.read()?.submission.content === "queue one follow-up"
+      return Promise.reject(new SessionClientError("network", "lost acknowledgement"))
+    }
+    expect(engine.submit("queue one follow-up")).toBe(true)
+    await settle()
+    expect(savedBeforePost).toBe(true)
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+    expect(engine.getSnapshot().machine.runId).toBe(activeRun)
+    expect(engine.getSnapshot().thread.todos).toEqual(todos)
+    expect(engine.submit("keep this next draft")).toBe(false)
+    expect(client.createCalls).toHaveLength(2)
+
+    const receipt = makeReceipt("queued_successor")
+    client.nextCreate = () => Promise.resolve(receipt)
+    engine.retry()
+    await settle()
+    expect(client.createCalls).toHaveLength(3)
+    expect(client.createCalls[2]).toEqual(client.createCalls[1])
+    expect(engine.getSnapshot().thread.messages.filter(row => row.id === receipt.user_message_id)).toHaveLength(1)
+    expect(engine.getSnapshot().machine.runId).toBe(activeRun)
+    expect(client.lastStream()).toBe(stream)
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(false)
+    expect(recovery.read()).toBeNull()
+  } finally { engine.dispose() }
+})
+
+it("absorbs a FIFO receipt received during automatic stream reconnection without opening a second stream", async () => {
+  const client = createFakeClient()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(), submissionRecovery: journal() })
+  try {
+    engine.submit("current run")
+    await settle()
+    const activeRun = engine.getSnapshot().machine.runId
+    const stream = client.lastStream()
+    let acknowledge!: (receipt: ReturnType<typeof makeReceipt>) => void
+    client.nextCreate = () => new Promise(resolve => { acknowledge = resolve })
+    expect(engine.submit("queued while connected")).toBe(true)
+    stream.reconnecting()
+    const receipt = makeReceipt("queued_while_reconnecting")
+    acknowledge(receipt)
+    await settle()
+    expect(engine.getSnapshot().canSubmitMessage).toBe(false)
+
+    stream.connected()
+    await settle()
+    expect(engine.getSnapshot()).toMatchObject({ hasPendingSubmission: false, canSubmitMessage: true })
+    expect(engine.getSnapshot().thread.messages.filter(row => row.id === receipt.user_message_id)).toHaveLength(1)
+    expect(engine.getSnapshot().machine.runId).toBe(activeRun)
+    expect(client.lastStream()).toBe(stream)
+    expect(client.createCalls).toHaveLength(2)
+  } finally { engine.dispose() }
+})
+
+it("freezes an exact started Run and restores the draft only after a definitive interrupt conflict", async () => {
+  const client = createFakeClient()
+  const recovery = journal()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(), submissionRecovery: recovery })
+  try {
+    expect(engine.submit("first message")).toBe(true)
+    await settle()
+    const runId = engine.getSnapshot().machine.runId!
+    expect(engine.submit("original interrupt", { interruptRunId: runId })).toBe(false)
+    client.lastStream().emit([makeEvent("run.created", { run_id: runId }, { run_id: runId })])
+    await settle()
+    expect(engine.submit("original interrupt", { interruptRunId: "different_run" })).toBe(false)
+
+    client.nextCreate = () => Promise.reject(new SessionClientError("network", "lost ACK"))
+    const refs: SelectedResourceRef[] = [{ kind: "asset", resource_id: "original-asset" }]
+    expect(engine.submit("original interrupt", { interruptRunId: runId }, refs)).toBe(true)
+    await settle()
+    const original = client.createCalls[1]!
+    expect(original.body).toMatchObject({ interrupt_run_id: runId, selected_resource_refs: refs })
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+    expect(engine.restoreRejectedDelivery?.(() => true)).toBe(false)
+
+    client.nextCreate = () => Promise.reject(new SessionClientError("http", "stale target", "run_delivery_conflict", 409))
+    engine.retry()
+    await settle()
+    expect(client.createCalls[2]).toEqual(original)
+    expect(engine.getSnapshot()).toMatchObject({ canRetryPendingSubmission: false, canRestoreRejectedDelivery: true })
+    expect(engine.restoreRejectedDelivery?.(() => false)).toBe(false)
+    expect(recovery.read()?.submission.content).toBe("original interrupt")
+    const save = vi.fn(() => true)
+    expect(engine.restoreRejectedDelivery?.(save)).toBe(true)
+    expect(save).toHaveBeenCalledWith("original interrupt", refs)
+    expect(recovery.read()).toBeNull()
+    expect(engine.getSnapshot().thread.messages.some(row => row.content === "original interrupt")).toBe(false)
+    expect(engine.getSnapshot().machine.runId).toBe(runId)
+    expect(client.createCalls).toHaveLength(3)
+  } finally { engine.dispose() }
+})
+
 it("a cold local home selection preserves another session's original unknown for explicit recovery without cancelling it", async () => {
   const records = new Map<string, { submission: Intent; failureCode: string | null }>()
   let abandoned = 0
@@ -110,4 +221,104 @@ it("a cold local home selection preserves another session's original unknown for
     expect(client.controlCalls).toEqual([])
     expect(abandoned).toBe(0)
   } finally { home.dispose() }
+})
+
+it("replays a lost same-Run supplement only on explicit retry, then uses the canonical user receipt", async () => {
+  const client = createFakeClient()
+  const recovery = journal()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>(), submissionRecovery: recovery })
+  try {
+    expect(engine.submit("start one Run")).toBe(true)
+    await settle()
+    const runId = engine.getSnapshot().machine.runId!
+    const stream = client.lastStream()
+    stream.emit([makeEvent("run.created", { run_id: runId }, { run_id: runId })])
+    await settle()
+    client.nextControl = () => Promise.reject(new SessionClientError("network", "lost acknowledgement"))
+    expect(engine.submit("keep the current Run", { steerRunId: runId })).toBe(true)
+    await settle()
+    const original = client.controlCalls[0]!
+    expect(original).toMatchObject({ runId, body: { kind: "run.steer", content: "keep the current Run" } })
+    expect(recovery.read()?.submission.content).toBe("keep the current Run")
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(true)
+    expect(client.controlCalls).toHaveLength(1)
+    expect(client.createCalls).toHaveLength(1)
+    expect(engine.getSnapshot().thread.messages.some(row => row.content === "keep the current Run")).toBe(false)
+
+    client.nextControl = async () => ({
+      run_id: runId, command_id: original.commandId, message_id: "owner-supplement",
+      request_digest: "sha256:owner", status: "failed", error_code: "control_superseded", replayed: true,
+    })
+    engine.retry()
+    await settle()
+    expect(client.controlCalls).toEqual([original, original])
+    expect(client.createCalls).toHaveLength(1)
+    expect(engine.getSnapshot().machine.runId).toBe(runId)
+    expect(client.lastStream()).toBe(stream)
+    expect(engine.getSnapshot().thread.messages.filter(row => row.id === "owner-supplement")).toEqual([
+      { id: "owner-supplement", role: "user", runId, content: "keep the current Run", deliveryStatus: "failed" },
+    ])
+    expect(engine.getSnapshot().canRetryPendingSubmission).toBe(false)
+    expect(recovery.read()).toBeNull()
+  } finally { engine.dispose() }
+})
+
+it("follows a pending canonical supplement by exact scoped owner GET without replacing live state", async () => {
+  const client = createFakeClient()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<ConversationStore>() })
+  try {
+    engine.submit("start Run")
+    await settle()
+    const { machine: { runId }, store } = engine.getSnapshot()
+    if (!runId || !store) throw new Error("missing Run")
+    const sessionId = store.activeId
+    const stream = client.lastStream()
+    stream.emit([makeEvent("run.created", { run_id: runId }, { run_id: runId })])
+    await settle()
+    vi.useFakeTimers()
+    const text = "same content"
+    const row = { role: "user", content: text, status: "completed", created_at: "2026-10-24T00:00:00Z" } as const
+    client.nextControl = async () => ({
+      run_id: runId, command_id: client.controlCalls[0]!.commandId, message_id: "canonical",
+      request_digest: "sha256:owner", status: "pending", replayed: false,
+    })
+    expect(engine.submit(text, { steerRunId: "not-current" })).toBe(false)
+    expect(engine.submit(text, { steerRunId: runId })).toBe(true)
+    await vi.advanceTimersByTimeAsync(0)
+    const supplement = () => engine.getSnapshot().thread.messages.find(message => message.id === "canonical")
+    expect(supplement()?.deliveryStatus).toBe("pending")
+    client.nextSnapshot = async () => makeSnapshot({ sessionId, messages: [
+      { ...row, message_id: "another-message", run_id: runId },
+      { ...row, message_id: "canonical", run_id: "another-run" },
+    ] })
+    await vi.advanceTimersByTimeAsync(750)
+    expect(supplement()?.deliveryStatus).toBe("pending")
+    await vi.advanceTimersByTimeAsync(45_000)
+    const readsBeforeTerminal = client.snapshotCalls.length
+    expect(readsBeforeTerminal).toBeLessThan(30)
+    await vi.advanceTimersByTimeAsync(45_000)
+    expect(client.snapshotCalls).toHaveLength(readsBeforeTerminal)
+    expect(supplement()?.deliveryStatus).toBe("pending")
+
+    // The Run's terminal can be projected before the independent steer worker
+    // writes its owner-confirmed receipt. A quiet EOF need not reconnect SSE.
+    let terminalSnapshot = true
+    client.nextSnapshot = async () => {
+      const status = terminalSnapshot ? "pending" : "completed"
+      terminalSnapshot = false
+      return makeSnapshot({ sessionId, messages: [{ ...row, message_id: "canonical", run_id: runId, status }] })
+    }
+    stream.emit([makeEvent("run.completed", { status: "completed" }, { session_id: sessionId, run_id: runId })])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(client.snapshotCalls).toHaveLength(readsBeforeTerminal + 1)
+    expect(supplement()?.deliveryStatus).toBe("pending")
+    await vi.advanceTimersByTimeAsync(750)
+    expect(supplement()).toMatchObject({ role: "user", runId, content: text })
+    expect(supplement()?.deliveryStatus).toBeUndefined()
+    expect(client.snapshotCalls).toEqual(Array.from({ length: readsBeforeTerminal + 2 }, () => sessionId))
+    expect(client.controlCalls).toHaveLength(1)
+    expect(client.createCalls).toHaveLength(1)
+    expect(engine.getSnapshot().machine.runId).toBeNull()
+    expect(client.lastStream()).toBe(stream)
+  } finally { engine.dispose(); vi.useRealTimers() }
 })

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { createHash, webcrypto } from "node:crypto"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 const routerPush = vi.hoisted(() => vi.fn())
@@ -15,8 +16,8 @@ import { artifactFilter } from "@/features/app/kokoro-library-model"
 import type { LibraryArtifact, LibraryArtifactPage } from "@/features/app/kokoro-library-artifact-client"
 
 const artifacts: LibraryArtifact[] = [
-  { conversationId: "session-1", artifactId: "artifact-slide", assetId: "asset-slide", artifactKind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", sizeBytes: "1024", deliveredAt: "2026-08-30T12:00:00Z" },
-  { conversationId: "session-2", artifactId: "artifact-doc", assetId: "asset-doc", artifactKind: "document", title: "研究摘要.pdf", filename: "研究摘要.pdf", mimeType: "application/pdf", sizeBytes: "2048", deliveredAt: "2026-08-29T12:00:00Z" },
+  { conversationId: "session-1", artifactId: "artifact-slide", assetId: "asset-slide", sourceRunId: "run-slide", contentSha256: "a".repeat(64), favorited: false, artifactKind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", sizeBytes: "1024", deliveredAt: "2026-08-30T12:00:00Z" },
+  { conversationId: "session-2", artifactId: "artifact-doc", assetId: "asset-doc", sourceRunId: "run-doc", contentSha256: "b".repeat(64), favorited: false, artifactKind: "document", title: "研究摘要.pdf", filename: "研究摘要.pdf", mimeType: "application/pdf", sizeBytes: "2048", deliveredAt: "2026-08-29T12:00:00Z" },
 ]
 
 const fileOne = {
@@ -58,11 +59,13 @@ function installUploadRequestShim() {
     readonly url: string
     readonly method: string
     readonly headers: Headers
+    readonly signal: AbortSignal | null
     readonly form: FormData
     constructor(url: URL, init: RequestInit) {
       this.url = String(url)
       this.method = init.method ?? "GET"
       this.headers = new Headers(init.headers)
+      this.signal = init.signal ?? null
       this.form = init.body as FormData
     }
     clone() {
@@ -98,6 +101,97 @@ it("个人文件深链从同源 BFF 读取 Asset，且不借用作品下载", as
   expect(screen.getByRole("button", { name: "上传个人文件" })).toBeInTheDocument()
   expect(within(screen.getByTestId("library-files")).getByTestId("library-file-download")).toHaveAccessibleName("下载 私人备忘.pdf")
   expect(screen.queryByTestId("library-artifacts")).not.toBeInTheDocument()
+})
+
+function fileDeletionReceipt(assetId: string, replayed = false) {
+  return Response.json({ data: { asset_id: assetId, deleted_at: "2026-11-10T00:00:00.000Z", replayed } }, {
+    headers: { "cache-control": "private, no-store", "x-request-id": "req_library_delete" },
+  })
+}
+
+it("文件删除取消零写，错误 ACK 不移除，显式重试同一空命令后只移除确认的文件", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  const neighbor = { ...fileOne, asset_id: "asset-neighbor", filename: "Other file.pdf" }
+  const later = { ...fileOne, asset_id: "asset-later", filename: "Later file.pdf" }
+  let finishOldPage!: (response: Response) => void
+  const oldPage = new Promise<Response>((resolve) => { finishOldPage = resolve })
+  const deletions: Array<{ path: string; key: string | null; body: BodyInit | null | undefined }> = []
+  vi.stubGlobal("fetch", vi.fn(async (target: string | Request, init?: RequestInit) => {
+    if (init?.method !== "DELETE") return requestUrl(target).includes("cursor=page-2") ? oldPage : Response.json(filePage([fileOne, neighbor], "page-2"))
+    deletions.push({ path: requestUrl(target), key: new Headers(init.headers).get("idempotency-key"), body: init.body })
+    return deletions.length === 1 ? fileDeletionReceipt(neighbor.asset_id) : fileDeletionReceipt(fileOne.asset_id, true)
+  }))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} projectReadBoundary={{ admitted: true, subject: "owner", generation: 1 }} /></LocaleProvider>)
+  const trigger = await screen.findByRole("button", { name: `Delete ${fileOne.filename}` })
+  fireEvent.click(trigger)
+  const dialog = () => screen.getByRole("alertdialog", { name: "Delete file" })
+  expect(deletions).toEqual([])
+  fireEvent.click(within(dialog()).getByRole("button", { name: "Cancel" }))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(deletions).toEqual([])
+  await waitFor(() => expect(trigger).toHaveFocus())
+
+  fireEvent.click(screen.getByRole("button", { name: "Load more files" }))
+  fireEvent.click(trigger)
+  fireEvent.click(within(dialog()).getByRole("button", { name: "Delete file" }))
+  const retry = await within(dialog()).findByRole("button", { name: "Retry deletion" })
+  expect(within(dialog()).getByRole("alert")).toBeInTheDocument()
+  expect(trigger).toBeInTheDocument()
+  expect(deletions).toHaveLength(1)
+  expect(deletions[0]).toEqual({ path: "/api/hub/library/files/asset-personal-1", key: expect.any(String), body: undefined })
+  fireEvent.click(retry)
+  await waitFor(() => expect(trigger).not.toBeInTheDocument())
+  expect(screen.getByText(neighbor.filename)).toBeInTheDocument()
+  expect(deletions).toEqual([deletions[0], deletions[0]])
+  finishOldPage(Response.json(filePage([fileOne, later])))
+  await screen.findByText(later.filename)
+  expect(screen.queryByText(fileOne.filename)).not.toBeInTheDocument()
+})
+
+it("会话失效后迟到的文件删除回执不污染新准入列表，也不自动重复提交", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  const fileNext = { ...fileOne, filename: "Replacement owner's file.pdf" }
+  let readCount = 0
+  let oldSignal: AbortSignal | null | undefined
+  let resolveDelete!: (response: Response) => void
+  const submitted = new Promise<Response>((resolve) => { resolveDelete = resolve })
+  const mutate = vi.fn((signal: AbortSignal | null | undefined) => { oldSignal = signal; return submitted })
+  vi.stubGlobal("fetch", vi.fn(async (_target: string | Request, init?: RequestInit) => init?.method === "DELETE"
+    ? mutate(init.signal)
+    : Response.json(filePage([++readCount === 1 ? fileOne : fileNext]))))
+  const view = (admitted: boolean, subject: string, generation: number) =>
+    <LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} projectReadBoundary={{ admitted, subject, generation }} /></LocaleProvider>
+  const { rerender } = render(view(true, "actor-a", 1))
+  fireEvent.click(await screen.findByRole("button", { name: `Delete ${fileOne.filename}` }))
+  fireEvent.click(within(screen.getByRole("alertdialog", { name: "Delete file" })).getByRole("button", { name: "Delete file" }))
+  expect(mutate).toHaveBeenCalledTimes(1)
+  rerender(view(false, "actor-a", 2))
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+  expect(screen.queryByText(fileOne.filename)).not.toBeInTheDocument()
+  expect(oldSignal?.aborted).toBe(true)
+  rerender(view(true, "actor-b", 3))
+  await screen.findByText(fileNext.filename)
+  resolveDelete(fileDeletionReceipt(fileOne.asset_id))
+  await submitted
+  expect(screen.getByText(fileNext.filename)).toBeInTheDocument()
+  expect(mutate).toHaveBeenCalledTimes(1)
+})
+
+it("文件删除的明确 404 不是成功回执，也不提供同命令的盲目重试", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  vi.stubGlobal("fetch", vi.fn(async (_target: string | Request, init?: RequestInit) => init?.method === "DELETE"
+    ? Response.json({ error: { code: "file_not_found", message: "No visible file", retryable: false } }, {
+      status: 404, headers: { "cache-control": "no-store", "x-request-id": "owner-rejection" },
+    })
+    : Response.json(filePage([fileOne]))))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} projectReadBoundary={{ admitted: true, subject: "owner", generation: 1 }} /></LocaleProvider>)
+  const trigger = await screen.findByRole("button", { name: `Delete ${fileOne.filename}` })
+  fireEvent.click(trigger)
+  const dialog = within(screen.getByRole("alertdialog", { name: "Delete file" }))
+  fireEvent.click(dialog.getByRole("button", { name: "Delete file" }))
+  expect(await dialog.findByRole("alert")).toBeInTheDocument()
+  expect(dialog.queryByRole("button", { name: "Retry deletion" })).not.toBeInTheDocument()
+  expect(trigger).toBeInTheDocument()
 })
 
 it("个人文件卡独立在窄屏改为两行网格，下载按钮换行且不挤压文件名", async () => {
@@ -239,6 +333,72 @@ it("完整响应已读取但共享下载 helper 尚在异步 Blob 阶段时取�
   expect(dom.click).not.toHaveBeenCalled()
 })
 
+it("opens one personal file preview on demand and retires the in-flight body across owners", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  vi.stubGlobal("crypto", webcrypto)
+  const marker = "kokoro.web.auth-index-subject"
+  const previousMarker = window.localStorage.getItem(marker)
+  const exactContent = "/api/hub/library/files/asset-personal-1/content"
+  const oldText = "Retired owner preview content"
+  const newText = "Current owner preview content"
+  const fileFor = (filename: string, text: string) => ({ ...fileOne, filename, mime_type: "text/plain",
+    size_bytes: String(Buffer.byteLength(text)), content_sha256: createHash("sha256").update(text).digest("hex") })
+  const oldFile = fileFor("old-owner.txt", oldText)
+  const newFile = fileFor("current-owner.txt", newText)
+  const unsupportedFile = { ...fileOne, asset_id: "asset-no-preview", filename: "download-only.pdf" }
+  const responseFor = (text: string) => new Response(text, { status: 200, headers: {
+    "content-type": "text/plain", "content-length": String(Buffer.byteLength(text)),
+    "cache-control": "private, no-store", "x-request-id": "preview-content",
+  } })
+  let resolveOld!: (response: Response) => void
+  const oldResponse = new Promise<Response>(resolve => { resolveOld = resolve })
+  const reads: AbortSignal[] = []
+  const request = vi.fn(async (target: string | Request, init?: RequestInit) => {
+    if (requestUrl(target) !== exactContent) {
+      return Response.json(filePage([window.localStorage.getItem(marker) === "owner-a" ? oldFile : newFile, unsupportedFile]))
+    }
+    if (!init?.signal) throw new Error("preview must be cancellable")
+    reads.push(init.signal)
+    return reads.length === 1 ? oldResponse : responseFor(newText)
+  })
+  vi.stubGlobal("fetch", request)
+  const tree = (subject: string, generation: number) => <LocaleProvider>
+    <KokoroLibrarySurface onPrompt={vi.fn()} projectReadBoundary={{ admitted: true, subject, tenant: subject, generation }} />
+  </LocaleProvider>
+  window.localStorage.setItem(marker, "owner-a")
+  try {
+    const view = render(tree("owner-a", 1))
+    await screen.findByText(oldFile.filename)
+    expect(reads).toHaveLength(0)
+    expect(screen.queryByRole("button", { name: "Preview", description: unsupportedFile.filename })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: `Download ${unsupportedFile.filename}` })).toBeInTheDocument()
+    const opener = screen.getByRole("button", { name: "Preview", description: oldFile.filename })
+    fireEvent.click(opener)
+    expect(screen.getByRole("dialog", { name: "Preview", description: oldFile.filename })).toBeInTheDocument()
+    await waitFor(() => expect(reads).toHaveLength(1))
+
+    window.localStorage.setItem(marker, "owner-b")
+    view.rerender(tree("owner-b", 2))
+    expect(reads[0]?.aborted).toBe(true)
+    await act(async () => { resolveOld(responseFor(oldText)); await oldResponse })
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(screen.queryByText(oldText)).not.toBeInTheDocument()
+
+    await screen.findByText(newFile.filename)
+    expect(reads).toHaveLength(1)
+    const currentOpener = screen.getByRole("button", { name: "Preview", description: newFile.filename })
+    fireEvent.click(currentOpener)
+    expect(await screen.findByText(newText)).toBeInTheDocument()
+    expect(reads).toHaveLength(2)
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Preview" })).getByRole("button", { name: "Close" }))
+    await waitFor(() => expect(currentOpener).toHaveFocus())
+    expect(screen.queryByText(newText)).not.toBeInTheDocument()
+  } finally {
+    if (previousMarker === null) window.localStorage.removeItem(marker)
+    else window.localStorage.setItem(marker, previousMarker)
+  }
+})
+
 it("用户点击单文件上传后只以重新读取的个人 GET 显示文件", async () => {
   installUploadRequestShim()
   let resolveRefresh: (response: Response) => void = () => {}
@@ -265,6 +425,66 @@ it("用户点击单文件上传后只以重新读取的个人 GET 显示文件",
   const post = calls.mock.calls.find(([input]) => requestUrl(input) === "/api/hub/library/files")?.[0] as Request
   expect(post.method).toBe("POST")
   expect(post.headers.get("Idempotency-Key")).toMatch(/^library-file:/u)
+})
+
+it("personal upload cancellation clears unsubmitted files and ignores a late ACK while the same intent retries", async () => {
+  installUploadRequestShim()
+  const attempts: { request: Request & { form: FormData }; response: PromiseWithResolvers<Response> }[] = []
+  let listed = false
+  let listReads = 0
+  vi.stubGlobal("fetch", vi.fn((input: string | Request) => {
+    if (requestUrl(input) === "/api/hub/library/files") {
+      if (typeof input === "string") throw new Error("upload must use the native multipart Request")
+      const response = Promise.withResolvers<Response>()
+      attempts.push({ request: input as Request & { form: FormData }, response })
+      return response.promise
+    }
+    listReads++
+    return Promise.resolve(Response.json(filePage(listed ? [fileOne] : [])))
+  }))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} /></LocaleProvider>)
+  await screen.findByTestId("library-files-empty")
+  const choose = (file: File) => fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [file] } })
+  const cancel = () => fireEvent.click(screen.getByRole("button", { name: /^取消$/u }))
+
+  choose(new File(["discard"], "not-uploaded.txt", { type: "text/plain" }))
+  cancel()
+  expect(screen.queryByText("not-uploaded.txt")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "上传个人文件" })).toBeDisabled()
+  expect(attempts).toHaveLength(0)
+
+  const file = new File([new Uint8Array(2048)], fileOne.filename, { type: fileOne.mime_type })
+  choose(file)
+  fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
+  await waitFor(() => expect(attempts).toHaveLength(1))
+  const first = attempts[0]!
+  cancel()
+  expect(first.request.signal.aborted).toBe(true)
+  expect(screen.getByRole("alert")).toHaveTextContent("上传结果暂不确定")
+  expect(screen.getByText(file.name)).toBeInTheDocument()
+  showArtifacts()
+  await screen.findByText("季度汇报.pptx")
+  showFiles()
+  await screen.findByTestId("library-files-empty")
+  expect(attempts).toHaveLength(1)
+
+  fireEvent.click(screen.getByRole("button", { name: "重试上传同一文件" }))
+  await waitFor(() => expect(attempts).toHaveLength(2))
+  const second = attempts[1]!
+  expect(second.request.headers.get("Idempotency-Key")).toBe(first.request.headers.get("Idempotency-Key"))
+  expect(second.request.form.get("files")).toBe(file)
+  const readsBeforeLateAck = listReads
+  await act(async () => { first.response.resolve(Response.json(cleanUploadReceipt())); await first.response.promise })
+  expect(listReads).toBe(readsBeforeLateAck)
+  expect(screen.getByRole("button", { name: "正在上传…" })).toBeDisabled()
+  expect(second.request.signal.aborted).toBe(false)
+
+  listed = true
+  await act(async () => { second.response.resolve(Response.json(cleanUploadReceipt())); await second.response.promise })
+  expect(await screen.findByTestId("library-files")).toHaveTextContent(file.name)
+  expect(listReads).toBe(readsBeforeLateAck + 1)
+  expect(screen.queryByRole("button", { name: /^取消$/u })).not.toBeInTheDocument()
+  expect(attempts).toHaveLength(2)
 })
 
 it("上传响应未知时切到作品再返回仍保留同一文件和键供显式重试", async () => {
@@ -504,6 +724,109 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
+it("个人文件改筛选立即退休旧页，类型改动合并正在防抖的词，刷新按同一 URL 查询 owner", async () => {
+  const oldMatch = { ...fileOne, filename: "旧图片.png", mime_type: "image/png" }
+  const serverOnly = { ...fileOne, asset_id: "asset-personal-2", filename: "图片.png", mime_type: "image/png" }
+  let completeOldPage!: (response: Response) => void
+  let oldPageSignal: AbortSignal | null | undefined
+  const oldPage = new Promise<Response>((resolve) => { completeOldPage = resolve })
+  const fetchFiles = vi.fn(async (target: string | Request, init?: RequestInit) => {
+    const query = new URL(requestUrl(target), "https://test.invalid").searchParams
+    if (query.get("cursor") === "old-cursor") {
+      oldPageSignal = init?.signal
+      return oldPage
+    }
+    if (query.get("q") && query.get("type") === "images") return Response.json(filePage([serverOnly]))
+    return Response.json(filePage([oldMatch], "old-cursor"))
+  })
+  vi.stubGlobal("fetch", fetchFiles)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+
+  await screen.findByText(oldMatch.filename)
+  fireEvent.click(screen.getByRole("button", { name: "加载更多文件" }))
+  expect(oldPageSignal?.aborted).toBe(false)
+  const query = screen.getByRole("textbox", { name: "搜索文件" })
+  fireEvent.change(query, { target: { value: "图" } })
+  expect(screen.queryByText(oldMatch.filename)).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "加载更多文件" })).not.toBeInTheDocument()
+  expect(oldPageSignal?.aborted).toBe(true)
+  expect(fetchFiles).toHaveBeenCalledTimes(2)
+
+  const filter = screen.getByRole("combobox")
+  await act(async () => { fireEvent.change(filter, { target: { value: "images" } }) })
+  expect(fetchFiles).toHaveBeenCalledTimes(3)
+  expect(requestUrl(fetchFiles.mock.calls[2]![0])).toBe("/api/hub/library?kind=file&limit=50&q=%E5%9B%BE&type=images")
+  await screen.findByText(serverOnly.filename)
+  await act(async () => { completeOldPage(Response.json(filePage([oldMatch], "obsolete-next"))); await oldPage })
+  expect(screen.queryByText(oldMatch.filename)).not.toBeInTheDocument()
+
+  fireEvent.change(query, { target: { value: "图片" } })
+  expect(screen.queryByText(serverOnly.filename)).not.toBeInTheDocument()
+  expect(fetchFiles).toHaveBeenCalledTimes(3)
+  await screen.findByText(serverOnly.filename)
+  expect(requestUrl(fetchFiles.mock.calls[3]![0])).toBe("/api/hub/library?kind=file&limit=50&q=%E5%9B%BE%E7%89%87&type=images")
+  expect(filter).toHaveAccessibleName("按类型筛选个人文件")
+  expect(window.location.search).toContain("file_q=%E5%9B%BE%E7%89%87")
+  expect(window.location.search).toContain("file_type=images")
+
+  cleanup()
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByText(serverOnly.filename)
+  expect(fetchFiles).toHaveBeenCalledTimes(5)
+  expect(requestUrl(fetchFiles.mock.calls[4]![0])).toBe(requestUrl(fetchFiles.mock.calls[3]![0]))
+})
+
+it("文件搜索按 200 个原始 Unicode code points 接受输入，拒绝非法深链且不发 owner 请求", async () => {
+  const fetchFiles = vi.fn<(target: string | Request) => Promise<Response>>(async () => Response.json(filePage([fileOne])))
+  vi.stubGlobal("fetch", fetchFiles)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByText(fileOne.filename)
+  const input = screen.getByRole("textbox", { name: "搜索文件" })
+  const valid = "🧪".repeat(200)
+  fireEvent.change(input, { target: { value: valid } })
+  await waitFor(() => expect(fetchFiles).toHaveBeenCalledTimes(2))
+  const params = new URL(requestUrl(fetchFiles.mock.calls[1]![0]), "https://test.invalid").searchParams
+  expect(params.get("q")).toBe(valid)
+  fireEvent.change(input, { target: { value: valid + "🧪" } })
+  expect(input).toHaveValue(valid)
+  expect(screen.getByRole("alert")).toHaveTextContent("搜索词最多 200 个字符")
+  act(() => {
+    window.history.replaceState(null, "", "/app/library?tab=files&file_q=raw%7F")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  expect(input).toHaveAttribute("aria-invalid", "true")
+  expect(screen.queryByText(fileOne.filename)).not.toBeInTheDocument()
+  expect(fetchFiles).toHaveBeenCalledTimes(2)
+})
+
+it("新筛选已无目标行时，仍从文件页恢复未知删除的同一命令", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  const image = { ...fileOne, asset_id: "image-1", filename: "Other.png", mime_type: "image/png" }
+  const deletes: { target: string; key: string | null }[] = []
+  vi.stubGlobal("fetch", vi.fn(async (target: string | Request, init?: RequestInit) => {
+    if (init?.method !== "DELETE") return Response.json(filePage(requestUrl(target).includes("type=images") ? [image] : [fileOne]))
+    deletes.push({ target: requestUrl(target), key: new Headers(init.headers).get("idempotency-key") })
+    if (deletes.length === 1) throw new Error("lost delete ACK")
+    return fileDeletionReceipt(fileOne.asset_id, true)
+  }))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: `Delete ${fileOne.filename}` }))
+  const dialog = () => within(screen.getByRole("alertdialog", { name: "Delete file" }))
+  fireEvent.click(dialog().getByRole("button", { name: "Delete file" }))
+  await dialog().findByRole("button", { name: "Retry deletion" })
+  fireEvent.click(dialog().getByRole("button", { name: "Close" }))
+  fireEvent.change(screen.getByRole("combobox", { name: "Filter personal files by type" }), { target: { value: "images" } })
+  await screen.findByText(image.filename)
+  expect(within(screen.getByTestId("library-files")).queryByText(fileOne.filename)).not.toBeInTheDocument()
+  const recovery = screen.getByRole("button", { name: "Retry deletion" })
+  fireEvent.click(recovery)
+  fireEvent.click(dialog().getByRole("button", { name: "Retry deletion" }))
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument())
+  expect(deletes).toEqual([deletes[0], deletes[0]])
+  expect(screen.getByText(image.filename)).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "Retry deletion" })).not.toBeInTheDocument()
+})
+
 type LibraryProps = React.ComponentProps<typeof KokoroLibrarySurface>
 
 type LibraryRenderProps = Omit<Partial<LibraryProps>, "fixtureArtifacts"> & {
@@ -633,9 +956,15 @@ it("进入 Agent 作品页签时注入的资料库 fixture 同步渲染", () => 
 })
 
 it("收藏作品跨个人文件切换保留，个人文件深链不预载作品", async () => {
-  const listArtifacts = vi.fn(async () => ({ items: artifacts, nextCursor: null }))
-  const fetchFiles = vi.fn(async () => new Response(JSON.stringify(filePage([])), { status: 200 }))
-  vi.stubGlobal("fetch", fetchFiles)
+  let favorited = false
+  const listArtifacts = vi.fn(async () => ({ items: [{ ...artifactAt(0), favorited }, artifactAt(1)], nextCursor: null }))
+  const fetchSameOrigin = vi.fn(async (_url: string, init?: RequestInit) => {
+    if (init?.method !== "PUT") return Response.json(filePage([]))
+    favorited = (JSON.parse(String(init.body)) as { favorited: boolean }).favorited
+    return Response.json({ data: { conversation_id: "session-1", artifact_id: "artifact-slide", favorited },
+      meta: { request_id: "req-artifact-favorite" } }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-artifact-favorite" } })
+  })
+  vi.stubGlobal("fetch", fetchSameOrigin)
   render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} artifactClient={{ listArtifacts }} /></LocaleProvider>)
 
   await screen.findByTestId("library-files-empty")
@@ -644,7 +973,7 @@ it("收藏作品跨个人文件切换保留，个人文件深链不预载作品"
   showArtifacts()
   await screen.findByText("季度汇报.pptx")
   fireEvent.click(screen.getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" }))
-  expect(screen.getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" })).toHaveAttribute("aria-pressed", "true")
+  await waitFor(() => expect(screen.getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" })).toHaveAttribute("aria-pressed", "true"))
 
   showFiles()
   expect(screen.queryByTestId("library-artifacts")).not.toBeInTheDocument()
@@ -739,19 +1068,85 @@ it("无匹配筛选时给出明确空态并可一键恢复", async () => {
   expect(screen.getByText("季度汇报.pptx")).toBeInTheDocument()
 })
 
-it("收藏卡片、打开来源和下载失败均保持明确的可恢复状态", async () => {
+it("收藏只采用 exact owner 回执，收藏筛选也交给 owner", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const artifact = { ...artifactAt(0), favorited: false }
+  let finishFavorites!: (page: LibraryArtifactPage) => void
+  const listArtifacts = vi.fn().mockResolvedValueOnce({ items: [artifact], nextCursor: null })
+    .mockImplementationOnce(() => new Promise<LibraryArtifactPage>(resolve => { finishFavorites = resolve }))
+  let finishFavorite!: (response: Response) => void
+  const sendFavorite = vi.fn().mockImplementation(() => new Promise<Response>(resolve => { finishFavorite = resolve }))
+  vi.stubGlobal("fetch", sendFavorite)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} artifactClient={{ listArtifacts }} /></LocaleProvider>)
+  const name = "仅显示收藏: 季度汇报.pptx"
+  const star = () => screen.getByRole("button", { name })
+  expect(await screen.findByRole("button", { name })).toHaveAttribute("aria-pressed", "false")
+  fireEvent.click(star())
+  expect(star()).toHaveAttribute("aria-pressed", "false")
+  expect(sendFavorite).toHaveBeenCalledWith("/api/hub/library/artifacts/session-1/artifact-slide/favorite",
+    expect.objectContaining({ method: "PUT", body: '{"favorited":true}' }))
+  await act(async () => finishFavorite(Response.json({
+    data: { conversation_id: "session-1", artifact_id: "artifact-slide", favorited: true }, meta: { request_id: "req-artifact-favorite" },
+  }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-artifact-favorite" } })))
+  expect(star()).toHaveAttribute("aria-pressed", "true")
+  expect(listArtifacts).toHaveBeenCalledOnce()
+  toggleFavorites()
+  await waitFor(() => expect(listArtifacts).toHaveBeenLastCalledWith(null, expect.any(AbortSignal), { query: "", type: "all", favoritesOnly: true }))
+  expect(screen.queryByRole("button", { name })).not.toBeInTheDocument()
+  await act(async () => finishFavorites({ items: [{ ...artifact, favorited: true }], nextCursor: null }))
+  expect(star()).toHaveAttribute("aria-pressed", "true")
+})
+
+it("作品删除取消零写；未知回执保原键，exact replay 只退休目标行", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  window.history.replaceState(null, "", "/app/library")
+  const first = artifacts.map(artifact => ({ ...artifact, favorited: false }))
+  let finishOldPage!: (page: LibraryArtifactPage) => void
+  const listArtifacts = vi.fn().mockResolvedValueOnce({ items: first, nextCursor: "previous-window" })
+    .mockImplementationOnce(() => new Promise<LibraryArtifactPage>(resolve => { finishOldPage = resolve }))
+  const sent: Array<{ path: string; key: string | null; body: BodyInit | null | undefined }> = []
+  vi.stubGlobal("fetch", vi.fn(async (target: string | Request, init?: RequestInit) => {
+    expect(init?.method).toBe("DELETE")
+    sent.push({ path: requestUrl(target), key: new Headers(init?.headers).get("idempotency-key"), body: init?.body })
+    return Response.json({
+      data: { conversation_id: "session-1", artifact_id: sent.length === 1 ? "wrong-artifact" : "artifact-slide",
+        deleted_at: "2026-11-10T00:00:00.000Z", replayed: sent.length > 1 },
+    }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-artifact-delete" } })
+  }))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} artifactClient={{ listArtifacts }} /></LocaleProvider>)
+  const trigger = await screen.findByRole("button", { name: "Delete 季度汇报.pptx" })
+  fireEvent.click(screen.getByRole("button", { name: "Load more" }))
+  await waitFor(() => expect(listArtifacts).toHaveBeenCalledTimes(2))
+  const oldSignal = listArtifacts.mock.calls[1]?.[1] as AbortSignal
+  const dialog = () => screen.getByRole("alertdialog", { name: "Delete artifact" })
+  fireEvent.click(trigger)
+  fireEvent.click(within(dialog()).getByRole("button", { name: "Cancel" }))
+  expect(sent).toEqual([])
+
+  fireEvent.click(trigger)
+  fireEvent.click(within(dialog()).getByRole("button", { name: "Delete artifact" }))
+  const retry = await within(dialog()).findByRole("button", { name: "Retry deletion" })
+  expect(trigger).toBeVisible()
+  fireEvent.click(retry)
+  await waitFor(() => expect(trigger).not.toBeInTheDocument())
+  expect(oldSignal.aborted).toBe(true)
+  await act(async () => finishOldPage({ items: first.slice(0, 1), nextCursor: null }))
+  expect(screen.queryByRole("button", { name: "Delete 季度汇报.pptx" })).not.toBeInTheDocument()
+  expect(screen.getByText("研究摘要.pdf")).toBeVisible()
+  expect(sent[0]).toMatchObject({ path: "/api/hub/library/artifacts/session-1/artifact-slide", key: expect.any(String), body: undefined })
+  expect(sent).toEqual([sent[0], sent[0]])
+})
+
+it("打开来源和下载失败均保持明确的可恢复状态", async () => {
   const downloadArtifact = vi.fn(async () => { throw new Error("preflight failed") })
-  const onFavoriteChange = vi.fn()
   const onOpenSession = vi.fn()
-  renderLibrary({ downloadArtifact, onFavoriteChange, onOpenSession })
+  const getArtifact = vi.fn().mockResolvedValue({ ...artifactAt(0), projectRef: null })
+  renderLibrary({ downloadArtifact, onOpenSession, artifactClient: { listArtifacts: vi.fn(), getArtifact } })
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
   const card = listItemAt(0)
-  fireEvent.click(within(card).getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" }))
-  expect(onFavoriteChange).toHaveBeenCalledWith(artifactAt(0), expect.any(Set))
-  expect(within(card).getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" })).toHaveAttribute("aria-pressed", "true")
   fireEvent.click(within(card).getByRole("button", { name: "查看来源会话" }))
-  expect(onOpenSession).toHaveBeenCalledWith("session-1")
+  await waitFor(() => expect(onOpenSession).toHaveBeenCalledExactlyOnceWith({ kind: "direct" }, "session-1"))
 
   fireEvent.click(within(card).getByRole("button", { name: "下载 季度汇报.pptx" }))
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("下载失败"))
@@ -783,7 +1178,7 @@ it("开发环境未注入 client 的正式资料库请求同源 live，失败可
   vi.stubEnv("NODE_ENV", "development")
   const fetchArtifacts = vi.fn()
     .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-    .mockResolvedValueOnce(new Response(JSON.stringify({ data: { items: [{ kind: "artifact", conversation_id: "session-1", artifact_id: "artifact-slide", asset_id: "asset-slide", artifact_kind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mime_type: "application/pdf", size_bytes: "1024", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-08-30T12:00:00Z" }], next_cursor: null }, meta: { request_id: "req-1" } }), {
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: { items: [{ kind: "artifact", conversation_id: "session-1", artifact_id: "artifact-slide", asset_id: "asset-slide", artifact_kind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mime_type: "application/pdf", size_bytes: "1024", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-08-30T12:00:00Z", favorited: false }], next_cursor: null }, meta: { request_id: "req-1" } }), {
       status: 200,
       headers: { "content-type": "application/json" },
     }))
@@ -866,7 +1261,7 @@ it("翻页失败时保留当前成果并提供明确的重试入口", async () =
 
 it("收藏筛选为空时 CTA 清除收藏筛选，不导航到新任务", async () => {
   const onPrompt = vi.fn()
-  renderLibrary({ initialFavoriteIds: [], onPrompt })
+  renderLibrary({ onPrompt })
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
   toggleFavorites()
@@ -883,7 +1278,7 @@ it("正式作品页用二元 Product 列表，空页带 cursor 时继续加载�
   const liveArtifact = {
     kind: "artifact", conversation_id: "conversation-1", artifact_id: "artifact-1", asset_id: "asset-1",
     artifact_kind: "document", title: "正式报告", filename: "report.pdf", mime_type: "application/pdf",
-    size_bytes: "24", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-09-28T10:00:00Z",
+    size_bytes: "24", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-09-28T10:00:00Z", favorited: false,
   }
   const fetcher = vi.fn(async (input: string) => {
     if (input.includes("kind=file")) return new Response(JSON.stringify(filePage([])), { status: 200 })
@@ -933,9 +1328,91 @@ it("资料库按音频和视频独立筛选，网页归入文本而不单设网�
   expect(window.location.search).toBe("?type=audio")
 })
 
+it("opens a Project artifact source only after its exact detail, and the modal reuses the detail", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const artifact = artifactAt(0)
+  const projectRef = "project_12345678-1234-1234-1234-123456789abc"
+  const detail = { ...artifact, projectRef }
+  let finish!: (value: typeof detail) => void
+  const getArtifact = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finish = resolve })).mockResolvedValue(detail)
+  const source = vi.fn()
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={[artifact]} artifactClient={{ listArtifacts: vi.fn(), getArtifact }} onOpenSession={source} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "查看来源会话" }))
+  expect(source).not.toHaveBeenCalled()
+  expect(getArtifact).toHaveBeenCalledWith(artifact.conversationId, artifact.artifactId, expect.any(AbortSignal))
+  await act(async () => finish(detail))
+  expect(source).toHaveBeenCalledExactlyOnceWith({ kind: "project", projectRef }, artifact.conversationId)
+
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 季度汇报.pptx" }))
+  const modal = await screen.findByRole("dialog")
+  fireEvent.click(await within(modal).findByRole("button", { name: "查看来源会话" }))
+  expect(source).toHaveBeenCalledTimes(2)
+  expect(source).toHaveBeenLastCalledWith({ kind: "project", projectRef }, artifact.conversationId)
+  expect(getArtifact).toHaveBeenCalledTimes(2)
+})
+
+it("does not treat omitted or mismatched source facts as direct, while omitted metadata still permits download", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const artifact = artifactAt(0)
+  const getArtifact = vi.fn().mockResolvedValueOnce(artifact).mockResolvedValueOnce(artifact)
+    .mockResolvedValueOnce({ ...artifact, projectRef: null, contentSha256: "b".repeat(64) })
+  const source = vi.fn()
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={[artifact]} artifactClient={{ listArtifacts: vi.fn(), getArtifact }} onOpenSession={source} /></LocaleProvider>)
+  const sourceButton = () => screen.getByRole("button", { name: "查看来源会话" })
+  fireEvent.click(sourceButton())
+  expect(await screen.findByText("此作品的来源会话不可用。")).toBeVisible()
+  expect(source).not.toHaveBeenCalled()
+
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 季度汇报.pptx" }))
+  const modal = screen.getByRole("dialog")
+  expect(await within(modal).findByRole("button", { name: "下载" })).toBeEnabled()
+  expect(within(modal).getByRole("status")).toHaveTextContent("此作品的来源会话不可用。")
+  expect(within(modal).queryByRole("button", { name: "查看来源会话" })).not.toBeInTheDocument()
+  fireEvent.click(within(modal).getByRole("button", { name: "关闭" }))
+
+  fireEvent.click(sourceButton())
+  expect(await screen.findByRole("alert")).toHaveTextContent("读取来源会话失败，请重试。")
+  expect(source).not.toHaveBeenCalled()
+})
+
+it("retires pending card source reads on route and same-generation tenant changes", async () => {
+  window.history.replaceState(null, "", "/app/library")
+  const artifact = artifactAt(0)
+  const detail = { ...artifact, projectRef: "project_12345678-1234-1234-1234-123456789abc" }
+  const resolvers: Array<(value: typeof detail) => void> = []
+  const getArtifact = vi.fn().mockImplementation(() => new Promise(resolve => { resolvers.push(resolve) }))
+  const source = vi.fn()
+  const client = { listArtifacts: vi.fn(), getArtifact }
+  const renderFor = (tenant: string, authInvalidationHint = "first") => <LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={[artifact]} artifactClient={client} onOpenSession={source} projectReadBoundary={{ admitted: true, subject: "owner", tenant, generation: 1, authInvalidationHint }} /></LocaleProvider>
+  const view = render(renderFor("tenant-one"))
+  const open = () => fireEvent.click(screen.getByRole("button", { name: "查看来源会话" }))
+  open()
+  expect(getArtifact).toHaveBeenCalledTimes(1)
+
+  window.history.pushState(null, "", "/app/library?view=list")
+  act(() => window.dispatchEvent(new Event("kokoro:surface-navigation")))
+  expect((getArtifact.mock.calls[0]![2] as AbortSignal).aborted).toBe(true)
+  await act(async () => resolvers[0]!(detail))
+  expect(source).not.toHaveBeenCalled()
+
+  open()
+  expect(getArtifact).toHaveBeenCalledTimes(2)
+  view.rerender(renderFor("tenant-two"))
+  expect((getArtifact.mock.calls[1]![2] as AbortSignal).aborted).toBe(true)
+  await act(async () => resolvers[1]!(detail))
+  expect(source).not.toHaveBeenCalled()
+
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 季度汇报.pptx" }))
+  await act(async () => resolvers[2]!(detail))
+  expect(within(screen.getByRole("dialog")).getByRole("button", { name: "查看来源会话" })).toBeEnabled()
+  view.rerender(renderFor("tenant-two", "invalidated"))
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  expect(source).not.toHaveBeenCalled()
+})
+
 it("opens exact artifact metadata before download and returns keyboard focus to its original card", async () => {
   window.history.replaceState(null, "", "/app/library")
-  const detail = { ...artifacts[0]!, title: "Owner-confirmed title", filename: "owner-file.pptx" }
+  const detail = { ...artifacts[0]!, projectRef: null, title: "Owner-confirmed title", filename: "owner-file.pptx" }
   const getArtifact = vi.fn().mockResolvedValue(detail)
   const download = vi.fn().mockResolvedValue(undefined)
   const source = vi.fn()
@@ -947,7 +1424,7 @@ it("opens exact artifact metadata before download and returns keyboard focus to 
   expect(getArtifact).toHaveBeenCalledWith("session-1", "artifact-slide", expect.any(AbortSignal))
   expect(download).not.toHaveBeenCalled()
   fireEvent.click(within(dialog).getByRole("button", { name: "查看来源会话" }))
-  expect(source).toHaveBeenCalledWith("session-1")
+  expect(source).toHaveBeenCalledExactlyOnceWith({ kind: "direct" }, "session-1")
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   await waitFor(() => expect(trigger).toHaveFocus())
 })

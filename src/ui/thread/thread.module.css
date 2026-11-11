@@ -90,6 +90,13 @@
   word-break: break-word;
 }
 
+.userDelivery {
+  margin: 0.35rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
 /* 一轮 = 一条无头像竖脊（spine），全宽贴页面流。脊上是按 seq 排好的有序步骤列表，
    过程（思考/工具/子智能体）以样式弱化、正文强调，绝不在落定时重排 DOM。 */
 .turn {

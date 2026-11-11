@@ -1,31 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  admittedProductSession,
   productBffConfig,
   requestWithDomain,
   sameOriginOk,
-  currentProductSession,
 } = vi.hoisted(() => ({
-  admittedProductSession: vi.fn(),
-  currentProductSession: vi.fn(),
   productBffConfig: vi.fn(),
   requestWithDomain: vi.fn(),
   sameOriginOk: vi.fn<(request: Request) => boolean>(() => true),
 }));
 
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }));
 vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }));
 vi.mock("@/lib/server/product-bff", () => ({
-  admittedProductSession,
   productBffConfig,
   productBffHeaders: (
     _config: unknown,
-    claims: { access: string },
+    request: Request,
     requestId: string,
   ) =>
     new Headers({
-      authorization: `Bearer ${claims.access}`,
+      cookie: request.headers.get("cookie") ?? "",
       "x-kokoro-service": "web-bff",
       "x-kokoro-request-id": requestId,
     }),
@@ -41,7 +35,7 @@ import * as teamRoute from "@/app/api/team/[...path]/route";
 function teamRequest(url: string, init: RequestInit = {}): Request {
   return new Request(url, {
     ...init,
-    headers: {
+    headers: {cookie: "kokoro-issuer.session_token=fixture",
       host: "web.example.test",
       ...Object.fromEntries(new Headers(init.headers).entries()),
     },
@@ -61,17 +55,9 @@ beforeEach(async () => {
       secret: "x".repeat(32),
     },
   });
-  const now = Date.now();
-  const session = {
-    id: "opaque-session",
-    generation: 1,
-    subject: "user-me",
-    access: "product-access",
-    accessExpiresAt: now + 60_000,
-    expiresAt: now + 120_000,
-  };
-  admittedProductSession.mockResolvedValue(session);
-  currentProductSession.mockResolvedValue(session);
+
+
+
   requestWithDomain.mockImplementation(
     async (target: string, _domain: string, init: RequestInit) => {
       const path = new URL(target).pathname;
@@ -130,7 +116,7 @@ describe("fixed-tenant Team Product adapter", () => {
     ["DELETE", ["members", "member-1"]],
     ["DELETE", ["members", "me"]],
   ] as const)(
-    "forwards only the exact %s /v1/team/%s operation with Product Bearer",
+    "forwards only the exact %s /v1/team/%s operation with the native session",
     async (method, path) => {
       const handler = (
         teamRoute as unknown as Record<
@@ -173,10 +159,9 @@ describe("fixed-tenant Team Product adapter", () => {
       expect(target).toBe(`https://bff.internal/v1/team/${path.join("/")}`);
       expect(domain).toBe("web.example.test");
       const headers = new Headers(init.headers);
-      expect(headers.get("authorization")).toBe("Bearer product-access");
+      expect(headers.get("cookie")).toBe("kokoro-issuer.session_token=fixture");
       expect(headers.get("x-kokoro-principal-id")).toBeNull();
       expect(headers.get("x-kokoro-namespace")).toBeNull();
-      expect(headers.get("cookie")).toBeNull();
       expect(init.method).toBe(method);
       expect(init.body === undefined).toBe(body === undefined);
       expect(requestWithDomain).toHaveBeenCalledTimes(1);
@@ -214,12 +199,6 @@ describe("fixed-tenant Team Product adapter", () => {
   });
 
   it("rejects unauthenticated or cross-origin mutations before BFF I/O", async () => {
-    admittedProductSession.mockResolvedValueOnce(null);
-    const anonymous = await teamRoute.GET(
-      teamRequest("https://web.example.test/api/team/members"),
-      context(["members"]),
-    );
-    expect(anonymous.status).toBe(401);
     sameOriginOk.mockReturnValueOnce(false);
     const csrf = await teamRoute.POST(
       teamRequest("https://web.example.test/api/team/invitations", {
@@ -375,20 +354,7 @@ describe("SET20 Team adapter protocol RED", () => {
     expect(requestWithDomain).not.toHaveBeenCalled();
   });
 
-  it("does not release successful owner data after the final session generation changed", async () => {
-    currentProductSession.mockResolvedValue({
-      ...(await admittedProductSession()),
-      generation: 2,
-    });
-    const response = await teamRoute.GET(
-      teamRequest("https://web.example.test/api/team/members", {
-        headers: { host: "web.example.test" },
-      }),
-      context(["members"]),
-    );
-    expect(response.status).toBe(401);
-    expect(requestWithDomain).toHaveBeenCalledOnce();
-  });
+
 
   it("includes suspended route params in the single ten-second budget", async () => {
     vi.useFakeTimers();
@@ -419,59 +385,8 @@ describe("SET20 Team adapter protocol RED", () => {
 });
 
 describe("SET20 same-session and strict upstream negatives", () => {
-  it.each([
-    "id",
-    "generation",
-    "subject",
-    "access",
-    "accessExpiresAt",
-    "expiresAt",
-  ])("retires the final %s change after an owner ACK", async (field) => {
-    const session = await admittedProductSession();
-    currentProductSession.mockResolvedValue({
-      ...session,
-      [field]:
-        typeof session[field] === "number"
-          ? session[field] + 1
-          : `${session[field]}-changed`,
-    });
-    const response = await teamRoute.DELETE(
-      teamRequest("https://web.example.test/api/team/members/member-1", {
-        method: "DELETE",
-        headers: { origin: "https://web.example.test" },
-      }),
-      context(["members", "member-1"]),
-    );
-    expect(response.status).toBe(401);
-    expect(requestWithDomain).toHaveBeenCalledOnce();
-    expect(response.headers.get("cache-control")).toContain("no-store");
-  });
-  it("does not dispatch after late session admission completes beyond the entry deadline", async () => {
-    vi.useFakeTimers();
-    let release!: (value: unknown) => void;
-    admittedProductSession.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          release = resolve;
-        }),
-    );
-    const pending = teamRoute.GET(
-      teamRequest("https://web.example.test/api/team/members"),
-      context(["members"]),
-    );
-    await vi.advanceTimersByTimeAsync(10_001);
-    expect((await pending).status).toBe(503);
-    release({
-      id: "late",
-      generation: 1,
-      subject: "user-me",
-      access: "late",
-      accessExpiresAt: Date.now() + 60000,
-      expiresAt: Date.now() + 60000,
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(requestWithDomain).not.toHaveBeenCalled();
-  });
+
+
   it.each([undefined, "1", "99999"])(
     "accepts formal429 Retry-After %s without an automatic owner retry",
     async (retry) => {
@@ -546,7 +461,7 @@ it.each(["identity", "gzip"])(
       context(["invitations"]),
     );
     expect(response.status).toBe(400);
-    expect(admittedProductSession).not.toHaveBeenCalled();
+
     expect(requestWithDomain).not.toHaveBeenCalled();
   },
 );

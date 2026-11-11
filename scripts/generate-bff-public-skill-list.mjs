@@ -16,9 +16,9 @@ import YAML from "yaml";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml");
 const destination = join(root, "src/generated/bff-public-skill-list");
-const ownerCommit = "853ca9a5d8da3500b0c37543c72198a520e46225";
+const ownerCommit = "18dcc30179632eb32a86f160a5f13c71eb1c5d27";
 const expectedDigest =
-  "ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7";
+  "a26431d45ad96c4e80e6751d61e66a14b3933ae7c2ffb6f9e7df57fcc7e6808f";
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const mode = process.argv[2];
 assert.ok(

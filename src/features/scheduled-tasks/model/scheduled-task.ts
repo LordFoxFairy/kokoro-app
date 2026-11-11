@@ -60,12 +60,29 @@ export type ScheduledTaskPatch = Partial<
 > & { expiresAt?: string | null }
 
 export type ScheduledTaskClient = {
-  listScheduledTasks: () => Promise<readonly ScheduledTaskRecord[]>
+  listScheduledTasks: (options?: ScheduledTaskReadOptions) => Promise<readonly ScheduledTaskRecord[]>
+  listScheduledExecutions: (options?: ScheduledExecutionReadOptions) => Promise<ScheduledExecutionPage>
   createScheduledTask: (draft: ScheduledTaskDraft) => Promise<ScheduledTaskRecord>
   updateScheduledTask: (taskId: string, patch: ScheduledTaskPatch) => Promise<ScheduledTaskRecord>
   retryScheduledTask: (taskId: string) => Promise<ScheduledTaskRecord>
   deleteScheduledTask: (taskId: string) => Promise<{ ok: true }>
 }
+
+export type ScheduledTaskReadOptions = { projectId?: string; signal?: AbortSignal }
+export type ScheduledExecutionReadOptions = ScheduledTaskReadOptions & { taskId?: string; cursor?: string; limit?: number }
+export type ScheduledExecution = {
+  id: string
+  taskId: string
+  taskTitle: string
+  occurrenceAt: string
+  state: "queued" | "admitted" | "streaming" | "completed" | "failed" | "cancelled"
+  conversationId: string | null
+  projectId: string | null
+  runId: string
+  assistantMessageId: string | null
+  completedAt: string | null
+}
+export type ScheduledExecutionPage = { executions: readonly ScheduledExecution[]; nextCursor: string | null }
 
 export function isScheduledTaskRecord(value: unknown): value is ScheduledTaskRecord {
   if (typeof value !== "object" || value === null) return false
