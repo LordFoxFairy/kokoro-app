@@ -42,6 +42,27 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  // MCP detail, configuration and local JSON editing.
+  "mcp.tryAction": "试用一下",
+  "mcp.configurationEdit": "编辑配置",
+  "mcp.configurationEditJson": "编辑 JSON",
+  "mcp.configurationJsonTitle": "编辑配置 JSON",
+  "mcp.configurationJsonLabel": "MCP 配置 JSON",
+  "mcp.configurationJsonHelp": "已保存的 Header 密钥不会显示；省略 headers 保留原绑定。传输类型不可修改。复制仅包含当前输入，不会保存配置。",
+  "mcp.configurationJsonInvalid": "请输入仅含一个 MCP 服务器的有效配置；只支持 type、url 和合法 headers。",
+  "mcp.configurationTransportImmutable": "当前连接器的传输类型不可修改。",
+  "mcp.configurationHeadersDuplicate": "自定义 headers 名称重复。",
+  "mcp.configurationHeadersInvalid": "自定义 headers 无效或超过允许的数量和大小。",
+  "mcp.configurationCopy": "复制到剪贴板",
+  "mcp.configurationCopied": "已复制到剪贴板",
+  "mcp.configurationCopyFailed": "复制失败，请重试。",
+  "mcp.headerConfigured": "已配置",
+  "mcp.removeNamedHeader": "移除 {name}",
+  "mcp.removeNewHeader": "移除新增 Header",
+  "mcp.uncategorized": "未分类",
+  "mcp.customDeleteConfirm": "确认删除此自定义 MCP？",
+  "mcp.provideFeedback": "提供反馈",
+
   "projectTodo.heading": "项目待办",
   "projectTodo.newTitle": "新待办标题",
   "projectTodo.status": "待办状态",

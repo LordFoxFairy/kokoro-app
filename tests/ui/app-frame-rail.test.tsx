@@ -242,6 +242,9 @@ it.each([
   if (composer) expect(input).toBeDisabled()
   else expect(input).not.toBeInTheDocument()
   expect(document.querySelector("header") !== null).toBe(header)
+  expect(screen.queryByText("当前目录暂无模型。")).not.toBeInTheDocument()
+  expect(screen.queryByText("正在加载模型目录…")).not.toBeInTheDocument()
+  expect(document.querySelector('[data-composer-control="model"]')).toBeNull()
   expect(privateSurface).not.toHaveBeenCalled()
   expect(fetch).not.toHaveBeenCalled()
   expect(client.snapshotCalls).toEqual([])
@@ -3940,7 +3943,7 @@ it("MCP recheck restores typed configuration against fresh facts/CAS and an old 
   view.rerender(content(true, 2))
   await waitFor(() => expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveValue("https://mcp.example.test/v2"))
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("My explicit edit")
-  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Owner note 2")
+  expect(screen.getByRole("textbox", { name: "备注 （选填）" })).toHaveValue("Owner note 2")
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(update).toHaveBeenCalledWith("draft-server", { expected_state_version: "2", display_name: "My explicit edit" }, expect.any(String), expect.any(AbortSignal)))
   round = 3
@@ -4309,7 +4312,7 @@ it.each([
   }
   const label = kind === "mcp" ? "服务器名称" : "名称"
   if (target === "secret") fireEvent.click(screen.getByRole("button", { name: kind === "mcp" ? "添加自定义 header" : "添加密钥" }))
-  const control = () => target === "secret" ? screen.getByLabelText(kind === "mcp" ? "Header value" : "密钥值") : screen.getByRole("textbox", { name: label })
+  const control = () => target === "secret" ? screen.getByLabelText(kind === "mcp" ? "Header 值" : "密钥值") : screen.getByRole("textbox", { name: label })
   const field = control() as HTMLInputElement
   if (dirty) fireEvent.change(field, { target: { value: "Explicit user text" } })
   act(() => { field.focus(); field.setSelectionRange(2, 6, "backward"); fireEvent.select(field) })
@@ -4322,7 +4325,7 @@ it.each([
   if (kind === "mcp") {
     view.rerender(content(false, false, true))
     expect(field).toHaveValue(dirty ? "Explicit user text" : "")
-    expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("")
+    expect(screen.getByRole("textbox", { name: "备注 （选填）" })).toHaveValue("")
   }
   expect(screen.queryByText("Retired owner note")).not.toBeInTheDocument()
   if (kind === "mcp") {
@@ -4377,7 +4380,7 @@ it.each(["mcp", "api"])("%s configuration restores a bounded range without steal
   expect(field).toHaveFocus()
   expect([field.selectionStart, field.selectionEnd]).toEqual([0, 0])
   view.rerender(content(null))
-  const note = screen.getByRole("textbox", { name: kind === "mcp" ? "备注 （可选）" : "备注（可选）" }) as HTMLTextAreaElement
+  const note = screen.getByRole("textbox", { name: kind === "mcp" ? "备注 （选填）" : "备注（可选）" }) as HTMLTextAreaElement
   act(() => { note.focus(); note.setSelectionRange(0, 0); fireEvent.select(note) })
   view.rerender(content("Recovered paragraph"))
   expect(note).toHaveFocus()
@@ -4785,8 +4788,8 @@ it("a mounted MCP editor clears header secrets on management ACK but preserves n
   fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "ArrowDown" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
   fireEvent.click(screen.getByRole("button", { name: "添加自定义 header" }))
-  fireEvent.change(screen.getByLabelText("Header name"), { target: { value: "x-test" } })
-  fireEvent.change(screen.getByLabelText("Header value"), { target: { value: "mounted-header" } })
+  fireEvent.change(screen.getByLabelText("Header 名称"), { target: { value: "x-test" } })
+  fireEvent.change(screen.getByLabelText("Header 值"), { target: { value: "mounted-header" } })
   const name = screen.getByLabelText("服务器名称") as HTMLInputElement
   fireEvent.change(name, { target: { value: "My draft" } })
   view.rerender(content("unknown"))
@@ -4794,7 +4797,7 @@ it("a mounted MCP editor clears header secrets on management ACK but preserves n
   expect(screen.getByRole("button", { name: "连接" })).toBeDisabled()
   fireEvent.submit(name.closest("form")!); expect(save).not.toHaveBeenCalled()
   view.rerender(content("completed"))
-  expect(screen.queryByLabelText("Header value")).not.toBeInTheDocument()
+  expect(screen.queryByLabelText("Header 值")).not.toBeInTheDocument()
   expect(name.value).toBe("My draft")
   expect(screen.getByRole("button", { name: "完成" })).toBeEnabled()
 })

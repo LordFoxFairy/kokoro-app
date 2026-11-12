@@ -5,16 +5,26 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import type { McpPrivateServer } from "@/hub/mcp-connector.schema";
-import { parseConfigurationJson, type McpConfigurationJsonFields } from "./mcp-configuration-json";
+import { useT } from "@/i18n/context";
+import type { MessageKey } from "@/i18n/messages";
+import { McpConfigurationJsonError, parseConfigurationJson, type McpConfigurationJsonErrorCode, type McpConfigurationJsonFields } from "./mcp-configuration-json";
 import styles from "./custom-mcp-detail-dialog.module.css";
+
+const validationMessages = {
+  headers_duplicate: "mcp.configurationHeadersDuplicate",
+  headers_invalid: "mcp.configurationHeadersInvalid",
+  immutable_transport: "mcp.configurationTransportImmutable",
+  invalid_configuration: "mcp.configurationJsonInvalid",
+} satisfies Record<McpConfigurationJsonErrorCode, MessageKey>;
 
 /** An inner editor; closing it never dismisses or cancels the outer configuration. */
 export function McpConfigurationJsonDialog({ initialJson, transport, locked, status, isCurrent, onSave, onClose, returnFocusRef }: {
   initialJson: string; transport: McpPrivateServer["transport"]; locked: boolean; status: ReactNode;
   isCurrent: () => boolean; onSave: (fields: McpConfigurationJsonFields) => void; onClose: () => void; returnFocusRef: RefObject<HTMLButtonElement | null>;
 }) {
+  const t = useT();
   const [text, setText] = useState(initialJson);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<McpConfigurationJsonErrorCode | null>(null);
   const helpId = useId();
   const [copyState, setCopyState] = useState<"idle" | "pending" | "copied" | "failed">("idle");
   const live = useRef<object | null>(null);
@@ -39,22 +49,22 @@ export function McpConfigurationJsonDialog({ initialJson, transport, locked, sta
     }
   };
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className={styles.jsonDialog} overlayClassName={styles.overlay ?? ""} closeLabel="取消"
+    <DialogContent className={styles.jsonDialog} overlayClassName={styles.overlay ?? ""} closeLabel={t("mcp.cancel")}
       onEscapeKeyDown={event => event.stopPropagation()}
       onCloseAutoFocus={event => { event.preventDefault(); const target = returnFocusRef.current; if (target?.isConnected && !target.disabled) target.focus({ preventScroll: true }); }}>
       <form className={styles.jsonForm} onSubmit={event => {
         event.preventDefault(); event.stopPropagation();
         if (locked) return;
         try { const fields = parseConfigurationJson(text, transport); setError(null); onSave(fields); }
-        catch (failure) { setError(failure instanceof Error ? failure.message : "配置格式无效。"); }
+        catch (failure) { setError(failure instanceof McpConfigurationJsonError ? failure.code : "invalid_configuration"); }
       }}>
-        <DialogTitle className={styles.jsonTitle}>编辑配置 JSON</DialogTitle>
-        <DialogDescription className={styles.jsonDescription}>请粘贴您的配置 JSON</DialogDescription>
-        <p id={helpId} className="sr-only">已保存的 Header 密钥不会显示；省略 headers 保留原绑定。传输类型不可修改。复制仅包含当前输入，不会保存配置。</p>
-        <Textarea autoFocus aria-label="MCP 配置 JSON" aria-describedby={helpId} aria-invalid={error !== null} readOnly={locked} value={text}
+        <DialogTitle className={styles.jsonTitle}>{t("mcp.configurationJsonTitle")}</DialogTitle>
+        <DialogDescription className={styles.jsonDescription}>{t("mcp.jsonImportDescription")}</DialogDescription>
+        <p id={helpId} className="sr-only">{t("mcp.configurationJsonHelp")}</p>
+        <Textarea autoFocus aria-label={t("mcp.configurationJsonLabel")} aria-describedby={helpId} aria-invalid={error !== null} readOnly={locked} value={text}
           onChange={event => { if (!locked) { setText(event.target.value); setError(null); setCopyState(current => current === "pending" ? "pending" : "idle"); } }} />
-        <div className={styles.jsonFeedback}>{error ? <p role="alert">{error}</p> : null}{copyState === "failed" ? <p role="alert">复制失败，请重试。</p> : null}{copyState === "copied" ? <p role="status">已复制到剪贴板</p> : null}{status}</div>
-        <footer className={styles.jsonActions}><Button type="button" variant="outline" disabled={locked || copyState === "pending"} onClick={() => void copy()}>复制到剪贴板</Button><Button type="submit" disabled={locked}>保存</Button></footer>
+        <div className={styles.jsonFeedback}>{error ? <p role="alert">{t(validationMessages[error])}</p> : null}{copyState === "failed" ? <p role="alert">{t("mcp.configurationCopyFailed")}</p> : null}{copyState === "copied" ? <p role="status">{t("mcp.configurationCopied")}</p> : null}{status}</div>
+        <footer className={styles.jsonActions}><Button type="button" variant="outline" disabled={locked || copyState === "pending"} onClick={() => void copy()}>{t("mcp.configurationCopy")}</Button><Button type="submit" disabled={locked}>{t("mcp.save")}</Button></footer>
       </form>
     </DialogContent>
   </Dialog>;

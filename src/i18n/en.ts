@@ -4,6 +4,28 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  // MCP detail, configuration and local JSON editing.
+  "mcp.errHeaderName": "This header name is not allowed. Do not use reserved names such as Authorization, Cookie, Host, X-Kokoro-* or X-Forwarded-*.",
+  "mcp.tryAction": "Try it",
+  "mcp.configurationEdit": "Edit configuration",
+  "mcp.configurationEditJson": "Edit JSON",
+  "mcp.configurationJsonTitle": "Edit configuration JSON",
+  "mcp.configurationJsonLabel": "MCP configuration JSON",
+  "mcp.configurationJsonHelp": "Saved header secrets are not shown; omitting headers preserves existing bindings. The transport type cannot be changed. Copying includes only the current input and does not save the configuration.",
+  "mcp.configurationJsonInvalid": "Enter a valid configuration containing exactly one MCP server. Only type, url and valid headers are supported.",
+  "mcp.configurationTransportImmutable": "The transport type of this connector cannot be changed.",
+  "mcp.configurationHeadersDuplicate": "Custom header names must be unique.",
+  "mcp.configurationHeadersInvalid": "Custom headers are invalid or exceed the allowed count or size.",
+  "mcp.configurationCopy": "Copy to clipboard",
+  "mcp.configurationCopied": "Copied to clipboard",
+  "mcp.configurationCopyFailed": "Copy failed. Try again.",
+  "mcp.headerConfigured": "Configured",
+  "mcp.removeNamedHeader": "Remove {name}",
+  "mcp.removeNewHeader": "Remove new header",
+  "mcp.uncategorized": "Uncategorized",
+  "mcp.customDeleteConfirm": "Delete this custom MCP?",
+  "mcp.provideFeedback": "Give feedback",
+
   "projectTodo.heading": "Project to-do",
   "projectTodo.newTitle": "New task title",
   "projectTodo.status": "Task status",

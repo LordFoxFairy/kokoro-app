@@ -290,7 +290,7 @@ export function CustomMcpDetailDialog({
   const trialLocked = !trialAvailable || managementLocked || busy || configurationDirty || !onTrial;
   const primaryAction = () => configurationReadOnly || preparationRetired || preparationStatus && preparationState === "unknown" && !needsAuthorization ? null : showingTrial ? <Button type="button" variant={editing ? "outline" : "default"}
     disabled={trialLocked} onClick={() => { if (!trialLocked) setTrialError(onTrial?.() !== true); }}>
-    <Send aria-hidden="true" />试用一下
+    <Send aria-hidden="true" />{t("mcp.tryAction")}
   </Button> : <><Button type="button" variant={editing ? "outline" : "default"}
     disabled={!admitted || !preparationRecoveryReady || preparationState === "running" || (!needsAuthorization && (preparationState === "unknown" || preparationState === "completed") ? !mayResumePreparation : managementLocked || busy || !ready || (!needsAuthorization && !mayResumePreparation))}
     onClick={needsAuthorization ? onAuthorize : onPrepare}>
@@ -439,7 +439,7 @@ export function CustomMcpDetailDialog({
             aria-busy={!ready && !pendingError}
           >
             <header className={styles.configurationHeader}>
-              <DialogTitle>MCP 配置</DialogTitle>
+              <DialogTitle>{t("mcp.registerDialogTitle")}</DialogTitle>
               <Button
                 type="button"
                 variant="outline"
@@ -450,7 +450,7 @@ export function CustomMcpDetailDialog({
                 }
               >
                 <Copy aria-hidden="true" />
-                <span className={styles.configurationButtonLabel}>复制 UUID</span>
+                <span className={styles.configurationButtonLabel}>{t("connectorCatalog.copyUuid")}</span>
               </Button>
             </header>
             <div className={styles.configurationBody}>
@@ -467,7 +467,7 @@ export function CustomMcpDetailDialog({
               ) : null}
               <div className={styles.configurationGrid}>
                 <div className={styles.field}>
-                  <Label htmlFor="custom-mcp-name">服务器名称</Label>
+                  <Label htmlFor="custom-mcp-name">{t("mcp.customName")}</Label>
                   <Input
                     readOnly={locked}
                     id="custom-mcp-name"
@@ -478,8 +478,8 @@ export function CustomMcpDetailDialog({
                   />
                 </div>
                 <div className={styles.field}>
-                  <Label>传输类型</Label>
-                  <div className={styles.staticValue} aria-label={`传输类型 ${transportLabel}`}>
+                  <Label>{t("mcp.customTransport")}</Label>
+                  <div className={styles.staticValue} aria-label={`${t("mcp.customTransport")} ${transportLabel}`}>
                     {transportLabel}
                   </div>
                 </div>
@@ -497,19 +497,19 @@ export function CustomMcpDetailDialog({
                 }} />
               <div className={styles.field}>
                 <Label htmlFor="custom-mcp-notes">
-                  备注 <span className={styles.optional}>（可选）</span>
+                  {t("mcp.customInstructions")} <span className={styles.optional}>{t("mcp.optional")}</span>
                 </Label>
                 <Textarea
                   readOnly={locked}
                   id="custom-mcp-notes"
                   value={notes}
-                  placeholder="提供 MCP 文档或说明，以告知 Kokoro 如何及何时使用此 MCP"
+                  placeholder={t("mcp.customInstructionsPlaceholder")}
                   maxLength={4000}
                   onChange={(event) => !locked && setNotes(event.target.value)}
                 />
               </div>
               <div className={styles.field}>
-                <Label htmlFor="custom-mcp-server-url">服务器 URL</Label>
+                <Label htmlFor="custom-mcp-server-url">{t("mcp.customServerUrl")}</Label>
                 <Input
                   readOnly={locked}
                   id="custom-mcp-server-url"
@@ -521,18 +521,18 @@ export function CustomMcpDetailDialog({
               </div>
               <fieldset className={styles.headers}>
                 <legend>
-                  自定义 headers <span className={styles.optional}>（可选）</span>
+                  {t("mcp.customHeaders")} <span className={styles.optional}>{t("mcp.optional")}</span>
                 </legend>
                 {displayedHeaderNames.map((headerName) => (
                     <div className={styles.existingHeader} key={headerName}>
                       <span>{headerName}</span>
-                      <small>已配置</small>
+                      <small>{t("mcp.headerConfigured")}</small>
                       <Button
                         type="button"
                         size="icon"
                         variant="ghost"
                         disabled={locked}
-                        aria-label={`移除 ${headerName}`}
+                        aria-label={t("mcp.removeNamedHeader", { name: headerName })}
                         onClick={() =>
                           setRemovedHeaders((items) => [...items, headerName])
                         }
@@ -546,7 +546,7 @@ export function CustomMcpDetailDialog({
                     <Input
                       readOnly={locked}
                       id={`mcp-header-${header.id}-name`}
-                      aria-label="Header name"
+                      aria-label={t("mcp.customHeaderNamePlaceholder")}
                       value={header.name}
                       onChange={(event) =>
                         !locked && setHeaders((items) =>
@@ -561,7 +561,7 @@ export function CustomMcpDetailDialog({
                     <Input
                       readOnly={locked}
                       id={`mcp-header-${header.id}-value`}
-                      aria-label="Header value"
+                      aria-label={t("mcp.customHeaderValuePlaceholder")}
                       type="password"
                       value={header.value}
                       onChange={(event) =>
@@ -579,7 +579,7 @@ export function CustomMcpDetailDialog({
                       size="icon"
                       variant="ghost"
                       disabled={locked}
-                      aria-label="移除新增 Header"
+                      aria-label={t("mcp.removeNewHeader")}
                       onClick={() =>
                         !locked && setHeaders((items) =>
                           items.filter((item) => item.id !== header.id),
@@ -608,7 +608,7 @@ export function CustomMcpDetailDialog({
                   }
                 >
                   <Plus aria-hidden="true" />
-                  <span className={styles.configurationButtonLabel}>添加自定义 header</span>
+                  <span className={styles.configurationButtonLabel}>{t("mcp.customAddHeader")}</span>
                 </Button>
               </fieldset>
             </div>
@@ -616,7 +616,7 @@ export function CustomMcpDetailDialog({
               <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button ref={configurationMenuRef} type="button" variant="outline" size="sm" disabled={locked}>
-                    管理
+                    {t("settings.manage")}
                     <ChevronDown aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -625,7 +625,7 @@ export function CustomMcpDetailDialog({
                     if (locked || !currentServer) return;
                     setManagementOpen(false);
                     setJsonEditor({ scope: jsonScope, initialJson: configurationJson(name, serverUrl, currentServer.transport) });
-                  }}>编辑 JSON</DropdownMenuItem>
+                  }}>{t("mcp.configurationEditJson")}</DropdownMenuItem>
                   <DropdownMenuSeparator className={styles.managementDivider} />
                   <DropdownMenuItem
                     className={styles.dangerMenuItem}
@@ -635,7 +635,7 @@ export function CustomMcpDetailDialog({
                       onDeleteIntent();
                     }}
                   >
-                    删除
+                    {t("mcp.delete")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -644,17 +644,17 @@ export function CustomMcpDetailDialog({
                 <span className={styles.saveSplit}>
                   <Button type="submit" disabled={locked || invalidHeaderName || !icon.draft.canSave()}>
                     {busy ? <Spinner aria-hidden="true" /> : null}
-                    保存
+                    {t("mcp.save")}
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button type="button" aria-label="保存选项" disabled={publicationLocked}>
+                      <Button type="button" aria-label={t("mcp.customSaveOptions")} disabled={publicationLocked}>
                         <ChevronDown aria-hidden="true" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className={styles.configurationMenu}>
                       <DropdownMenuItem disabled={publicationLocked || !publicationAvailable || !icon.draft.canSave() || !onPublish}
-                        onSelect={saveAndPublish}>发布到项目</DropdownMenuItem>
+                        onSelect={saveAndPublish}>{t("mcp.publishTitle")}</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </span>
@@ -690,7 +690,7 @@ export function CustomMcpDetailDialog({
                 {!configurationReadOnly ? <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button ref={detailMenuRef} type="button" variant="outline" disabled={managementLocked}>
-                      管理
+                      {t("settings.manage")}
                       <ChevronDown aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -700,17 +700,17 @@ export function CustomMcpDetailDialog({
                   >
                     <DropdownMenuItem disabled={managementLocked || busy} onSelect={onDisconnect}>
                       <Link2Off aria-hidden="true" />
-                      断开连接
+                      {t("mcp.disconnectConnection")}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className={styles.managementDivider} />
                     <DropdownMenuItem disabled={publicationLocked || !publicationAvailable || !onPublish} onSelect={() => { if (!publicationLocked && publicationAvailable) onPublish?.(); }}>
                       <FolderOpen aria-hidden="true" />
-                      发布到项目
+                      {t("mcp.publishTitle")}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className={styles.managementDivider} />
                     <DropdownMenuItem onSelect={() => setEditing(true)}>
                       <Pencil aria-hidden="true" />
-                      编辑配置
+                      {t("mcp.configurationEdit")}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className={styles.managementDivider} />
                     <DropdownMenuItem
@@ -719,7 +719,7 @@ export function CustomMcpDetailDialog({
                       onSelect={onDeleteIntent}
                     >
                       <Trash2 aria-hidden="true" />
-                      删除
+                      {t("mcp.delete")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu> : null}
@@ -741,21 +741,21 @@ export function CustomMcpDetailDialog({
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>
                 </Alert>
               ) : null}
-              <h3>详情</h3>
+              <h3>{t("mcp.details")}</h3>
               <dl className={styles.facts}>
                 {configurationReadOnly ? <>
-                  <div><dt>服务器 URL</dt><dd>{server.server_url}</dd></div>
-                  <div><dt>传输类型</dt><dd>{transportLabel}</dd></div>
-                  {server.notes ? <div><dt>备注</dt><dd>{server.notes}</dd></div> : null}
-                  {displayedHeaderNames.length > 0 ? <div><dt>Headers</dt><dd>{displayedHeaderNames.join(", ")}</dd></div> : null}
+                  <div><dt>{t("mcp.customServerUrl")}</dt><dd>{server.server_url}</dd></div>
+                  <div><dt>{t("mcp.customTransport")}</dt><dd>{transportLabel}</dd></div>
+                  {server.notes ? <div><dt>{t("mcp.customInstructions")}</dt><dd>{server.notes}</dd></div> : null}
+                  {displayedHeaderNames.length > 0 ? <div><dt>{t("mcp.customHeaders")}</dt><dd>{displayedHeaderNames.join(", ")}</dd></div> : null}
                 </> : null}
                 <div>
-                  <dt>分类</dt>
-                  <dd>未分类</dd>
+                  <dt>{t("mcp.detailCategory")}</dt>
+                  <dd>{t("mcp.uncategorized")}</dd>
                 </div>
                 <div>
-                  <dt>连接器类型</dt>
-                  <dd>自定义 MCP</dd>
+                  <dt>{t("mcp.detailConnectorType")}</dt>
+                  <dd>{t("connectorCatalog.customMcp")}</dd>
                 </div>
                 <div>
                   <dt>UUID</dt>
@@ -776,7 +776,7 @@ export function CustomMcpDetailDialog({
               </dl>
               {!configurationReadOnly && deleteId === connector.connector_id ? (
                 <div className={styles.deleteConfirm}>
-                  <span>确认删除此自定义 MCP？</span>
+                  <span>{t("mcp.customDeleteConfirm")}</span>
                   <Button
                     type="button"
                     variant="destructive"
@@ -796,7 +796,7 @@ export function CustomMcpDetailDialog({
                 </div>
               ) : null}
             </div>
-            <footer className={styles.feedback}>提供反馈</footer>
+            <footer className={styles.feedback}>{t("mcp.provideFeedback")}</footer>
           </section>
         )}
       </DialogContent>

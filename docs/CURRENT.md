@@ -1,3 +1,9 @@
+## 2026-11-12 · Task B MCP配置多语言与未读模型壳修复
+
+仅bootstrap显式标记模型目录未读并隐藏选择，保真实ready-empty提示与原零私有读取；MCP详情／管理／配置／JSON编辑复用现t和本片九语言key，不引入resolver／新请求／固定语言宽度。JSON解析／Header／transport错误只按四类安全代码在UI翻译，异常及复制反馈不反射秘密；原unknown命令key/body与窗口退休／回焦逻辑不变。
+
+停写16源码／测试输入与manifest核等，writer及主控四相关文件443 PASS，types／精确lint和主控production build通过，独审CLEAR。新回归先复现冷壳错误反馈、English硬编码与缺译；补充错误fixture首次URL不合法失败保留，修fixture不放宽生产校验。未重跑全默认／生成器／新模型或Provider。正常native页面和窄屏交主控后继补验，不以词条覆盖冒九语言全部视觉验收。
+
 ## 2026-11-12 · Task B current-main integration candidate
 
 Original PR49 history is preserved by a normal merge of main59d412c9 into d6dd3cd0 in an isolated checkout; normal3310 source/output and the dirty Admin worktree were not touched. Current released Public28.35, native session, strict BFF profile, Task A executions/frequency/time/timezone and current AG-UI/AI SDK body remain authoritative. All22 normal generators ran; canonical/vendor/generated trees equal current main byte-for-byte. Old unpublished29.3, metadata/private-reauthorize consumers, picture direct-IAM read, RSS/runs and retiredOIDC are not activated; their original commits remain history and actual owner publication is a TODO, not a fallback/false success.

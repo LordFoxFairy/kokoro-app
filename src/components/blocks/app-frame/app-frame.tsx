@@ -98,6 +98,8 @@ function AppFrameBootingSurface({
       onModeChange={() => undefined}
       modeLocked
       models={[]}
+      modelCatalogStatus="loading"
+      hideModelSelector
       selectedModel={null}
       onModelChange={() => undefined}
       modelLocked
