@@ -1,3 +1,7 @@
+## 设置工具栏：按内容与容器排版
+
+Browse／Create 不再锁86／64px。现 Settings toolbar 与操作组自然换行，搜索保留可用宽度；长译文允许按钮增高，不用省略号、缩字或横向滚动掩盖溢出。规则只在 Settings scope，standalone／plaza与业务回调不变。实际验证范围见 CURRENT，不能从几种代表语言的布局通过推断全部词条已翻译完整。
+
 ## Composer 添加连接器：受控目录窗口
 
 `McpContent.catalogDialog` 将现 `McpProjectionRead` 的目录 portal／详情窗用于 composer Add；主 section／toolbar 不再重复绘制，查询、严格身份／命令及创建窗仍复用原 owner。普通 Manage 仍是 Settings 已添加页。此本地 overlay 不改当前 Project／Conversation URL、草稿或 MCP 选择；与 Manus 的 `#connectors/all` URL 表达不同，不另加 hash 协议或路由 alias。同 actor 暂时准入刷新保留窗口／搜索及创建意图，现 read generation 退旧事实、禁新 Create；换 actor／route 才退窗并撤销旧回焦。正常目录 ESC 退回原 composer trigger，详情／创建关闭退回原目录窗栈；打开目录本身不连接、授权或执行模型。
