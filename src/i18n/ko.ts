@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "settings.knowledgeUseHint": "켜면 이후 새 메시지에서 저장된 지식을 참고할 수 있습니다. 꺼도 저장된 지식은 유지됩니다.",
   // Default MCP detail and configuration qualification.
   "mcp.active": "연결됨",
   "mcp.availability.refreshRequired": "사용 시 갱신",

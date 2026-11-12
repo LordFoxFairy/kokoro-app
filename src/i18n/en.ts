@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "settings.knowledgeUseHint": "When enabled, saved knowledge can inform new messages. Turning it off keeps your saved knowledge.",
   // MCP detail, configuration and local JSON editing.
   "mcp.errHeaderName": "This header name is not allowed. Do not use reserved names such as Authorization, Cookie, Host, X-Kokoro-* or X-Forwarded-*.",
   "mcp.tryAction": "Try it",

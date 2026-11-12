@@ -6,7 +6,7 @@
 
 | 资料 | 源目录 | 读者／入口 |
 | --- | --- | --- |
-| 产品功能 | `docs/product/` | 普通用户；[快速开始](docs/product/index.md)，按任务、文件、项目、定时、连接子目录阅读 |
+| 产品功能 | `docs/product/` | 普通用户；[快速开始](docs/product/index.md)，按任务、文件、项目、定时、连接与[设置](docs/product/settings/personalization.md)主题阅读 |
 | API | `docs/api/` | 接入方；[API入口](docs/api/index.md)，包含认证、概念、调用指南、参考及变更 |
 | 内部工程 | App 的 `../docs/` 与 Root `docs/` | 工程／维护人员；不进入公开构建和搜索 |
 

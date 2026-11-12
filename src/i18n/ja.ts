@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "settings.knowledgeUseHint": "オンにすると、これから送る新しいメッセージで保存済みの知識を参照できます。オフにしても知識は保存されたままです。",
   // Default MCP detail and configuration qualification.
   "mcp.availability.refreshRequired": "使用時に更新",
   "mcp.availability.refreshing": "更新中",

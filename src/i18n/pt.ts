@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const pt: Partial<Record<MessageKey, string>> = {
+  "settings.knowledgeUseHint": "Quando ativado, os novos envios de mensagens podem levar em conta o conhecimento salvo. Ao desativar, ele continua salvo.",
   // Default MCP detail and configuration qualification.
   "mcp.active": "Conectado",
   "mcp.availability.refreshRequired": "Renovado ao usar",

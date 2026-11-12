@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "settings.knowledgeUseHint": "Une fois activée, cette option permet aux nouveaux messages de s’appuyer sur vos connaissances enregistrées. La désactiver ne les supprime pas.",
   // Default MCP detail and configuration qualification.
   "mcp.active": "Connecté",
   "mcp.availability.refreshRequired": "Renouvellement à l’utilisation",

@@ -424,7 +424,6 @@ const interactionFallback: Partial<Record<MessageKey, string>> = {
   "hitl.cancelling": "Stopping, waiting for execution to finish",
   "settings.knowledgeClose": "Close knowledge form",
   "settings.knowledgeUse": "Use knowledge",
-  "settings.knowledgeUseHint": "Save your knowledge preference; task consumption is not connected yet.",
   "settings.knowledgeEmptySearch": "No matching knowledge",
   "settings.knowledgeLoadFailed": "Knowledge could not be loaded. Try again.",
   "settings.knowledgePending": "The save is unconfirmed. Check current values; the original request will not be resent.",

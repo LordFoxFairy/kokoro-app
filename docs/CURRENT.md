@@ -1,3 +1,9 @@
+## 2026-11-12 B-08 产品指南与知识使用提示
+
+新增公开产品层级“设置→个性化与个人知识”，说明实际onBlur保存、知识显式保存/启停、后续新消息生效及旧消息重新生成原上下文；API/内部工程分层不变，导入记忆未开放明确说明，不以页面存在冒实际自动记忆。现knowledgeUseHint九语言纠正过时“任务未接通”，删公共旧英文fallback，仅该key与直接回归，不改框架/业务。
+
+主控18输入冻结核等：hint相关47 PASS、非增量types、门户阅读路线具名1 PASS（其他名称过滤未跑）、正规reference生成/门户build、62 HTML/20513内部链接检查、App production build全部exit0；独审CLEAR。原VitePress大chunk warning、原全站Markdown API changelog MD012与配置忽略mts lint如实保留，未冒完整lint。未正常浏览器提交profile/知识或发送新模型，native设置→新消息闭环仍由Root继续；本片不是整TaskB完成或部署。
+
 ## 2026-11-12 Skills 当前语言展示修正
 
 正常英文页复现 scope radio 两词条回退中文、日期固定 zh。仅补 en 两已有 key（其他八语言原本齐备），installed/catalog 两日期调用显式使用当前 locale，保 UTC／Unix秒与旧毫秒值；不改筛选／启停／详情行为、CSS、认证或契约。writer 7 RED 后修复，主控冻结5输入：两相关文件41 PASS／types／production build，writer scoped lint零警告，独审输入核等／CLEAR。英／中／德及动态切语言由现实际组件承接；正常native英文页已复验4筛选与日期，320px实测document宽320、每radio文本内收、Third-party整词自然换行，恢复原视口。不冒九语言全站QA或完整默认全绿。沿原#49继续，未部署。

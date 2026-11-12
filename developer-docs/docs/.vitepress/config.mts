@@ -97,6 +97,7 @@ export default defineConfig({
             { text: '项目', items: [{ text: '会话、指令与手工 Todo', link: '/product/projects/' }] },
             { text: '定时任务', items: [{ text: '计划、日历与执行记录', link: '/product/scheduled-tasks/' }] },
             { text: '连接与语音', items: [{ text: '入口、授权与识别', link: '/product/connections/' }] },
+            { text: '设置', items: [{ text: '个性化与个人知识', link: '/product/settings/personalization' }] },
             { text: '当前支持范围', link: '/product/availability' },
           ],
         },

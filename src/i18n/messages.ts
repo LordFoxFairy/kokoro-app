@@ -2907,7 +2907,7 @@ export const zh = {
   "library.filterAudio": "音频",
   "settings.knowledgeClose": "关闭知识表单",
   "settings.knowledgeUse": "使用知识",
-  "settings.knowledgeUseHint": "保存知识使用偏好；任务中的知识应用仍待接通。",
+  "settings.knowledgeUseHint": "开启后供之后的新消息参考；关闭后仍保留已保存的知识。",
   "settings.knowledgeEmptySearch": "没有匹配的知识",
   "settings.knowledgeLoadFailed": "知识暂时未能加载，请重试。",
   "settings.knowledgePending": "保存结果尚未核实，请读取当前值。原请求不会自动重发。",

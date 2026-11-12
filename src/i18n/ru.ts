@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "settings.knowledgeUseHint": "Если включено, сохранённые знания могут учитываться в новых сообщениях. При выключении знания сохраняются.",
   // Default MCP detail and configuration qualification.
   "mcp.active": "Подключено",
   "mcp.availability.refreshRequired": "Обновляется при использовании",
