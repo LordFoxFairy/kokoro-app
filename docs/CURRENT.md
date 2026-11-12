@@ -2,7 +2,7 @@
 
 新增公开产品层级“设置→个性化与个人知识”，说明实际onBlur保存、知识显式保存/启停、后续新消息生效及旧消息重新生成原上下文；API/内部工程分层不变，导入记忆未开放明确说明，不以页面存在冒实际自动记忆。现knowledgeUseHint九语言纠正过时“任务未接通”，删公共旧英文fallback，仅该key与直接回归，不改框架/业务。
 
-主控18输入冻结核等：hint相关47 PASS、非增量types、门户阅读路线具名1 PASS（其他名称过滤未跑）、正规reference生成/门户build、62 HTML/20513内部链接检查、App production build全部exit0；独审CLEAR。原VitePress大chunk warning、原全站Markdown API changelog MD012与配置忽略mts lint如实保留，未冒完整lint。未正常浏览器提交profile/知识或发送新模型，native设置→新消息闭环仍由Root继续；本片不是整TaskB完成或部署。
+主控18输入冻结核等：hint相关47 PASS、非增量types、门户阅读路线具名1 PASS（其他名称过滤未跑）、正规reference生成/门户build、62 HTML/20513内部链接检查、App production build全部exit0；独审CLEAR。原VitePress大chunk warning、原全站Markdown API changelog MD012与配置忽略mts lint如实保留，未冒完整lint。后继Root21e833c4/Appc044/BFF143正常native已验：原四空字段中临时回复偏好onBlur显示Saved，新消息本身无标记，正常配置模型一次调用回复按该偏好带标记；硬刷新同一条回复恢复。BFF/Agent私有context核等，两个Message/Run终态，原四空字段经正常UI恢复revision2，未创建知识或改usage开关。知识启停/原key/regen等分支复用真实PG和Agent规则/私有prompt证据，不扩大成重复模型矩阵；原网络collector提交阶段无事件，未称零HTTP。本片不是整TaskB完成或部署。
 
 ## 2026-11-12 Skills 当前语言展示修正
 
