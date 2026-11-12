@@ -1,3 +1,7 @@
+## 2026-11-12 · 显式新授权
+
+`mcp-management-commands.ts` 沿原 actor-owned 命令冻结已移除 Connector 的 source／双 CAS／key；`mcp-projection-read.tsx` 仅在只读断开配置装配显式新授权。确认 pending ACK 只产生安全新 locator，详情重读 exact Connector＋Server，不自动 Prepare／OAuth。原窗口／主体退休与 unknown 原命令恢复保持；正式独立 artifact、同源边界及验证范围见本仓 API_CONTRACT／CURRENT。
+
 2026-11-12：创建命令仅暂存安全completion locator，API需fresh exact profile GET，JSON单项直入／多项显选后核exact Connector+Server。unknown仍同key/body；迟到／换主体／窗口退休不handoff，已确认后的详情失败只重读不POST。原URL/form publication保留。private reauthorize未发行owner投影不装配，配置读取不当连接授权。
 
 ## 设置工具栏：按内容与容器排版

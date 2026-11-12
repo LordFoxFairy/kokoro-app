@@ -13,7 +13,7 @@
 
 **外部接入：**公开 Web 的 `GET /v1/skill.list` 支持 IAM User API Key 或已登记 OAuth Open App 令牌。外部调用方不发送内部服务凭据。
 
-**工作台服务端参考：**项目、会话、任务、资源及管理接口由受信第一方适配器调用。浏览器经同源入口，由服务端注入凭据；普通产品请求使用原生 Cookie／Session。不要把参考中的全部 operation 当成可用一个 API Key 调用的外部接口。具体差异与尚待 owner 纠正的认证声明见[认证约定](/api/authentication)。
+**工作台服务端参考：**项目、会话、任务、资源及管理接口由受信第一方适配器调用。浏览器经同源入口，由服务端注入凭据；普通产品请求使用原生 Cookie／Session。不要把参考中的全部 operation 当成可用一个 API Key 调用的外部接口。具体认证适用范围见[认证约定](/api/authentication)。
 
 ## 提交任务与接收结果
 

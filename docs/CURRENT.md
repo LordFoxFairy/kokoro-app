@@ -1,3 +1,19 @@
+## 2026-11-12 · Task B Share／MCP正式消费者候选
+
+固定BFF已提交0a2c98ae（原PR17后继609b0e93完整源树相同）的Public28.37与独立private reauthorization profile；现23正规生成/check、门户既有clean-checkout+blob验证通过，旧独立profiles与父证明不改。Share复用现generated事实源读取metadata，打开零发布；原unknown key/body/scope与ACK分离、读失败仅GET、失准入无locator/不写，重新verified同subject+tenant保持原key。MCP仅已移除/disabled配置可显式新授权，原source双CAS冻结，safeACK后fresh exact Server/Connector；坏provider绑定拒绝、不自动Prepare/OAuth/enable。无新认证／session探测／store／SDK框架，preview不造live metadata。
+
+主控原109冻结输入23 checks／60相关文件1216 PASS及build通过；独审随后定位真实tenant暂缺丢原key、私有provider跨字段遗漏、shared SDK路径参数丢失三缺口，均真实RED后定向修复。最终110输入主控6文件185 PASS／types／shared SDK正规check／build，逐SHA保持，Share/SDK与MCP独审CLEAR；未把阶段拼成一次全默认绿。SDK仍orphans:false、仅4操作，GET/POST/DELETE path.id必需且实际URL替换通过。门户210公开过滤operations／22页正规生成检查通过，完整owner216项；原参数指向固定clean609，不改loader或绕验证。
+
+正常服务/精确Root组合与真实浏览器Share刷新／新授权仍待主控受控切换验收，当前只交付源码候选，不冒Task B整体闭环。未重跑全默认、新模型或真实Provider。
+
+## 2026-11-12 · Task B Public28.37／新授权消费者候选
+
+固定 BFF `0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97` 的 Public28.37（216 operations，原生 Session metadata、Share GET、Team delete_series）及独立 browser-private reauthorization1.0。当前 public 生成链与精确28.36／28.35父字节逆证一起升级，旧独立 profile 与历史父 pin 不变；无契约手写副本、锁依赖或认证状态机变更。
+
+会话分享打开／重开／焦点刷新只读 fresh metadata；成功 null 才是未分享，失败不当空、不自动发布。POST／DELETE 仍需明确操作，unknown 保原 scope／key／body，ACK 后只通过 fresh GET 展示；主体／窗口／准入退休阻断迟到显示与剪贴板反馈。确认后读失败只重读，不再发布。
+
+已断开的个人 MCP 仅显式“创建新授权”可提交 source Connector＋Server/Connector 双 CAS；复用现 actor-owned command 冻结原 key/body，unknown 原样恢复。严格 pending ACK 只提供新 Connector locator，随后 fresh exact Connector＋Server，历史 ACK 不授连接／执行资格；失败只重读，零自动 Prepare／OAuth／enable。旧 picture/RSS 等退休链保持不激活。此为消费者源码候选；工程证据由停写交接与主控复验绑定，正常 native 组合旅程／build／Root 配对另由主控验收，不冒全部 Task B 完成。
+
 ## 2026-11-12 · MCP默认词条真实法语补口
 
 正常native页面已验English详情／管理／JSON错误、取消回焦与390px内收，JSON非法输入零MCP写；French320px另发现默认availability回退中文、Connect／标题／Save仍English占位、icon标签／hint缺译。只纠正本片10个现有key的七份缺译语言字典（zh/en原准确字节保持）及既有测试，不改UI逻辑／resolver／配置流程。writer真实3 FAIL→117 PASS；主控原两文件117 PASS及production build，八输入SHA核等、独审CLEAR。最终正常法语补验由主控继续，未将key存在冒实际译文正确或全站翻译完成。

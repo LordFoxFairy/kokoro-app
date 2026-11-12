@@ -1,3 +1,4 @@
+import { sessionShareMetadataDataSchema, type SessionShareMetadata } from "@/lib/shared-tasks.schema"
 // session HTTP/SSE 客户端：全部入站（含 POST 回执与 snapshot）过 contract Zod；失败以类型化错误上抛，零静默降级。
 
 import type { InteractionState } from "@/contract/control"
@@ -132,17 +133,20 @@ export type SessionClient = {
   listModels: (options?: { signal?: AbortSignal }) => Promise<ModelCandidateList>
   // 作品库（ARTIFACT-LIB）：属主 namespace 全部成果跨会话聚合、复合游标分页（cursor 缺省=首页）。
   // 分享（SHARE-1）：创建返 share_id（活跃分享幂等返同 id）；撤销置失效（公共读随即 404）。
-  createShare: (sessionId: string, signal?: AbortSignal) => Promise<ShareReceipt>
-  revokeShare: (sessionId: string, signal?: AbortSignal) => Promise<ShareReceipt>
+  readShare: (sessionId: string, options?: { scope?: SessionScope; signal?: AbortSignal }) => Promise<SessionShareMetadata>
+  createShare: (sessionId: string, signal?: AbortSignal, scope?: SessionScope, commandKey?: string) => Promise<ShareReceipt>
+  revokeShare: (sessionId: string, signal?: AbortSignal, scope?: SessionScope, commandKey?: string) => Promise<ShareReceipt>
   openEvents: (args: OpenEventsArgs) => EventStreamHandle
 }
 
 
-async function shareMutation(
+async function shareMutation<T>(
   target: string,
-  method: "POST" | "DELETE",
-  signal?: AbortSignal,
-): Promise<ShareReceipt> {
+  method: "GET" | "POST" | "DELETE",
+  signal: AbortSignal | undefined,
+  commandKey: string | undefined,
+  parse: (raw: unknown) => T,
+): Promise<T> {
   const controller = new AbortController(),
     deadline = performance.now() + 10_000;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined,
@@ -184,7 +188,7 @@ async function shareMutation(
       redirect: "error",
       signal: controller.signal,
       headers: {
-        "idempotency-key": `session-mutation:${crypto.randomUUID()}`,
+        ...(method === "GET" ? {} : { "idempotency-key": commandKey ?? `session-mutation:${crypto.randomUUID()}` }),
         ...(method === "POST" ? { "content-type": "application/json" } : {}),
       },
       ...(method === "POST" ? { body: "{}" } : {}),
@@ -246,9 +250,9 @@ async function shareMutation(
       const error = shareErrorSchema.parse(raw);
       if (error.meta.request_id !== response.headers.get("x-request-id"))
         throw Error("Invalid share binding");
-      throw new SessionClientError("http", error.error.code, error.error.code);
+      throw new SessionClientError("http", error.error.code, error.error.code, response.status);
     }
-    return shareReceiptSchema.parse(raw);
+    return parse(raw);
   };
   try {
     return await Promise.race([cancelled, operation()]);
@@ -610,8 +614,13 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       return parseJsonResponse(response, (raw) => runProcessPageSchema.parse(raw))
     },
 
-    createShare: (sessionId, signal) => shareMutation(url(sharePath(sessionId)), "POST", signal),
-    revokeShare: (sessionId, signal) => shareMutation(url(sharePath(sessionId)), "DELETE", signal),
+    readShare: (sessionId, options) => {
+      const scope = options?.scope ?? { kind: "direct" };
+      const query = new URLSearchParams(scope.kind === "project" ? { project_ref: scope.projectRef } : { scope: "direct" });
+      return shareMutation(url(`${sharePath(sessionId)}?${query}`), "GET", options?.signal, undefined, raw => sessionShareMetadataDataSchema.parse(raw));
+    },
+    createShare: (sessionId, signal, scope, key) => shareMutation(url(sharePath(sessionId) + (scope ? `?${new URLSearchParams(scope.kind === "project" ? { project_ref: scope.projectRef } : { scope: "direct" })}` : "")), "POST", signal, key, raw => shareReceiptSchema.parse(raw)),
+    revokeShare: (sessionId, signal, scope, key) => shareMutation(url(sharePath(sessionId) + (scope ? `?${new URLSearchParams(scope.kind === "project" ? { project_ref: scope.projectRef } : { scope: "direct" })}` : "")), "DELETE", signal, key, raw => shareReceiptSchema.parse(raw)),
 
     sendControl: (sessionId, runId, body, commandId, scope) => {
       const path = controlPath(sessionId, runId)

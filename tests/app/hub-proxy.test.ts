@@ -5252,3 +5252,20 @@ it("bounds a never-ending empty DELETE stream at10seconds and keeps GET bodies f
     expect(requestWithDomain).not.toHaveBeenCalled()
   } finally { vi.useRealTimers() }
 })
+
+it("the new-authorization adapter forwards native admission and the exact original source/double-CAS/key, without trusting browser credentials", async () => {
+  const { reauthorizationFixture, reauthorizationInput } = await import("../hub/fixtures/mcp-reauthorization");
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify(reauthorizationFixture()), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-reauthorize" } }));
+  const { POST, GET } = await import("@/app/api/hub/[...path]/route");
+  const target = "http://localhost/api/hub/mcp/servers/saved-server/reauthorize";
+  const request = (body: unknown) => new Request(target, { method: "POST", headers: { cookie: sessionCookie(), origin: "http://localhost", "content-type": "application/json", "idempotency-key": "original-key", authorization: "Bearer untrusted-browser", "x-kokoro-internal-secret": "untrusted-browser" }, body: JSON.stringify(body) });
+  const result = await POST(request(reauthorizationInput), params(["mcp", "servers", "saved-server", "reauthorize"]));
+  expect(result.status).toBe(200); expect(await result.json()).toEqual(reauthorizationFixture());
+  const [url, , init] = vi.mocked(requestWithDomain).mock.calls[0]!;
+  expect(url).toBe("http://bff.test/browser/v1/mcp/servers/saved-server/reauthorize");
+  expect(JSON.parse(new TextDecoder().decode(init!.body as ArrayBuffer))).toEqual(reauthorizationInput);
+  const outgoing = new Headers(init!.headers); expect(outgoing.get("idempotency-key")).toBe("original-key"); expect(outgoing.get("authorization")).toBeNull(); expect(outgoing.get("cookie")).toBe(sessionCookie()); expect(outgoing.get("x-kokoro-service")).toBe("web-bff"); expect(outgoing.get("x-kokoro-internal-secret")).toBe(ENV.KOKORO_INTERNAL_SECRET_WEB_BFF);
+  expect((await POST(request({ ...reauthorizationInput, source_connector_id: "" }), params(["mcp", "servers", "saved-server", "reauthorize"]))).status).toBe(400);
+  expect((await GET(new Request(target, { headers: { cookie: sessionCookie() } }), params(["mcp", "servers", "saved-server", "reauthorize"]))).status).toBe(405);
+  expect(requestWithDomain).toHaveBeenCalledOnce();
+});

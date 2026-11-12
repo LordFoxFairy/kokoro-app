@@ -38,7 +38,7 @@ const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "idempotency
 async function proxy(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
   if (/^\/api\/session\/sessions\/[^/]+\/(?:messages\/[^/]+\/(?:feedback|regenerate)|runs\/[^/]+\/(?:display|workspace-outputs\/[^/]+\/content))$/u.test(new URL(request.url).pathname)) return sessionAnswerActions(request, context.params)
   if (/^\/api\/session\/sessions\/[^/]+\/(?:archive|restore)$/u.test(new URL(request.url).pathname)) return sessionArchive(request, context.params)
-  if (["POST", "DELETE"].includes(request.method) && /^\/api\/session\/sessions\/[^/]+\/share$/u.test(new URL(request.url).pathname)) return sessionShare(request, context.params)
+  if (["GET", "POST", "DELETE"].includes(request.method) && /^\/api\/session\/sessions\/[^/]+\/share$/u.test(new URL(request.url).pathname)) return sessionShare(request, context.params)
   const requestId = requestIdForRequest(request)
   const { path } = await context.params
   const segments = path ?? []

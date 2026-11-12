@@ -52,6 +52,7 @@ export function WorkspaceNavigationTrigger({ className, onToggle, expanded: expa
 export function WorkspaceHeader({
   activeId,
   shareClient,
+  shareReadBoundary,
   onOpenSettings,
   brandName = DEFAULT_BRAND.name,
   emptyWorkspace = false,
@@ -90,6 +91,7 @@ export function WorkspaceHeader({
           {...(projectInstruction === undefined ? {} : { projectInstruction })}
           {...(projectDelete === undefined ? {} : { projectDelete })}
           shareClient={shareClient}
+          {...(shareReadBoundary === undefined ? {} : { shareReadBoundary })}
         />
       </div>
     </header>

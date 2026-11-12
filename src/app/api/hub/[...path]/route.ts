@@ -1,3 +1,4 @@
+import { mcpReauthorizationRequestSchema, mcpReauthorizationErrorAllowed } from "@/hub/mcp-reauthorization.schema";
 import { proxyProjectSkillContent } from "@/lib/server/project-skill-content";
 import { proxyLibraryArtifactMutation } from "@/lib/server/library-artifact-mutation";
 import { proxyLibraryFileDelete } from "@/lib/server/library-file-delete";
@@ -436,6 +437,8 @@ async function proxyMcpConnector(
     );
   const url = new URL(request.url);
   const iconOperation = mcpIconOperation(path, request.method);
+  const reauthorizationPath = path.length === 4 && path[1] === "servers" && path[3] === "reauthorize";
+  if (reauthorizationPath && request.method !== "POST") return fail(405, "invalid_mcp_personal_request");
   const receiptPath = path.length === 4 && path[1] === "servers" && path[3] === "prepare-receipt";
   if (receiptPath && request.method !== "GET") return fail(405, "invalid_mcp_personal_request");
   const receiptOperation = receiptPath && request.method === "GET";
@@ -445,7 +448,7 @@ async function proxyMcpConnector(
     | McpPrivateServerOperation
     | McpIconOperation
     | "prepareReceipt"
-    | undefined = receiptOperation ? "prepareReceipt" : iconOperation ?? (
+    | undefined = reauthorizationPath ? "reauthorizeServer" : receiptOperation ? "prepareReceipt" : iconOperation ?? (
     path.length === 3 &&
       path[1] === "servers" &&
       path[2] === "import" &&
@@ -542,6 +545,7 @@ async function proxyMcpConnector(
     "registerServer",
     "importJson",
     "server",
+    "reauthorizeServer",
     "prepareServer",
     "updateServer",
     "deleteServer",
@@ -565,6 +569,7 @@ async function proxyMcpConnector(
     "createConnection",
     "registerServer",
     "importJson",
+    "reauthorizeServer",
     "prepareServer",
     "prepareReceipt",
     "updateServer",
@@ -584,7 +589,7 @@ async function proxyMcpConnector(
       "beginAuthorization",
       "reconnectAuthorization",
     ].includes(operation) ||
-    ["prepareServer", "prepareReceipt", "updateServer", "deleteServer", "getIcon", "completeIcon", "cancelIcon"].includes(operation)
+    ["reauthorizeServer", "prepareServer", "prepareReceipt", "updateServer", "deleteServer", "getIcon", "completeIcon", "cancelIcon"].includes(operation)
       ? path[2]
       : undefined;
   const query = url.searchParams;
@@ -692,7 +697,7 @@ async function proxyMcpConnector(
             : "invalid_mcp_personal_request",
         );
       }
-      const accepted = iconOperation && iconOperation !== "getIcon" ? mcpIconInputs[iconOperation].safeParse(input).success : authorization
+      const accepted = operation === "reauthorizeServer" ? mcpReauthorizationRequestSchema.safeParse(input).success : iconOperation && iconOperation !== "getIcon" ? mcpIconInputs[iconOperation].safeParse(input).success : authorization
         ? operation === "beginAuthorization" ||
           operation === "reconnectAuthorization"
           ? mcpConnectorAuthorizationRequestSchema.safeParse(input).success
@@ -836,7 +841,7 @@ async function proxyMcpConnector(
                 query,
                 input,
               )
-        : receiptOperation ? mcpPrepareReceiptErrorAllowed(upstream.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(upstream.status, raw) : authorization
+        : operation === "reauthorizeServer" ? mcpReauthorizationErrorAllowed(upstream.status, raw) : receiptOperation ? mcpPrepareReceiptErrorAllowed(upstream.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(upstream.status, raw) : authorization
           ? mcpConnectorErrorAllowed("authorization", upstream.status, raw)
           : mcpConnectorErrorAllowed(
               connectorOperation as McpConnectorOperation,

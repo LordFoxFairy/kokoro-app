@@ -23,7 +23,7 @@ Web 不创建本地 Product Session，不读取 Auth.js/RP state、CSRF、callba
 所有业务 adapter 只携 allowlisted Cookie、固定 Origin 和受信服务身份调用 BFF 认证边缘，使用 `upstream-http.ts` 的有限 deadline、响应大小和取消语义：
 
 - `account-profile.ts`、`account-sessions.ts`、`shared-tasks.ts`：账户投影和分享边界；账户资料返回前保留 fresh native admission 复验，明确无效或身份变化为 `401 session_invalid`，复验不可用为 `503 account_profile_unavailable`，两者均不返回资料。
-- `session-answer-actions.ts`、`session-archive.ts`、`session-share.ts`：Chat 会话具名操作；不扩 generic proxy。
+- `session-answer-actions.ts`、`session-archive.ts`、`session-share.ts`：Chat 会话具名操作；分享 GET 只返回严格的 fresh nullable metadata，不创建 receipt／幂等键，沿原 deadline／取消与 native adapter；POST／DELETE 保明确原命令，不扩 generic proxy。
 - `library-file-delete.ts`：个人 Library 文件的精确空 `DELETE`；透传原幂等键，校验绑定 Asset 的 owner 回执，不授予读取或跨范围删除权限。
 - `project-skill-content.ts`、`project-mcp-recommendations.ts`、`project-pins.ts`、`mcp-project-publication.ts`：Project owner 薄桥。
 - `mcp-server-icon.ts`、`skill-download.ts`：固定媒体/下载路径，完整 EOF 后才返回内容。

@@ -146,3 +146,12 @@ export function validateSharedTasks(
   }
   return page;
 }
+
+
+/** Canonical metadata is nullable only after an authoritative successful read. */
+export const sessionShareMetadataDataSchema = wire.zSessionShareMetadataResponse.shape.data
+  .extend({ share: wire.zSessionShareMetadata.strict().nullable() }).strict();
+export const sessionShareMetadataResponseSchema = wire.zSessionShareMetadataResponse.extend({
+  data: sessionShareMetadataDataSchema, meta: wire.zRequestMeta.strict(),
+}).strict();
+export type SessionShareMetadata = z.infer<typeof sessionShareMetadataDataSchema>;

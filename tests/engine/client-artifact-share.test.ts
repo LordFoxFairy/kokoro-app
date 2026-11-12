@@ -58,3 +58,17 @@ it('an already retired createShare dispatches zero requests',async()=>{
  const signal=new AbortController();signal.abort();const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher)
  await expect(createSessionClient({baseUrl:'/api/session'}).createShare('ses_1',signal.signal)).rejects.toThrow();expect(fetcher).not.toHaveBeenCalled()
 })
+
+it.each([null, { share_id: "current", created_at: "2026-11-12T00:00:00Z", expires_at: null }])("readShare preserves the canonical metadata %j without a command key or body", async share => {
+  const fetch = vi.fn().mockResolvedValue(jsonResponse({ share })); vi.stubGlobal("fetch", fetch)
+  const result = await createSessionClient({ baseUrl: "/api/session" }).readShare("session/read", { scope: { kind: "direct" } })
+  expect(result).toEqual({ share }); expect(fetch).toHaveBeenCalledOnce()
+  expect(fetch.mock.calls[0]![0]).toBe("/api/session/sessions/session%2Fread/share?scope=direct")
+  const init = fetch.mock.calls[0]![1] as RequestInit
+  expect(init.method).toBe("GET"); expect(init.body).toBeUndefined(); expect(init.cache).toBe("no-store")
+  expect(new Headers(init.headers).has("idempotency-key")).toBe(false)
+})
+it.each([{ share: null, extra: true }, { share: { share_id: "locator-only" } }, { share: { share_id: "x", created_at: "2026-11-12T00:00:00Z", expires_at: null, secret: "unexpected" } }])("readShare rejects noncanonical metadata rather than treating it as unpublished: %j", async body => {
+  const fetch = vi.fn().mockResolvedValue(jsonResponse(body)); vi.stubGlobal("fetch", fetch)
+  await expect(createSessionClient({ baseUrl: "/api/session" }).readShare("session")).rejects.toThrow(); expect(fetch).toHaveBeenCalledOnce()
+})

@@ -13,9 +13,9 @@ const libraryOutputPath = join(root, "src/generated/bff-library-file-delete.ts")
 const artifactOutputPath = join(root, "src/generated/bff-library-artifact-mutations.ts")
 const websiteOutputPath = join(root, "src/generated/bff-project-websites.ts")
 const provenance = {
-  ownerCommit: "18dcc30179632eb32a86f160a5f13c71eb1c5d27",
-  sourceSha256: "a26431d45ad96c4e80e6751d61e66a14b3933ae7c2ffb6f9e7df57fcc7e6808f",
-  openapiVersion: "28.35.0",
+  ownerCommit: "0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97",
+  sourceSha256: "737688c79fa4fad8216168656d0fe7e4131b496ef2b506e424dbff82d7dca2c8",
+  openapiVersion: "28.37.0",
 }
 const names = ["ProjectResourceItem", "ProjectResourceItemResponse", "ProjectResourceDeletionResponse", "ErrorEnvelope"]
 

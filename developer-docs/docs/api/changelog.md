@@ -1,5 +1,12 @@
 # 变更记录
 
+## 2026-11-12 · Public28.37
+
+- 固定 BFF `0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97` 的完整 Public28.37（216 operations），包含只读会话分享 metadata GET 与 Team Skill delete_series 权限枚举。
+- 普通产品 operation 的认证 metadata 与现原生 Session／受信 adapter envelope 对齐；外部 skill.list、公共分享、webhook 和 service-only 例外保持各自边界。机器声明不是正常部署或全部产品旅程的验收证明。
+- browser-private 新授权不进入公开 API 目录。
+
+
 ## 2026-11-11 · 产品指南与 Public 28.35.0
 
 - 复用现有门户新增工作台产品指南：聊天／附件／结果、项目／定时与支持范围。产品阅读入口和开发者 API 入口分开，搜索继续复用。

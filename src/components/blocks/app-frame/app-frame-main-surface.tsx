@@ -1,3 +1,4 @@
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { currentRunProgressTodos } from "@/core/projections"
 import type { ComponentType, ReactNode } from "react"
 
@@ -52,7 +53,8 @@ export type AppFrameMainSurfaceProps = {
   onRetryProjectCreation: () => void
   retryConversationHydration: () => void
   onOpenSettings: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
-  shareClient: Pick<SessionClient, "createShare" | "revokeShare">
+  shareReadBoundary?: ProjectReadBoundary
+  shareClient: Pick<SessionClient, "readShare" | "createShare" | "revokeShare">
   thread: Thread
   conversationProps: ConversationThreadProps
   emptyState: ComponentType<EmptyStateProps>
@@ -125,6 +127,7 @@ export function AppFrameMainSurface({
   retryConversationHydration,
   onOpenSettings,
   shareClient,
+  shareReadBoundary,
   thread,
   conversationProps,
   emptyState: EmptyState,
@@ -151,6 +154,7 @@ export function AppFrameMainSurface({
         <WorkspaceHeader
           activeId={activeId}
           shareClient={shareClient}
+          {...(shareReadBoundary === undefined ? {} : { shareReadBoundary })}
           onOpenSettings={onOpenSettings}
           {...(brandName === undefined ? {} : { brandName })}
           emptyWorkspace={!showConversation}

@@ -854,7 +854,7 @@ function AppFrameRuntime({
   }, [activeId, engine, navigationState.resolvedConversationRouteId])
 
   const EmptyState = emptyState ?? DefaultEmptyState
-  const shareClient: Pick<SessionClient, "createShare" | "revokeShare"> = browserListClient({ preview })
+  const shareClient: Pick<SessionClient, "readShare" | "createShare" | "revokeShare"> = browserListClient({ preview })
 
 
   const conversationProps: ConversationThreadProps = {
@@ -1040,6 +1040,7 @@ function AppFrameRuntime({
       retryConversationHydration={retryConversationHydration}
       onOpenSettings={overlays.openSettings}
       shareClient={shareClient}
+      {...(projectReadBoundary === undefined ? {} : { shareReadBoundary: projectReadBoundary })}
       thread={thread}
       conversationProps={conversationProps}
       emptyState={EmptyState}

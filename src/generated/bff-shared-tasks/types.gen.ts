@@ -51,13 +51,25 @@ export type SharedTasksError503 = {
     };
 };
 
-export type ShareReceiptResponse = {
-    data: ShareReceipt;
+/**
+ * Request correlation identifier echoed by every v1 envelope.
+ */
+export type RequestId = string;
+
+export type SessionShareMetadataResponse = {
+    data: {
+        share: SessionShareMetadata | null;
+    };
     meta: RequestMeta;
 };
 
 export type ErrorEnvelope = {
     error: ErrorDetail;
+    meta: RequestMeta;
+};
+
+export type ShareReceiptResponse = {
+    data: ShareReceipt;
     meta: RequestMeta;
 };
 
@@ -68,8 +80,10 @@ export type SharedTaskItem = {
     expires_at: string | null;
 };
 
-export type ShareReceipt = {
+export type SessionShareMetadata = {
     share_id: string;
+    created_at: string;
+    expires_at: string | null;
 };
 
 export type RequestMeta = {
@@ -81,12 +95,14 @@ export type ErrorDetail = {
     message: string;
 };
 
-/**
- * Request correlation identifier echoed by every v1 envelope.
- */
-export type RequestId = string;
+export type ShareReceipt = {
+    share_id: string;
+};
 
-export type IdempotencyKey = string;
+/**
+ * Opaque chat session identifier.
+ */
+export type SessionId = string;
 
 /**
  * On the Conversation collection, omitted or empty keeps the admitted owner's full visible set while direct restricts results to project_ref IS NULL. On resource routes it does not alter the existing project-bound authorization. It never overrides the admitted tenant and subject.
@@ -97,6 +113,8 @@ export type DirectScopeQuery = '' | 'direct';
  * Filter the Conversation collection to an owned project reference. A nonempty value cannot be combined with scope=direct on GET /v1/sessions; resource routes retain their existing project-bound authorization.
  */
 export type ProjectRefQuery = string;
+
+export type IdempotencyKey = string;
 
 export type ListOwnedSharedTasksData = {
     body?: never;
@@ -147,7 +165,12 @@ export type RevokeShareData = {
     headers: {
         'Idempotency-Key': string;
     };
-    path?: never;
+    path: {
+        /**
+         * Opaque chat session identifier.
+         */
+        id: string;
+    };
     query?: {
         /**
          * On the Conversation collection, omitted or empty keeps the admitted owner's full visible set while direct restricts results to project_ref IS NULL. On resource routes it does not alter the existing project-bound authorization. It never overrides the admitted tenant and subject.
@@ -199,12 +222,76 @@ export type RevokeShareResponses = {
 
 export type RevokeShareResponse = RevokeShareResponses[keyof RevokeShareResponses];
 
+export type GetSessionShareMetadataData = {
+    body?: never;
+    path: {
+        /**
+         * Opaque chat session identifier.
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * On the Conversation collection, omitted or empty keeps the admitted owner's full visible set while direct restricts results to project_ref IS NULL. On resource routes it does not alter the existing project-bound authorization. It never overrides the admitted tenant and subject.
+         */
+        scope?: '' | 'direct';
+        /**
+         * Filter the Conversation collection to an owned project reference. A nonempty value cannot be combined with scope=direct on GET /v1/sessions; resource routes retain their existing project-bound authorization.
+         */
+        project_ref?: string;
+    };
+    url: '/v1/sessions/{id}/share';
+};
+
+export type GetSessionShareMetadataErrors = {
+    /**
+     * Invalid request
+     */
+    400: ErrorEnvelope;
+    /**
+     * Service or user-session authentication failed
+     */
+    401: ErrorEnvelope;
+    /**
+     * Service or user-session authentication failed
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found
+     */
+    404: ErrorEnvelope;
+    /**
+     * IAM session admission is rate limited
+     */
+    429: ErrorEnvelope;
+    /**
+     * A required BFF fact store or owner source is not configured
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetSessionShareMetadataError = GetSessionShareMetadataErrors[keyof GetSessionShareMetadataErrors];
+
+export type GetSessionShareMetadataResponses = {
+    /**
+     * Current active share or an accessible unshared session.
+     */
+    200: SessionShareMetadataResponse;
+};
+
+export type GetSessionShareMetadataResponse = GetSessionShareMetadataResponses[keyof GetSessionShareMetadataResponses];
+
 export type CreateShareData = {
     body?: never;
     headers: {
         'Idempotency-Key': string;
     };
-    path?: never;
+    path: {
+        /**
+         * Opaque chat session identifier.
+         */
+        id: string;
+    };
     query?: {
         /**
          * On the Conversation collection, omitted or empty keeps the admitted owner's full visible set while direct restricts results to project_ref IS NULL. On resource routes it does not alter the existing project-bound authorization. It never overrides the admitted tenant and subject.

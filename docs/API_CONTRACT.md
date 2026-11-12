@@ -1,3 +1,11 @@
+## 2026-11-12 · Task B Public28.37／新授权消费者候选
+
+固定 BFF `0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97` 的 Public28.37（216 operations，原生 Session metadata、Share GET、Team delete_series）及独立 browser-private reauthorization1.0。当前 public 生成链与精确28.36／28.35父字节逆证一起升级，旧独立 profile 与历史父 pin 不变；无契约手写副本、锁依赖或认证状态机变更。
+
+会话分享打开／重开／焦点刷新只读 fresh metadata；成功 null 才是未分享，失败不当空、不自动发布。POST／DELETE 仍需明确操作，unknown 保原 scope／key／body，ACK 后只通过 fresh GET 展示；主体／窗口／准入退休阻断迟到显示与剪贴板反馈。确认后读失败只重读，不再发布。
+
+已断开的个人 MCP 仅显式“创建新授权”可提交 source Connector＋Server/Connector 双 CAS；复用现 actor-owned command 冻结原 key/body，unknown 原样恢复。严格 pending ACK 只提供新 Connector locator，随后 fresh exact Connector＋Server，历史 ACK 不授连接／执行资格；失败只重读，零自动 Prepare／OAuth／enable。旧 picture/RSS 等退休链保持不激活。此为消费者源码候选；工程证据由停写交接与主控复验绑定，正常 native 组合旅程／build／Root 配对另由主控验收，不冒全部 Task B 完成。
+
 ## Task B承接：无网络增量（2026-11-12）
 
 当前仍为main固定的Public28.35及现browser-private artifacts；22原生成链正规生成且输出核等。API／JSON创建completion只是UI内部安全locator，不把ACK当当前详情；继续用现exact GET。原unknown/key/body/CAS与native session不变。旧未发行29.3、Share metadata/private reauthorize与RSS消费者不参与当前装配，待BFF正式统一发行后再正规消费；不新增兼容alias或假空响应。

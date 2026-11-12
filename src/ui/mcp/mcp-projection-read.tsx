@@ -1,5 +1,7 @@
 "use client";
 
+import { McpManagementStatus } from "./mcp-management-status";
+
 import { type FormEvent, type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -429,15 +431,24 @@ export function McpProjectionRead({
     }
   };
   const runManagement = async (origin: "editor" | "provider", connectorId: string, input?: McpManagementIntent) => {
-    if (origin === "editor" && editorCommandsBlocked()) return;
+    const operation = input?.operation ?? management.getSnapshot().find(item => item.connectorId === connectorId)?.operation;
+    // Removed configurations admit only the explicit replacement command; all old commands stay retired.
+    if (origin === "editor" && editorCommandsBlocked() && operation !== "reauthorize_server") return;
     const wait = origin === "editor" ? editorWindow.current : providerWindow.current;
     const currentWindow = () => origin === "editor" ? editorWindow.current : providerWindow.current;
     const expectedWindow = origin === "editor" ? connectorIntent?.window : providerWindowToken;
     const expectedConnector = origin === "editor" ? connectorIntent?.connectorId : selectedProviderConnectionId;
     if (!wait || wait.intent !== expectedWindow || connectorId !== expectedConnector || ownerRef.current !== owner || !admitted) return;
-    const operation = input?.operation ?? management.getSnapshot().find(item => item.connectorId === connectorId)?.operation;
     const confirmed = input ? await management.submit(input, commandBoundary, wait.controller.signal) : await management.resume(connectorId, commandBoundary, wait.controller.signal);
-    if (!confirmed || ownerRef.current !== owner || currentWindow() !== wait || !management.finish(connectorId, commandBoundary)) return;
+    if (!confirmed || ownerRef.current !== owner || currentWindow() !== wait) return;
+    const reauthorized = operation === "reauthorize_server" ? management.getReauthorizationTarget(connectorId, commandBoundary) : undefined;
+    if (!management.finish(connectorId, commandBoundary)) return;
+    if (origin === "editor" && operation === "reauthorize_server" && reauthorized) {
+      // The original ACK provides a safe locator, not current facts or permission to Prepare.
+      setEditor(null); setActionError(false); setDeleteId(null);
+      setConnectorIntent({ ...reauthorized, exact: true, entered: true, window: {}, binding: { connectorType: "mcp", serverId: reauthorized.serverId } });
+      return;
+    }
     if (origin === "editor" && operation === "update_server") {
       // Keep the configuration mounted, but retire old CAS/actions before an
       // exact post-save connector/server read. The page can retain its cards;
@@ -902,6 +913,18 @@ export function McpProjectionRead({
         <CustomMcpDetailDialog
           iconClient={client.mcpIcons} iconBoundary={commandBoundary}
           readOnlyConfiguration={readOnlyDetail}
+          {...(readOnlyDetail && client.reauthorizePrivateMcpServer ? {
+            onNewAuthorization: () => {
+              if (!admitted || ownerRef.current !== owner || !editor?.server || !connectorIntent ||
+                !isDisconnectedMcpConfiguration(editor.connector) || !editor.connector.server_id ||
+                editorWindow.current?.intent !== connectorIntent.window || management.isBlocked(editor.connector.connector_id)) return;
+              void runManagement("editor", editor.connector.connector_id, { operation: "reauthorize_server", connectorId: editor.connector.connector_id,
+                serverId: editor.server.server_id, input: { source_connector_id: editor.connector.connector_id,
+                  expected_server_state_version: editor.server.state_version, expected_connector_state_version: editor.connector.state_version } });
+            },
+            newAuthorizationDisabled: !admitted || !editor?.server || !isDisconnectedMcpConfiguration(editor.connector) || management.isBlocked(editor.connector.connector_id) || !preparation.recoveryReady(),
+            reauthorizationStatus: <McpManagementStatus command={managementState} admitted={admitted} onResume={() => { if (connectorIntent) void runManagement("editor", connectorIntent.connectorId); }} />,
+          } : {})}
           key={connectorIntent.serverId}
           connector={editor?.server ? editor.connector : null}
           server={editor?.server ?? null}

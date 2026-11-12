@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { createHubClient, HubClientError } from "@/hub/client"
+import { mcpReauthorizationDataSchema } from "@/hub/mcp-reauthorization.schema"
 import type { McpConnector, McpPrivateServer } from "@/hub/mcp-connector.schema"
 import type { McpIconBinding, McpIconIntent } from "@/hub/mcp-icon.schema"
 import type { McpIconClient } from "@/hub/mcp-icon-client"
@@ -1197,4 +1198,55 @@ it("French MCP configuration localizes its default title, save action and icon g
   expect(within(configuration).getByText("PNG ou JPG, 1 Mo maximum. Taille recommandée : 256×256 pixels.")).toBeVisible()
   expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
   expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
+})
+
+it.each([{ failedRead: false, badProvider: false }, { failedRead: true, badProvider: false }, { failedRead: false, badProvider: true }])("explicit New Authorization uses exact pending reads (read failure $failedRead, bad provider $badProvider), never Prepare or OAuth", async ({ failedRead, badProvider }) => {
+  localStorage.setItem("kokoro.locale", "en")
+  const removed: McpConnector = { availability: "unavailable", connector_id: "removed-source", server_id: "saved-server", provider_key: "private-saved-server",
+    connector_type: "mcp", display_name: "Removed configuration", status: "revoked", enabled: false, state_version: "7", approved_scopes: [] }
+  const saved: McpPrivateServer = { availability: "unavailable", server_id: "saved-server", display_name: "Removed configuration",
+    server_url: "https://mcp.example.test/saved", status: "registered", state_version: "4", headers: [], transport: "streamable_http",
+    prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const pendingConnector: McpConnector = { ...removed, connector_id: "new-pending", status: "pending", state_version: "1" }
+  const pendingServer: McpPrivateServer = { ...saved, status: "pending", state_version: "5" }
+  let confirmed = false, failedOnce = false
+  const reauthorize = vi.fn(async () => { confirmed = true; return mcpReauthorizationDataSchema.parse({ server: pendingServer, connector: badProvider ? { ...pendingConnector, provider_key: "private-other-server" } : pendingConnector, replayed: false }) })
+  const prepare = vi.fn(), oauth = vi.fn(), enable = vi.fn()
+  const client = { ...createHubClient(), reauthorizePrivateMcpServer: reauthorize, preparePrivateMcpServer: prepare,
+    beginMcpConnectorAuthorization: oauth, reconnectMcpConnectorAuthorization: oauth, setMcpConnectorEnabled: enable,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [removed], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    getMcpConnector: vi.fn(async (id: string) => {
+      if (id === pendingConnector.connector_id && failedRead && !failedOnce) { failedOnce = true; throw Error("fresh read unavailable") }
+      return id === pendingConnector.connector_id ? pendingConnector : removed
+    }),
+    getPrivateMcpServer: vi.fn(async () => confirmed ? pendingServer : saved) }
+  const boundary = { subject: "removed-owner", admitted: true, generation: 1 }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}>
+    <McpContent client={client} initialView="connections" readBoundary={boundary} />
+  </ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: saved.display_name }))
+  const action = await screen.findByRole("button", { name: "Create new authorization" })
+  await waitFor(() => expect(action).toBeEnabled())
+  expect(reauthorize).not.toHaveBeenCalled()
+  fireEvent.click(action)
+  await waitFor(() => expect(reauthorize).toHaveBeenCalledOnce())
+  expect(reauthorize).toHaveBeenCalledWith(saved.server_id, { source_connector_id: removed.connector_id,
+    expected_server_state_version: "4", expected_connector_state_version: "7" }, expect.any(String), expect.any(AbortSignal))
+  if (badProvider) {
+    await screen.findByRole("button", { name: "Retry original request" })
+    expect(client.getMcpConnector.mock.calls.some(([id]) => id === pendingConnector.connector_id)).toBe(false)
+    expect(client.getPrivateMcpServer).toHaveBeenCalledOnce()
+    expect(prepare).not.toHaveBeenCalled(); expect(oauth).not.toHaveBeenCalled(); expect(enable).not.toHaveBeenCalled()
+    return
+  }
+  await waitFor(() => expect(client.getMcpConnector).toHaveBeenCalledWith(pendingConnector.connector_id, expect.any(AbortSignal)))
+  if (failedRead) {
+    fireEvent.click(await screen.findByRole("button", { name: "Reload added connectors" }))
+    await waitFor(() => expect(client.getMcpConnector.mock.calls.filter(([id]) => id === pendingConnector.connector_id).length).toBe(2))
+    expect(reauthorize).toHaveBeenCalledOnce()
+  }
+  await waitFor(() => expect(client.getPrivateMcpServer.mock.calls.length).toBeGreaterThan(1))
+  expect(prepare).not.toHaveBeenCalled(); expect(oauth).not.toHaveBeenCalled(); expect(enable).not.toHaveBeenCalled()
 })
