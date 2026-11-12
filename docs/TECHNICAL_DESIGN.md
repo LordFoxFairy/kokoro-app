@@ -1,3 +1,11 @@
+## 2026-11-12 · AG-UI 正文单轨与最小工作台反馈
+
+沿现网络 decoder／mapper，live 和 ordered history 的文本都交锁定 AI SDK `readUIMessageStream` 装配。engine仍拥有提交、恢复、opaque cursor、scope和取消；reducer只采用SDK绝对快照，删除手工delta拼字。owner revision／watermark到达后，原有有界原始后缀仍经同一SDK重放，不拿旧绝对快照覆盖已确认前缀。
+
+接收frame并不立即确认cursor。现adapter批次等待machine的SDK采用，正文／最终cursor共同接管后才触发terminal相关读取；同chunk后续解析错误、EOF和重连等待已接收批次。scope／hydrate／dispose则立即退休旧reader和队列，旧异步结果不进入新scope。SDK EOF不是Run终态，tool／reasoning chunks不是公开答案正文；无第二useChat网络或兼容回退。
+
+UI复用exact Run终态，中性结束旧未决Skill，不伪造其成功或失败；控制owner仍独占action／读取。首页保持单Composer，只补首次模型目录可见反馈／既有显式重试与连接器原列表加载／错误。没有新增owner、API、Schema或依赖。真实后端首片由Root收据绑定，App最终验证状态以CURRENT为准。
+
 ## A‑08：当前消息资源选择（2026‑11‑09，实施候选）
 
 沿 Root 已批准方案复用同一 Composer 的 `+` 菜单：本地文件、资料库、最近任务；Skills/MCP 原流程不变。`composer-resource-picker.tsx` 只负责候选读取、显式上传与受控选择。最近任务打开当前列表成员时只读一次同 scope 私有 Session snapshot，校验 exact task 和 owner；存在交付或更多交付时保持 FINAL artifacts 分页。只有明确无交付的任务才可选择最近的 completed ordered durable 最终答复，缺标记显示空态；不读 Message parts、猜正文或把答案复制为文件。Project artifacts 仍按当前已知会话过滤，候选不授予执行权限。

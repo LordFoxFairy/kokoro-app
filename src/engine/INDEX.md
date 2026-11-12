@@ -1,3 +1,5 @@
+2026-11-12：实时与历史共用 `message-parts-reader.ts` 的 AI SDK text slot。`client` 保留完整 mapped frame；`execution-adapter` 批次有序等待采用；`machine` 串行处理 live 与 owner baseline／原始后缀重放，采用正文后才确认 opaque cursor，terminal／错误不抢占前序正文。scope／hydrate／dispose 立即退休 reader，旧代际不阻塞新scope。不新增网络／提交协议，安全活动／交付仍走原投影，tool／reasoning chunks不作为正文。
+
 Custom API draft selection lives in `custom-api-selection.ts` as immutable profileId/expectedStateVersion references (max32, unique profile IDs), separately from MCP Connection IDs. `machine.ts` scopes and freezes this safe intent per submission; no credentials/instructions or account preference. Formal853ca/Public28.17 serialization, browser original-key recovery and private snapshot hydration use the same generated safe-ref schema; API restoration has its own manual-selection version guard.
 
 2026-10-28 最终答复引用沿原AG-UI/快照/parts读取链消费：仅exact Run与公共revision可建立分层事实；旧版本、跨页不一致和未完整正文不替代新事实。无新读取通道，正常配对状态见CURRENT。
@@ -8,7 +10,7 @@ Custom API draft selection lives in `custom-api-selection.ts` as immutable profi
 
 <!-- Ordered private Message reads: message-parts-reader.ts is the sole bounded continuation reader; machine owns its context retirement and read-only retryMessageParts. It never retries commands or advances resumeCursor. -->
 <!-- A typed page GET401 may await the existing ProductReadRecheck once, using the captured subject/data epoch and the original10s episode; only trusted same-subject readmission permits the exact same scope/cursor GET. Abort/retirement,409 and subsequent401 do not replay. -->
-`message-parts-reader.ts` 只把同一已校验 ordered text slot 的 owner 分片交给锁定 AI SDK `readUIMessageStream` 装配；页面仍经原 Message merge 使用该文本。每次读最多一个 SDK slot，沿原 10 秒预算与取消，不推进 SSE cursor，不以 SDK 完成推断 Run 终态。实时 AG-UI 片字保持原路径。
+`message-parts-reader.ts` 只把同一已校验 ordered text slot 的 owner 分片交给锁定 AI SDK `readUIMessageStream` 装配；页面仍经原 Message merge 使用该文本。每次读最多一个 SDK slot，沿原 10 秒预算与取消，不推进 SSE cursor，不以 SDK 完成推断 Run 终态。实时 AG-UI 的同一 mapped frame 也进入该 SDK 文本装配，reducer 只采用绝对 snapshot，不再追加原始 delta。
 CHAT-1当前：`ownerConfirmedSessionId`只投影当前视图的正向snapshot/create ACK，内存保存，不由乐观正文或浏览器索引推断；供归档读取资格使用，不授权或改变原提交恢复。
 
 ## CHAT-1 未决提交刷新恢复（2026-10-24，候选）

@@ -1,3 +1,9 @@
+## 2026-11-12 · AG-UI／AI SDK 本地适配（无网络增量）
+
+外部仍是现BFF AG-UI事件与opaque durable cursor。Web将已有mapper的文本chunks交现AI SDK reader，live与历史共用装配；内部 `message.text_snapshot` 是本地绝对文本视图，不新增SSE事件、公开API或generated contract。安全activity／interaction／delivery及私有parts读取资格不变，tool／reasoning payload不作为答案正文。
+
+已接收frame的正文采用先于cursor确认、terminal及流错误反馈；scope退出仍立即退休。首页目录重试只调用既有读取，未新增请求路径或自动提交。公开参考与机器契约不因内部适配重生成版本。
+
 ## A‑13 — Slack workspace association
 
 Setup uses the existing GET/POST with `platform=slack`. The exact browser `GET /api/agents/connections/slack/callback` is a private no-store/no-referrer navigation, relays a bounded code/state body to the admitted BFF completion route, and returns an empty 303 to the fixed Agents page. Neither callback values nor a provider token enter the redirect, storage or public projection. The destination reads the same BFF-owned association.

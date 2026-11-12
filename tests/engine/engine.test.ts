@@ -1,3 +1,4 @@
+import { projectionFrame } from "./fakes"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { addConversation, type ConversationStore } from "@/core/conversations"
@@ -2910,8 +2911,8 @@ describe("R74 atomic terminal RR snapshot takeover", () => {
     // prove a non-cooperative old producer cannot bypass the adapter generation.
     oldCallbacks.onCursor(R74_OLD)
     for (const revision of [1, 2]) {
-      oldCallbacks.onEvent(makeEvent("interaction.state", r66Interaction({ interaction_revision: revision,
-        pause_revision: revision, pause_ref: `old_pause_${revision}` }), { run_id: "run_2", seq: revision }))
+      oldCallbacks.onFrame(projectionFrame(makeEvent("interaction.state", r66Interaction({ interaction_revision: revision,
+        pause_revision: revision, pause_ref: `old_pause_${revision}` }), { run_id: "run_2", seq: revision }), R74_OLD))
     }
     oldCallbacks.onReconnecting?.(R74_OLD)
     oldCallbacks.onStreamError(new SessionClientError("parse", "obsolete subscription"))
@@ -2938,7 +2939,7 @@ describe("R74 atomic terminal RR snapshot takeover", () => {
     expect(http.streams[1]?.headers.get("last-event-id")).toBe(R74_W3)
     expect(thread().lastSeq).toBe(4)
     oldCallbacks.onCursor(R74_OLD)
-    oldCallbacks.onEvent(makeEvent("message.delta", { segment_id: "b_wire", delta: " obsolete" }, { run_id: "run_2", seq: 2 }))
+    oldCallbacks.onFrame(projectionFrame(makeEvent("message.delta", { segment_id: "b_wire", delta: " obsolete" }, { run_id: "run_2", seq: 2 }), R74_OLD))
     await settle()
     expect(thread().resumeCursor).toBe(R74_NEXT)
     expect(thread().messages.find((message) => message.snapshotMessageId === "b_assistant")?.content).toBe("B full prefix plus tail")

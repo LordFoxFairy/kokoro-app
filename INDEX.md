@@ -1,3 +1,5 @@
+2026-11-12：实时与历史正文收敛为同一 AI SDK reader；命令／cursor／恢复仍由现 engine 拥有，安全过程与成果不变。首页仅补读取反馈和既有重试。当前本地验证／真实浏览器范围见 docs/CURRENT.md，网络边界见 docs/API_CONTRACT.md；无新增公开协议或执行框架。
+
 ### A‑08 当前消息资源接线（2026‑11‑09，未提交候选）
 
 `ui/composer/composer-resource-picker.tsx` 复用现文件上传/列表与 artifact 客户端，`AppFrameComposer` 在同一加号显示三类资源。打开最近任务才读一次同 scope 的私有 snapshot；无任何交付的任务可选择 owner 已标记的最终答复，仅发送 opaque Message ID，不读取正文。原 `useDraft` 按准入主体/租户恢复未发送的正文与 opaque refs；Project 首发仍在 fresh Conversation 分配后提交选择，未确认命令用原 journal。无第二 engine、store、路由或答案复制。真实浏览器验收由 Root 串行交付。

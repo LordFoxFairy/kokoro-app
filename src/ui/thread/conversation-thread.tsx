@@ -300,7 +300,7 @@ function ConversationThreadSurface({
                 <>
                   <AssistantTurn
                     runId={item.runId}
-                    terminal={ownsRunControls && thread.runTerminalsById?.[item.runId] !== undefined}
+                    terminal={thread.runTerminalsById?.[item.runId] !== undefined}
                     succeeded={ownsRunControls && thread.runTerminalsById?.[item.runId] === "completed"}
                     {...(ownsRunControls && thread.finalAnswersByRun?.[item.runId]?.segmentId ? { finalSegmentId: thread.finalAnswersByRun[item.runId]!.segmentId! } : {})}
                     finalPartsComplete={ownsRunControls && finalAnswerPartsComplete(thread.finalAnswersByRun?.[item.runId], thread.messageParts, item.runId)}

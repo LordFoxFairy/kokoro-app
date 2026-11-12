@@ -49,7 +49,7 @@ import {
   type MoveSessionReceipt,
 } from "@/contract/http"
 import type { EventCursor } from "@/contract/agui-events"
-import type { ChatProjectionEvent } from "@/core/chat-projection-event"
+import type { AgUiTransportFrame } from "./agui-chat-transport"
 import { AgUiChatTransport } from "./agui-chat-transport"
 import { readPartsJson } from "./message-parts-reader"
 import { SessionClientError, type ClientFailureReason } from "./client-error"
@@ -101,7 +101,7 @@ export type OpenEventsArgs = {
   // BFF durable AG-UI ledger 的 opaque cursor；null 表示从当前 snapshot 之前没有可续点。
   resumeCursor: EventCursor | null
   onCursor: (cursor: EventCursor) => void
-  onEvent: (event: ChatProjectionEvent) => void
+  onFrame: (frame: AgUiTransportFrame) => void | Promise<void>
   onReconnecting?: (cursor: EventCursor | null) => void
   onConnected?: () => void
   // 入站载荷未过契约或流已不可恢复：交状态机转错误态。
@@ -685,17 +685,13 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
 
     // Canonical AG-UI only: SSE framing, validation, dedupe and reconnect are
     // centralized in AgUiChatTransport; no reducer-shaped wire fallback exists.
-    openEvents: ({ sessionId, resumeCursor, interactionBaselines, onCursor, onEvent, onReconnecting, onConnected, onStreamError }) =>
+    openEvents: ({ sessionId, resumeCursor, interactionBaselines, onCursor, onFrame, onReconnecting, onConnected, onStreamError }) =>
       agUiTransport.openProjectionEvents({
         chatId: sessionId,
         resumeCursor,
         ...(interactionBaselines === undefined ? {} : { interactionBaselines }),
-        onFrame: (frame) => {
-          onCursor(frame.cursor)
-          if (frame.projectionEvent !== null) {
-            onEvent(frame.projectionEvent)
-          }
-        },
+        onFrame,
+        onCursor,
         ...(onReconnecting === undefined ? {} : { onReconnecting }),
         ...(onConnected === undefined ? {} : { onConnected }),
         onStreamError,

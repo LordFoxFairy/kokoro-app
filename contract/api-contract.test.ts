@@ -519,7 +519,7 @@ describe("cursor pagination and same-origin client paths", () => {
       sessionId: "project_session",
       resumeCursor: EVENT_CURSOR,
       onCursor,
-      onEvent,
+      onFrame: frame => { if (frame.projectionEvent !== null) onEvent(frame.projectionEvent) },
       onStreamError,
     })
 

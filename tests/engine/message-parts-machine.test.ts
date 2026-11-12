@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { addConversation, type ConversationStore } from "@/core/conversations"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import { SessionClientError } from "@/engine/client-error"
 import { parseSessionSnapshot, type MessagePartsPage } from "@/contract/chat"
 import { createFakeClient, createMemoryStorage, settle } from "./fakes"
 import { makeEvent, makeSnapshot } from "../core/fixtures"
+vi.mock("ai", { spy: true })
 let engine: SessionEngine | undefined
 afterEach(() => engine?.dispose())
 const W = "agui_00000000000000000000000000000001"
@@ -21,6 +22,70 @@ function setup() {
   return { client, start: () => { engine = createSessionEngine({ client, storage, scope: { kind: "project", projectRef: "project" } }); return engine } }
 }
 describe("ordered history lifecycle", () => {
+  it("assembles live text through the SDK before adopting the following terminal", async () => {
+    const sdk = await import("ai")
+    const actual = await vi.importActual<typeof import("ai")>("ai")
+    const read = vi.mocked(sdk.readUIMessageStream)
+    read.mockClear()
+    let release!: () => void, entered!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const started = new Promise<void>(resolve => { entered = resolve })
+    read.mockImplementationOnce(options => actual.readUIMessageStream(options).pipeThrough(new TransformStream({
+      async transform(message, controller) {
+        if (message.parts.some(part => part.type === "text" && part.text === "last text")) { entered(); await gate }
+        controller.enqueue(message)
+      },
+    })) as ReturnType<typeof actual.readUIMessageStream>)
+    const { client, start } = setup()
+    client.nextParts = () => new Promise(() => {})
+    try {
+      const active = start(); await settle()
+      client.lastStream().emit([
+        makeEvent("message.delta", { segment_id: "segment", delta: "last text" }, { session_id: "s", run_id: "r", seq: 11, publicSequence: "11" }),
+        makeEvent("run.completed", { status: "completed", token_usage: null }, { session_id: "s", run_id: "r", seq: 12, publicSequence: "12" }),
+      ])
+      await started
+      expect(read).toHaveBeenCalled()
+      expect(active.getSnapshot().thread.runTerminalsById.r).toBeUndefined()
+      release()
+      await vi.waitFor(() => expect(active.getSnapshot().thread.runTerminalsById.r).toBe("completed"))
+      expect(active.getSnapshot().thread.messages.find(message => message.id === "segment")?.content).toBe("last text")
+    } finally { release(); read.mockClear() }
+  })
+  it("rebases the next live SDK delta onto a delayed owner baseline rather than its old suffix-only slot", async () => {
+    const { client, start } = setup(); let resolve!: (page: MessagePartsPage) => void
+    client.nextParts = () => new Promise(yes => { resolve = yes })
+    const active = start(); await settle()
+    client.lastStream().emit([makeEvent("message.delta", { segment_id: "segment", delta: "!" }, { session_id: "s", run_id: "r", seq: 11, publicSequence: "11" })])
+    await settle(); resolve(result()); await settle()
+    client.lastStream().emit([makeEvent("message.delta", { segment_id: "segment", delta: "?" }, { session_id: "s", run_id: "r", seq: 12, publicSequence: "12" })])
+    await vi.waitFor(() => expect(active.getSnapshot().thread.messages.find(message => message.id === "segment")?.content).toBe("baseline!?"))
+  })
+  it("retires a pending SDK snapshot on scope change without blocking the new stream or accepting its late text", async () => {
+    const sdk = await import("ai"), actual = await vi.importActual<typeof import("ai")>("ai")
+    const read = vi.mocked(sdk.readUIMessageStream)
+    let release!: () => void, entered!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const started = new Promise<void>(resolve => { entered = resolve })
+    read.mockImplementationOnce(options => actual.readUIMessageStream(options).pipeThrough(new TransformStream({
+      async transform(message, controller) {
+        if (message.parts.some(part => part.type === "text" && part.text === "obsolete")) { entered(); await gate }
+        controller.enqueue(message)
+      },
+    })) as ReturnType<typeof actual.readUIMessageStream>)
+    const { client, start } = setup(); client.nextParts = () => new Promise(() => {})
+    try {
+      const active = start(); await settle()
+      client.lastStream().emit([makeEvent("message.delta", { segment_id: "old", delta: "obsolete" }, { session_id: "s", run_id: "r", seq: 11, publicSequence: "11" })])
+      await started
+      client.nextSnapshot = async () => makeSnapshot({ sessionId: "next", activeRun: { run_id: "next-run", status: "running" } })
+      active.selectConversation("next"); await settle()
+      client.lastStream().emit([makeEvent("message.delta", { segment_id: "new", delta: "current" }, { session_id: "next", run_id: "next-run", seq: 1, publicSequence: "1" })])
+      await vi.waitFor(() => expect(active.getSnapshot().thread.messages.find(message => message.id === "new")?.content).toBe("current"))
+      release(); await settle()
+      expect(active.getSnapshot().thread.messages.some(message => message.content.includes("obsolete"))).toBe(false)
+    } finally { release(); read.mockClear() }
+  })
   it("starts live without waiting for history and merges the same slot's post-ledger delta", async () => {
     const { client, start } = setup(); let resolve!: (page: MessagePartsPage) => void
     client.nextParts = () => new Promise((yes) => { resolve = yes })
@@ -257,7 +322,10 @@ it("visible parts hidden live suffix survives a delayed fresh completion correct
   client.nextParts = async () => result("baseline")
   engine = createSessionEngine({ client, scope, storage: createMemoryStorage<ConversationStore>(addConversation(null, "s", 1)), messagePartsReadTarget: null })
   await settle()
-  client.lastStream().emit([makeEvent("message.delta", { segment_id: "segment", delta: "!", text_boundary: "end" }, { session_id: "s", run_id: "r", seq: 1, publicSequence: "11" })])
+  client.lastStream().emit([
+    makeEvent("message.delta", { segment_id: "segment", delta: "!" }, { session_id: "s", run_id: "r", seq: 1, publicSequence: "11" }),
+    makeEvent("message.delta", { segment_id: "segment", delta: "", text_boundary: "end" }, { session_id: "s", run_id: "r", seq: 2, publicSequence: "12" }),
+  ])
   await settle()
   expect(client.partsCalls).toHaveLength(0)
   engine.setMessagePartsReadTarget?.({ scope, conversationId: "s" })

@@ -113,9 +113,8 @@ describe("session execution adapter", () => {
     const batches: string[][] = []
 
     adapter.openStream("session_1", null, {
-      onCursor: () => {},
       onEvents: (events) => {
-        batches.push(events.map((event) => event.event_id))
+        batches.push(events.flatMap((frame) => frame.projectionEvent ? [frame.projectionEvent.event_id] : []))
       },
       onStreamError: () => {},
     })
@@ -124,9 +123,8 @@ describe("session execution adapter", () => {
     adapter.closeStream()
 
     adapter.openStream("session_1", null, {
-      onCursor: () => {},
       onEvents: (events) => {
-        batches.push(events.map((event) => event.event_id))
+        batches.push(events.flatMap((frame) => frame.projectionEvent ? [frame.projectionEvent.event_id] : []))
       },
       onStreamError: () => {},
     })
@@ -145,7 +143,6 @@ describe("session execution adapter", () => {
     const lifecycle: string[] = []
 
     adapter.openStream("session_1", null, {
-      onCursor: () => {},
       onEvents: () => {},
       onReconnecting: () => lifecycle.push("old-reconnecting"),
       onConnected: () => lifecycle.push("old-connected"),
@@ -153,7 +150,6 @@ describe("session execution adapter", () => {
     })
     const oldStream = client.lastStream()
     adapter.openStream("session_2", null, {
-      onCursor: () => {},
       onEvents: () => {},
       onReconnecting: () => lifecycle.push("new-reconnecting"),
       onConnected: () => lifecycle.push("new-connected"),

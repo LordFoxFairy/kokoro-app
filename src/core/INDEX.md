@@ -1,3 +1,5 @@
+2026-11-12：`chat-projection-event.ts` 区分原始文本输入与 reducer 事件；reducer 只接 SDK 绝对 `message.text_snapshot`，不再手工拼接 `message.delta`。ordered baseline 的原始后缀由 engine 经同一 SDK 重放后合并；现 event_id／publicSequence／Run归属、活动与终态规则保持。该 snapshot 仅本地视图事件，不是新 wire。
+
 2026-10-28 最终答复引用沿原AG-UI/快照/parts读取链消费：仅exact Run与公共revision可建立分层事实；旧版本、跨页不一致和未完整正文不替代新事实。无新读取通道，正常配对状态见CURRENT。
 
 运行时只接受 `runTerminalsById` canonical 状态；已删除 `cancelledRuns` HMR 兼容迁移，旧内存形状不会再被写入口接纳。不由 textState/runStatus 补成功，不改消息/草稿或持久状态。

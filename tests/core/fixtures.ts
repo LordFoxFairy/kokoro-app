@@ -61,7 +61,7 @@ export function makeEvent<K extends ChatProjectionEvent["kind"]>(
   kind: K,
   payload: PayloadOf<K>,
   overrides: EnvelopeOverrides = {},
-): ChatProjectionEvent {
+): Extract<ChatProjectionEvent, { kind: K }> {
   const seq = overrides.seq ?? (autoSeq += 1)
   return parseChatProjectionEvent({
     kind,
@@ -72,13 +72,13 @@ export function makeEvent<K extends ChatProjectionEvent["kind"]>(
     session_id: overrides.session_id ?? "ses_1",
     run_id: overrides.run_id ?? "run_1",
     timestamp: overrides.timestamp ?? "2026-07-02T00:00:00Z",
-  })
+  }) as Extract<ChatProjectionEvent, { kind: K }>
 }
 
 export function makeAgentFailureEvent(
   profile: AgentFailureProfile,
   overrides: EnvelopeOverrides = {},
-): ChatProjectionEvent {
+): Extract<ChatProjectionEvent, { kind: "run.failed" }> {
   const seq = overrides.seq ?? (autoSeq += 1)
   return parseChatProjectionEvent({
     kind: "run.failed",
@@ -88,13 +88,13 @@ export function makeAgentFailureEvent(
     session_id: overrides.session_id ?? "ses_1",
     run_id: overrides.run_id ?? "run_1",
     timestamp: overrides.timestamp ?? "2026-07-02T00:00:00Z",
-  })
+  }) as Extract<ChatProjectionEvent, { kind: "run.failed" }>
 }
 
 export function makeDispatchFailureEvent(
   sourceSequence: string,
   overrides: Omit<EnvelopeOverrides, "seq"> = {},
-): ChatProjectionEvent {
+): Extract<ChatProjectionEvent, { kind: "run.dispatch_failed" }> {
   return parseChatProjectionEvent({
     kind: "run.dispatch_failed",
     payload: {},
@@ -103,7 +103,7 @@ export function makeDispatchFailureEvent(
     session_id: overrides.session_id ?? "ses_1",
     run_id: overrides.run_id ?? "run_1",
     timestamp: overrides.timestamp ?? "2026-07-02T00:00:00Z",
-  })
+  }) as Extract<ChatProjectionEvent, { kind: "run.dispatch_failed" }>
 }
 
 type InteractionFixtureInput = {

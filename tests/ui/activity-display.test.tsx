@@ -208,3 +208,21 @@ it("keeps repeated legacy calls independently inspectable without hiding the fai
   expect(failed).toBeVisible()
   expect(completed).toBeVisible()
 })
+
+
+it.each(["resolving", "loading"] as const)("uses exact Run termination without inventing Skill success or failure (%s)", async (phase) => {
+  const { SkillActivityRow } = await import("@/ui/thread/skill-activity-row")
+  const activity = { activity: "skill" as const, activity_id: `act_${"e".repeat(64)}`, preflight_id: `spf_${"f".repeat(64)}`, source_refs: ["skill:ended"], phase }
+  const { rerender } = render(<LocaleProvider><SkillActivityRow activity={activity} /></LocaleProvider>)
+  expect(screen.getByText(phase === "loading" ? "Loading" : "Resolving")).toBeVisible()
+  rerender(<LocaleProvider><SkillActivityRow activity={activity} terminal /></LocaleProvider>)
+  expect(screen.getByText("Run ended")).toBeVisible()
+  expect(screen.queryByText(/^(Loading|Resolving|Ready|Failed to load)$/u)).toBeNull()
+  expect(activity.phase).toBe(phase)
+  rerender(<LocaleProvider><SkillActivityRow activity={{ ...activity, phase: "ready" }} terminal /></LocaleProvider>)
+  expect(screen.getByText("Ready")).toBeVisible()
+  expect(screen.queryByText("Run ended")).toBeNull()
+  rerender(<LocaleProvider><SkillActivityRow activity={{ ...activity, phase: "failed", error_code: "skill_load_failed" }} terminal /></LocaleProvider>)
+  expect(screen.getByText("Failed to load")).toBeVisible()
+  expect(screen.queryByText("Run ended")).toBeNull()
+})

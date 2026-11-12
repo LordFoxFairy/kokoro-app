@@ -1,4 +1,4 @@
-`composer-connections.tsx` uses one switch-row presentation for distinct MCP and Custom API choices. Identity keys and limits stay separate (16 MCP/32 APIs); stable list→add→management order for both placements, existing36px rows and200–400px panel budget stay unchanged. Pending/error reads remain quiet and never impersonate empty success.
+`composer-connections.tsx` uses one switch-row presentation for distinct MCP and Custom API choices. Identity keys and limits stay separate (16 MCP/32 APIs); stable list→add→management order for both placements, existing36px rows and200–400px panel budget stay unchanged. Initial pending and failed reads display lightweight status in the existing list; neither impersonates empty success.
 
 ## 语音预览边界（2026-10-28）
 
@@ -32,7 +32,7 @@ AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户
 
 - 恢复或语音追加的草稿超过现有 4000 字符提交上限时，保留完整草稿，在输入区关联可访问提示并禁用 Send；表单提交也阻断，缩短后自动恢复。有效输入不额外占布局。
 
-- 模型目录保留受控 `modelCatalogStatus` 的加载／成功／失败事实；失败只作 SR 状态，不在 Composer 插入可见错误／重试面板。同 scope 已确认候选和选择保留，首次未知不造候选或默认值；仅完整成功目录校正失效选择（含真正空目录），已锁定会话不改模型。底层 `retryModels` 的显式程序化恢复保持；正常页面重新挂载会重新读取，不宣称同一常驻壳的重入已恢复，也不把此展示修正当读取故障根因修复。明确发送失败仍归原消息／命令反馈，产品模式与业务模型身份保持分离。
+- 模型目录保留受控 `modelCatalogStatus` 的加载／成功／失败事实；首次无候选时显示轻量加载／错误，允许通过现 `onRetryModels` 显式重读；已有候选时保留原选择及安静错误提示。同 scope 已确认候选和选择保留，首次未知不造候选或默认值；仅完整成功目录校正失效选择（含真正空目录），已锁定会话不改模型。底层 `retryModels` 的原冷却和读取恢复保持；正常页面重新挂载会重新读取，不宣称同一常驻壳的重入已恢复，也不把此展示修正当读取故障根因修复。明确发送失败仍归原消息／命令反馈，产品模式与业务模型身份保持分离。
 
 ## 当前消息的连接来源
 

@@ -23,7 +23,7 @@ describe("authoritative cancellation", () => {
   })
   it("indexes live cancelled by exact run, retaining text and not cancelling its successor", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [
-      makeEvent("message.delta", { segment_id: "a", delta: "prefix" }, { run_id: "r" }),
+      makeEvent("message.text_snapshot", { segment_id: "a", content: "prefix" }, { run_id: "r" }),
       makeEvent("run.created", { run_id: "next" }, { run_id: "next" }),
       makeEvent("run.completed", { status: "cancelled" }, { run_id: "r" }),
     ])

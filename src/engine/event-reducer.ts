@@ -1,6 +1,6 @@
 // Engine 事件归约边界：把已校验的投影事件批量交给 core reducer，并同步推进本轮相位。
 
-import type { ChatProjectionEvent } from "@/core/chat-projection-event"
+import type { ReducerProjectionEvent as ChatProjectionEvent } from "@/core/chat-projection-event"
 import { applyChatProjectionEvents } from "@/core/reducer"
 import type { SessionStreamState } from "@/core/state"
 

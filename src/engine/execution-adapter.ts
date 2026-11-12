@@ -11,7 +11,7 @@ import type {
   SessionSnapshot,
 } from "@/contract/http"
 import type { EventCursor } from "@/contract/agui-events"
-import type { ChatProjectionEvent } from "@/core/chat-projection-event"
+import type { AgUiTransportFrame } from "./agui-chat-transport"
 import type { AgentMode } from "@/core/conversations"
 
 import type { EventStreamHandle, SessionClient } from "./client"
@@ -54,8 +54,7 @@ export type CancelRunArgs = {
 
 export type ExecutionStreamCallbacks = {
   interactionBaselines?: Readonly<Record<string, InteractionState>>
-  onCursor: (cursor: EventCursor) => void
-  onEvents: (events: readonly ChatProjectionEvent[]) => void
+  onEvents: (events: readonly AgUiTransportFrame[]) => void | Promise<void>
   onReconnecting?: (cursor: EventCursor | null) => void
   onConnected?: () => void
   onStreamError: (error: SessionClientError) => void
@@ -109,8 +108,10 @@ type ExecutionAdapterDeps = {
 
 type StreamContext = {
   generation: number
-  buffer: ChatProjectionEvent[]
-  flushScheduled: boolean
+  buffer: Array<{ frame: AgUiTransportFrame; resolve: () => void; reject: (error: unknown) => void }>
+  tail: Promise<void>
+  scheduled: boolean
+  pending: number
   callbacks: ExecutionStreamCallbacks
   handle: EventStreamHandle | null
 }
@@ -161,6 +162,7 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
     const stream = activeStream
     activeStream = null
     if (stream !== null) {
+      for (const entry of stream.buffer) entry.resolve()
       stream.buffer = []
       stream.handle?.close()
       stream.handle = null
@@ -177,28 +179,6 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
     })
   }
 
-  function flushStream(stream: StreamContext): void {
-    stream.flushScheduled = false
-    if (activeStream !== stream || stream.generation !== streamGeneration) {
-      stream.buffer = []
-      return
-    }
-    if (stream.buffer.length === 0) {
-      return
-    }
-    const events = stream.buffer
-    stream.buffer = []
-    stream.callbacks.onEvents(events)
-  }
-
-  function scheduleFlush(stream: StreamContext): void {
-    if (stream.flushScheduled) {
-      return
-    }
-    stream.flushScheduled = true
-    queueMicrotask(() => flushStream(stream))
-  }
-
   function openStream(
     sessionId: string,
     resumeCursor: EventCursor | null,
@@ -208,7 +188,9 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
     const stream: StreamContext = {
       generation: streamGeneration,
       buffer: [],
-      flushScheduled: false,
+      tail: Promise.resolve(),
+      scheduled: false,
+      pending: 0,
       callbacks,
       handle: null,
     }
@@ -218,18 +200,33 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
       sessionId,
       resumeCursor,
       ...(callbacks.interactionBaselines === undefined ? {} : { interactionBaselines: callbacks.interactionBaselines }),
-      onCursor: (cursor) => {
-        if (activeStream !== stream || stream.generation !== streamGeneration) {
-          return
+      // Cursor adoption belongs to the same frame batch in the engine, not receipt time.
+      onCursor: () => {},
+      onFrame: (frame) => {
+        if (activeStream !== stream || stream.generation !== streamGeneration) return
+        stream.pending++
+        const adopted = new Promise<void>((resolve, reject) => stream.buffer.push({ frame, resolve, reject }))
+        if (!stream.scheduled) {
+          stream.scheduled = true
+          queueMicrotask(() => {
+            stream.scheduled = false
+            const entries = stream.buffer
+            stream.buffer = []
+            stream.tail = stream.tail.then(async () => {
+              if (activeStream !== stream || stream.generation !== streamGeneration) {
+                for (const entry of entries) entry.resolve()
+                return
+              }
+              try {
+                await callbacks.onEvents(entries.map(entry => entry.frame))
+                for (const entry of entries) entry.resolve()
+              } catch (error) {
+                for (const entry of entries) entry.reject(error)
+              } finally { stream.pending -= entries.length }
+            })
+          })
         }
-        callbacks.onCursor(cursor)
-      },
-      onEvent: (event) => {
-        if (activeStream !== stream || stream.generation !== streamGeneration) {
-          return
-        }
-        stream.buffer.push(event)
-        scheduleFlush(stream)
+        return adopted
       },
       onReconnecting: (cursor) => {
         if (activeStream !== stream || stream.generation !== streamGeneration) {
@@ -247,8 +244,16 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
         if (activeStream !== stream || stream.generation !== streamGeneration) {
           return
         }
-        closeStream()
-        callbacks.onStreamError(error)
+        const finish = () => {
+          if (activeStream !== stream || stream.generation !== streamGeneration) return
+          closeStream()
+          callbacks.onStreamError(error)
+        }
+        if (stream.pending === 0) finish()
+        else queueMicrotask(() => { void stream.tail.then(async () => {
+          await Promise.resolve()
+          finish()
+        }) })
       },
     })
     stream.handle = handle

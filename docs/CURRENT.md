@@ -1,3 +1,15 @@
+## 2026-11-12 · Workbench SDK projection and visible read recovery
+
+Live AG-UI mapped text and ordered history now use the same pinned AI SDK text reader. Reducer accepts absolute text snapshots, not raw delta concatenation. The existing transport/adapter waits for adoption before cursor confirmation, terminal reads, EOF/reconnect/error; hydrate/reopen/scope/dispose retire the old reader and queue. Safe activity/interaction/delivery remain separate; no new wire, schema, dependency or fallback transport.
+
+Exact Run terminal facts neutralize unresolved historical Skill loading without inventing a Skill result or changing the action/read owner. Funding/permission denial copy covers both causes. The homepage retains its single Composer and adds only visible initial model/connector read status and the existing explicit model retry.
+
+Main verification on 57 frozen modified inputs: all default tests **6533 PASS**, full ESLint and nonincremental TypeScript, all pinned generation checks and production build PASS. Default run includes contract/architecture behavior; no duplicate full run. SDK and Composer independent reviews CLEAR. Public product guide Markdown/static build/internal links PASS (61 pages, 20402 internal links).
+
+Normal native-auth browser reused the real report and script-delivery histories: original failure, successful body/card and hard refresh restored; old Skill shows Run ended, not Loading. Script history initially hit existing 429 admission limits; two explicit read-only message reloads succeeded after the window, and a subsequent hard refresh restored both original failed content and delivery without a retry command or new model call. The 390×844 homepage has one textarea and no horizontal overflow; Context7 menu/Escape return focus passed. No new backend/model/volume operations were needed for this App slice.
+
+The separate preview `test:e2e` suite was not rerun: the affected normal authenticated UI was exercised directly, while default transport/engine tests cover async text/terminal/cursor retirement. This is scoped App acceptance, not a new full-product or pixel-identical Manus claim. Source commit/PR and exact Root pairing follow integration; Task B and deployment untouched.
+
 ## 2026-11-12 · Public documentation clarity
 
 The existing `developer-docs/` portal separates external skill-list access from first-party workbench references; product guides stay under feature directories and internal engineering documents remain outside the public build. Removed the obsolete Task Bearer quickstart, generic upload-success claim and undeclared `run.steer` instruction. The original five examples retain their lifecycle behavior with native first-party admission; a sixth covers the public Web skill-list route. Upload and skill-list response fixtures are checked against the pinned schemas.

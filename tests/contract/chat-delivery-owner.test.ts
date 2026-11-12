@@ -49,7 +49,7 @@ function mapDelivery(value: Record<string, unknown>) {
     metadata: { kokoro: { public_sequence: "1", event_id: "e1", seq: 1,
       session_id: delivery.conversation_id, run_id: delivery.run_id, timestamp: delivery.created_at } },
   })
-  if (mapped.projectionEvent === null) throw Error("missing delivery projection")
+  if (mapped.projectionEvent?.kind !== "delivery.created") throw Error("missing delivery projection")
   return applyChatProjectionEvent(createSessionStreamState(), mapped.projectionEvent).deliveries[0]
 }
 

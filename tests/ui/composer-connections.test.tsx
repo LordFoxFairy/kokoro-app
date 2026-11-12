@@ -311,6 +311,23 @@ it("does not auto-highlight the first connector for a pointer open, but keeps ke
   await waitFor(() => expect(trigger).toHaveFocus())
 })
 
+it.each(["loading", "error"] as const)("shows visible connector %s feedback rather than a blank initial list without changing requests", status => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const controller = { items: [], selectedIds: [], status, nextCursor: undefined, refresh: vi.fn(), loadMore: vi.fn(), toggle: vi.fn() }
+  render(<LocaleProvider><ComposerConnections controller={controller} onAdd={vi.fn()} onManage={vi.fn()} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "连接器 (0)" }))
+  const feedback = screen.getByRole("status")
+  expect(feedback).toHaveTextContent(status === "loading" ? "正在加载…" : "连接列表加载失败")
+  // sr-only clips this exact feedback from sighted users; DOM visibility alone
+  // does not detect the clipping utility in jsdom.
+  expect(feedback).not.toHaveClass("sr-only")
+  expect(screen.queryByText("还没有连接器")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "添加连接器" })).toBeEnabled()
+  expect(screen.getByRole("button", { name: "管理连接器" })).toBeEnabled()
+  expect(controller.refresh).toHaveBeenCalledTimes(status === "loading" ? 0 : 1)
+  expect(controller.toggle).not.toHaveBeenCalled()
+})
+
 it("retains known connector choices after a read failure without an extra refresh or generic retry panel", async () => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const controller = { items: [{ id: "connection:a", name: "Docs", availability: "available" as const, selectable: true }], selectedIds: ["connection:a"], status: "ready" as const, nextCursor: undefined, refresh: vi.fn(), loadMore: vi.fn(), toggle: vi.fn() }
@@ -321,6 +338,7 @@ it("retains known connector choices after a read failure without an extra refres
   view.rerender(<LocaleProvider><ComposerConnections controller={{ ...controller, status: "error" }} onAdd={onAdd} onManage={onManage} /></LocaleProvider>)
   expect(screen.getByRole("switch", { name: "Docs" })).toHaveAttribute("aria-checked", "true")
   expect(screen.getByRole("status")).not.toBeEmptyDOMElement()
+  expect(screen.getByRole("status")).not.toHaveClass("sr-only")
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "重新加载" })).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "添加连接器" })).toBeEnabled()
