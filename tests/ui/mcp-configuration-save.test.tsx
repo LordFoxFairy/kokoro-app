@@ -121,14 +121,14 @@ async function jsonConfigurationFixture(unknown = false, icons?: McpIconClient, 
     for (const label of ["Details", "Category", "Uncategorized", "Connector type", "Custom MCP", "Give feedback"])
       expect(within(detail).getByText(label)).toBeVisible()
   }
-  fireEvent.keyDown(within(detail).getByRole("button", { name: locale === "en" ? "Manage" : "管理" }), { key: "Enter" })
-  fireEvent.click(await screen.findByRole("menuitem", { name: locale === "en" ? "Edit configuration" : "编辑配置" }))
+  fireEvent.keyDown(within(detail).getByRole("button", { name: resolveMessage(locale, "settings.manage") }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: resolveMessage(locale, "mcp.configurationEdit") }))
   const openJson = async () => {
-    fireEvent.keyDown(screen.getByRole("button", { name: locale === "en" ? "Manage" : "管理" }), { key: "Enter" })
-    const entry = await screen.findByRole("menuitem", { name: locale === "en" ? "Edit JSON" : "编辑 JSON" })
+    fireEvent.keyDown(screen.getByRole("button", { name: resolveMessage(locale, "settings.manage") }), { key: "Enter" })
+    const entry = await screen.findByRole("menuitem", { name: resolveMessage(locale, "mcp.configurationEditJson") })
     expect(entry).not.toHaveAttribute("aria-disabled", "true")
     fireEvent.click(entry)
-    return screen.findByRole("dialog", { name: locale === "en" ? "Edit configuration JSON" : "编辑配置 JSON" })
+    return screen.findByRole("dialog", { name: resolveMessage(locale, "mcp.configurationJsonTitle") })
   }
   return { update, prepare, register, importJson, openJson, change: (value: Partial<typeof boundary>) => {
     boundary = { ...boundary, ...value }; view.rerender(content())
@@ -1110,6 +1110,9 @@ it("English configuration labels and JSON errors/copy feedback stay localized wi
 
 it("the MCP detail/configuration slice has explicit messages in all nine runtime locales", () => {
   const keys = [
+    "mcp.active", "mcp.availability.refreshRequired", "mcp.availability.refreshing",
+    "mcp.availability.reauthorizationRequired", "mcp.availability.unavailable", "settings.connect",
+    "mcp.iconLabel", "mcp.iconHint",
     "mcp.registerDialogTitle", "connectorCatalog.copyUuid", "mcp.customName", "mcp.customTransport",
     "mcp.customInstructions", "mcp.optional", "mcp.customInstructionsPlaceholder", "mcp.customServerUrl",
     "mcp.customHeaders", "mcp.customHeaderNamePlaceholder", "mcp.customHeaderValuePlaceholder",
@@ -1123,11 +1126,18 @@ it("the MCP detail/configuration slice has explicit messages in all nine runtime
     "mcp.configurationCopy", "mcp.configurationCopied", "mcp.configurationCopyFailed", "mcp.headerConfigured",
     "mcp.removeNamedHeader", "mcp.removeNewHeader", "mcp.uncategorized", "mcp.customDeleteConfirm", "mcp.provideFeedback",
   ] as const
+  const localizedDefaults = new Set<string>([
+    "mcp.active", "mcp.availability.refreshRequired", "mcp.availability.refreshing",
+    "mcp.availability.reauthorizationRequired", "mcp.availability.unavailable", "settings.connect",
+    "mcp.registerDialogTitle", "mcp.save", "mcp.iconLabel", "mcp.iconHint",
+  ])
   for (const locale of LOCALES) for (const key of keys) {
     const source: Readonly<Record<string, string | undefined>> = locale === "zh" ? zh : OVERLAYS[locale]
     expect.soft(source[key]?.trim(), `${locale}:${key}`).toBeTruthy()
     const resolved = resolveMessage(locale, key as keyof typeof zh, { name: "x-fixture" })
     expect.soft(resolved, `${locale}:${key}`).not.toBe(key)
+    if (locale !== "zh" && locale !== "en" && localizedDefaults.has(key))
+      expect.soft(resolved, `${locale}:${key} English placeholder`).not.toBe(resolveMessage("en", key as keyof typeof zh))
     if (locale !== "zh" && locale !== "ja") expect.soft(resolved, `${locale}:${key}`).not.toMatch(/[\u3400-\u9fff]/u)
   }
 })
@@ -1154,4 +1164,37 @@ it.each([
   expect(onSave).toHaveBeenCalledOnce()
   expect(screen.getByRole("alert")).toHaveTextContent(expected)
   expect(screen.getByRole("alert")).not.toHaveTextContent("private-thrown-sentinel")
+})
+
+
+it("French MCP detail translates unavailable qualification and the connection action without starting it", () => {
+  localStorage.setItem("kokoro.locale", "fr")
+  const connector: McpConnector = { availability: "unavailable", connector_id: "french-connector", server_id: "french-server",
+    provider_key: "french-provider", connector_type: "mcp", status: "active", enabled: true, state_version: "1", approved_scopes: [] }
+  const server: McpPrivateServer = { availability: "unavailable", server_id: "french-server", display_name: "French MCP",
+    server_url: "https://mcp.example.test/french", status: "registered", state_version: "1", transport: "streamable_http",
+    headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const command = vi.fn()
+  render(<LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} admitted
+    actionId={null} actionError={false} deleteId={null} managementCommand={undefined}
+    onResumeManagement={command} onSaveConfiguration={command} onPrepare={command}
+    onAuthorize={command} onDisconnect={command} onDeleteIntent={command} onDelete={command} onCancelDelete={command}
+    returnFocusRef={{ current: null }} onClose={command} /></LocaleProvider>)
+  const detail = screen.getByRole("dialog", { name: server.display_name })
+  expect(within(detail).getByLabelText("Actuellement indisponible")).toHaveTextContent("Actuellement indisponible")
+  expect(within(detail).getByRole("button", { name: "Connecter" })).toBeEnabled()
+  expect(within(detail).queryByText("暂不可用")).toBeNull()
+  expect(within(detail).queryByRole("button", { name: "Connect" })).toBeNull()
+  expect(command).not.toHaveBeenCalled()
+})
+
+
+it("French MCP configuration localizes its default title, save action and icon guidance without uploading", async () => {
+  const state = await jsonConfigurationFixture(false, undefined, "streamable_http", "fr")
+  const configuration = screen.getByRole("dialog", { name: "Paramètres MCP" })
+  expect(within(configuration).getByRole("button", { name: "Enregistrer" })).toBeEnabled()
+  expect(within(configuration).getByText("Icône")).toBeVisible()
+  expect(within(configuration).getByText("PNG ou JPG, 1 Mo maximum. Taille recommandée : 256×256 pixels.")).toBeVisible()
+  expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+  expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
 })

@@ -4,6 +4,14 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  // Default MCP detail and configuration qualification.
+  "mcp.availability.refreshRequired": "使用時に更新",
+  "mcp.availability.refreshing": "更新中",
+  "mcp.availability.reauthorizationRequired": "再認可が必要",
+  "mcp.availability.unavailable": "現在利用できません",
+  "mcp.iconLabel": "アイコン",
+  "mcp.iconHint": "PNG または JPG、最大 1 MB。推奨サイズは 256×256 ピクセルです。",
+
   // MCP detail, configuration and local JSON editing.
   "connectorCatalog.copyUuid": "UUID をコピー",
   "mcp.details": "詳細",
@@ -1524,8 +1532,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "connectorCatalog.typeformDescription": "Create forms, collect responses, and manage webhooks",
   "connectorCatalog.mailchimpDescription": "Manage audiences, campaigns, and email performance",
   "connectorCatalog.geminiDescription": "Process multimodal text, images, and code",
-  "mcp.registerDialogTitle": "MCP settings",
-  "mcp.save": "Save",
+  "mcp.registerDialogTitle": "MCP 設定",
+  "mcp.save": "保存",
   "connectorCatalog.importMcpJson": "Import MCP via JSON",
   "connectorCatalog.addMcpUrl": "Add MCP via URL",
   "connectorCatalog.beta": "Beta",
@@ -1564,7 +1572,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "settings.deploymentAppPlaceholder": "Describe the app you want to build",
   "settings.integrationDescription": "Build workflows in your favorite apps",
   "settings.integrationBack": "Back to integrations",
-  "settings.connect": "Connect",
+  "settings.connect": "接続",
   "settings.connected": "Connected",
   "settings.connecting": "Connecting…",
   "settings.tryNow": "Try it",

@@ -1,3 +1,7 @@
+## 2026-11-12 · MCP默认词条真实法语补口
+
+正常native页面已验English详情／管理／JSON错误、取消回焦与390px内收，JSON非法输入零MCP写；French320px另发现默认availability回退中文、Connect／标题／Save仍English占位、icon标签／hint缺译。只纠正本片10个现有key的七份缺译语言字典（zh/en原准确字节保持）及既有测试，不改UI逻辑／resolver／配置流程。writer真实3 FAIL→117 PASS；主控原两文件117 PASS及production build，八输入SHA核等、独审CLEAR。最终正常法语补验由主控继续，未将key存在冒实际译文正确或全站翻译完成。
+
 ## 2026-11-12 · Task B MCP配置多语言与未读模型壳修复
 
 仅bootstrap显式标记模型目录未读并隐藏选择，保真实ready-empty提示与原零私有读取；MCP详情／管理／配置／JSON编辑复用现t和本片九语言key，不引入resolver／新请求／固定语言宽度。JSON解析／Header／transport错误只按四类安全代码在UI翻译，异常及复制反馈不反射秘密；原unknown命令key/body与窗口退休／回焦逻辑不变。

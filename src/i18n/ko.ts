@@ -4,6 +4,15 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  // Default MCP detail and configuration qualification.
+  "mcp.active": "연결됨",
+  "mcp.availability.refreshRequired": "사용 시 갱신",
+  "mcp.availability.refreshing": "갱신 중",
+  "mcp.availability.reauthorizationRequired": "재승인 필요",
+  "mcp.availability.unavailable": "현재 사용 불가",
+  "mcp.iconLabel": "아이콘",
+  "mcp.iconHint": "PNG 또는 JPG, 최대 1MB. 권장 크기는 256×256픽셀입니다.",
+
   // MCP detail, configuration and local JSON editing.
   "connectorCatalog.copyUuid": "UUID 복사",
   "mcp.customInstructions": "메모",
@@ -1475,8 +1484,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "connectorCatalog.higgsfieldDescription": "Create cinematic images and videos",
   "connectorCatalog.outlookDescription": "Write, search, and manage Outlook email in Kokoro",
   "connectorCatalog.tiktokDescription": "Automate TikTok advertising management and reporting",
-  "mcp.registerDialogTitle": "MCP settings",
-  "mcp.save": "Save",
+  "mcp.registerDialogTitle": "MCP 설정",
+  "mcp.save": "저장",
   "connectorCatalog.importMcpJson": "Import MCP via JSON",
   "connectorCatalog.addMcpUrl": "Add MCP via URL",
   "connectorCatalog.beta": "Beta",
@@ -1527,7 +1536,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "settings.deploymentAppPlaceholder": "Describe the app you want to build",
   "settings.integrationDescription": "Build workflows in your favorite apps",
   "settings.integrationBack": "Back to integrations",
-  "settings.connect": "Connect",
+  "settings.connect": "연결",
   "settings.connected": "Connected",
   "settings.connecting": "Connecting…",
   "settings.tryNow": "Try it",

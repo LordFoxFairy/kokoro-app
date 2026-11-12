@@ -4,6 +4,15 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  // Default MCP detail and configuration qualification.
+  "mcp.active": "Connecté",
+  "mcp.availability.refreshRequired": "Renouvellement à l’utilisation",
+  "mcp.availability.refreshing": "Renouvellement en cours",
+  "mcp.availability.reauthorizationRequired": "Nouvelle autorisation requise",
+  "mcp.availability.unavailable": "Actuellement indisponible",
+  "mcp.iconLabel": "Icône",
+  "mcp.iconHint": "PNG ou JPG, 1 Mo maximum. Taille recommandée : 256×256 pixels.",
+
   // MCP detail, configuration and local JSON editing.
   "connectorCatalog.copyUuid": "Copier l’UUID",
   "mcp.customInstructions": "Notes",
@@ -1475,8 +1484,8 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "connectorCatalog.higgsfieldDescription": "Create cinematic images and videos",
   "connectorCatalog.outlookDescription": "Write, search, and manage Outlook email in Kokoro",
   "connectorCatalog.tiktokDescription": "Automate TikTok advertising management and reporting",
-  "mcp.registerDialogTitle": "MCP settings",
-  "mcp.save": "Save",
+  "mcp.registerDialogTitle": "Paramètres MCP",
+  "mcp.save": "Enregistrer",
   "connectorCatalog.importMcpJson": "Import MCP via JSON",
   "connectorCatalog.addMcpUrl": "Add MCP via URL",
   "connectorCatalog.beta": "Beta",
@@ -1527,7 +1536,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "settings.deploymentAppPlaceholder": "Describe the app you want to build",
   "settings.integrationDescription": "Build workflows in your favorite apps",
   "settings.integrationBack": "Back to integrations",
-  "settings.connect": "Connect",
+  "settings.connect": "Connecter",
   "settings.connected": "Connected",
   "settings.connecting": "Connecting…",
   "settings.tryNow": "Try it",
