@@ -1,4 +1,5 @@
 import { createServer, type RequestListener, type Server } from "node:http"
+import { setImmediate as nextTurn } from "node:timers/promises"
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
@@ -74,6 +75,37 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
     expect(receivedPath).toBe("/v1/scheduled-tasks")
     expect(receivedNamespace).toBe("")
     expect(receivedUser).toBe("")
+  })
+
+  it("retires a cancelled incoming task body before any BFF request", async () => {
+    receivedPath = ""
+    const controller = new AbortController()
+    let input!: ReadableStreamDefaultController<Uint8Array>
+    let cancellations = 0
+    const body = new ReadableStream<Uint8Array>({
+      start(stream) { input = stream; stream.enqueue(new TextEncoder().encode("{")) },
+      cancel() { cancellations++ },
+    })
+    const init: RequestInit & { duplex: "half" } = {
+      method: "POST", body, signal: controller.signal, duplex: "half",
+      headers: { host: "first.example", origin: "https://first.example", cookie: "kokoro-issuer.session_token=fixture", "content-type": "application/json" },
+    }
+    const result = POST(new Request("https://first.example/api/scheduled-tasks", init), { params: Promise.resolve({ path: [] }) })
+    try {
+      await nextTurn()
+      expect(body.locked).toBe(true)
+      controller.abort()
+      await nextTurn()
+      expect(cancellations).toBe(1)
+      const response = await result
+      expect(response.status).toBe(400)
+      expect(await response.json()).toEqual({ error: "request_body_unreadable" })
+      expect(body.locked).toBe(false)
+      expect(receivedPath).toBe("")
+    } finally {
+      input.error(new Error("fixture cleanup"))
+      await result
+    }
   })
 
   it("does not cache a valid BFF error envelope even when upstream marks it public", async () => {
