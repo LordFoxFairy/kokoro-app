@@ -1,3 +1,11 @@
+## 2026-11-12 · Screenshot defects and content-sized settings layout
+
+Root reproduced both screenshots in the normal native-auth workbench: Browse text126.74px overflowed a fixed86px button despite existing8px gap; Import memory footer was90px (button42px plus48px padding) and painted white against the Settings surface. Scoped CSS now uses content width/container wrapping and preserves search usability; footer is58px on the same desktop, matches the panel background and keeps sticky/flow/long-label behavior. Two undefined class references and unused adjacent selectors removed; no new abstraction, dependency, API, schema or business hook.
+
+Main focused UI454 PASS, affected ESLint and complete nonincremental TS PASS. Existing Playwright preview runner:12 PASS, comprising Chinese/English/German desktop1000px and narrow320px text containment/search/keyboard checks plus all original footer reachability/error/focus assertions at1280/876/320 and light/dark. No old assertion removed or narrowed. This is real browser geometry on the existing preview client, not real backend integration or complete translation QA. Normal logged-in English screenshots/geometry also confirmed both fixes. Production build PASS on those six frozen affected inputs. Final Git exit is bound by the accepted owner commit; Root retains exact pairing.
+
+No full default/model/financial/sandbox rerun for this CSS slice. Task B same-file additions were read for overlap but not edited or merged; standalone/plaza remain outside the changed Settings rules. Other UI details are not declared finished merely because these two defects passed.
+
 ## 2026-11-12 · Workbench SDK projection and visible read recovery
 
 Live AG-UI mapped text and ordered history now use the same pinned AI SDK text reader. Reducer accepts absolute text snapshots, not raw delta concatenation. The existing transport/adapter waits for adoption before cursor confirmation, terminal reads, EOF/reconnect/error; hydrate/reopen/scope/dispose retire the old reader and queue. Safe activity/interaction/delivery remain separate; no new wire, schema, dependency or fallback transport.

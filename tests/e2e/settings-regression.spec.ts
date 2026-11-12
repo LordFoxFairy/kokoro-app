@@ -2154,13 +2154,19 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 876, height: 778 
       });
       const initial = await footer.evaluate((element) => {
         const bounds = element.getBoundingClientRect();
+        const bar = element.parentElement!;
+        const surface = element.closest('[data-testid="settings-modal"]')!;
         const viewport = element.closest('[data-slot="scroll-area-viewport"]')!.getBoundingClientRect();
-        return { top: bounds.top, bottom: bounds.bottom, viewportTop: viewport.top, viewportBottom: viewport.bottom, scrollTop: element.closest('[data-slot="scroll-area-viewport"]')!.scrollTop };
+        return { top: bounds.top, bottom: bounds.bottom, viewportTop: viewport.top, viewportBottom: viewport.bottom, scrollTop: element.closest('[data-slot="scroll-area-viewport"]')!.scrollTop,
+          extraHeight: bar.getBoundingClientRect().height - bounds.height,
+          footerBackground: getComputedStyle(bar).backgroundColor, surfaceBackground: getComputedStyle(surface).backgroundColor };
       });
       console.log("Personalization initial footer geometry", { viewport, theme, initial });
       expect(initial.scrollTop).toBe(0);
       expect(initial.top).toBeGreaterThanOrEqual(initial.viewportTop);
       expect(initial.bottom).toBeLessThanOrEqual(initial.viewportBottom);
+      expect(initial.extraHeight).toBeLessThanOrEqual(24);
+      expect(initial.footerBackground).toBe(initial.surfaceBackground);
       await expect(footer).toBeInViewport();
       const instructions = profile.getByRole("textbox", { name: "Custom instructions", exact: true });
       await instructions.fill("a".repeat(8001));
