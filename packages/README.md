@@ -1,9 +1,10 @@
 # Shared package boundary
 
-当前 `packages/` 是 `kokoro-app` 的私有 workspace 层，实际包含 `web-core`、`i18n`、
+当前 `packages/` 是 `kokoro-app` 的私有 workspace 层，实际包含 `i18n`、
 `tsconfig`，App 的 manifest 与 lockfile 仍以 `workspace:*`／本仓 link 消费。
 独立 `libs/kokoro-web-shared` 已存在，Mori 通过显式 `file:` package bridge 消费其中同名三包；
-App 副本尚未切换，共享源码仍有双 writer，不能把目录存在或源码相同当成迁移完成。
+App 未使用的 `web-core` 副本及依赖已退役；共享仓 canonical 包保持，未迁移或发布。
+App 在用 `i18n` 副本尚未切换，仍有双 writer，不能把局部删除当成完整迁移完成。
 
 ## 当前仓库边界与后续交付
 
@@ -11,7 +12,7 @@ Root 当前组合如下；各产品只通过 package 公共入口消费，不互
 
 ```text
 Kokoro/
-├── apps/kokoro-app/packages/ # App 当前消费的三包副本
+├── apps/kokoro-app/packages/ # App 当前消费的 i18n 与 tsconfig
 ├── apps/kokoro-mori/         # file: bridge 消费下方独立共享包
 └── libs/kokoro-web-shared/
     └── packages/{web-core,i18n,tsconfig}
@@ -20,11 +21,11 @@ Kokoro/
 Root 通过 gitlink 组合独立子仓，不等于产品通过 submodule 嵌入共享源码。
 独立共享仓库允许本地显式 `file:` package bridge；私有 registry、semver 与 lockfile 的版本化
 发布仍是后续交付目标，不是当前已完成事实。App 切换与副本删除须先收敛唯一源码 owner，
-逐个验证消费者，再停止双 writer；本次文档纠正不实施迁移或发布。
+逐个验证消费者，再停止双 writer；本轮只退役无消费者的本地 web-core，不切换在用 i18n 或发布包；App 六项额外严格编译检查保持。
 
 ## 包职责与提取规划
 
-`web-core`、`i18n`、`tsconfig` 是当前实际包；下表其余包及后续依赖图是提取规划，
+本仓实际包为 `i18n`、`tsconfig`；`web-core` 仅保留在独立共享仓，下表其余包及后续依赖图是提取规划，
 不代表仓内已存在，不因规划创建空包或迁移现业务契约。
 
 | package | 允许拥有 | 禁止拥有 |

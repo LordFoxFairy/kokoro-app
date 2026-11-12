@@ -12,7 +12,6 @@ ENV npm_config_fetch_retries=6 \
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/tsconfig/package.json ./packages/tsconfig/
 COPY packages/i18n/package.json ./packages/i18n/
-COPY packages/web-core/package.json ./packages/web-core/
 # pnpm 11 blocks native build scripts by default in CI. Install deterministically first,
 # approve only the native packages required by Next/Tailwind, then build them explicitly.
 RUN pnpm install --frozen-lockfile --filter @kokoro/app... --ignore-scripts \
