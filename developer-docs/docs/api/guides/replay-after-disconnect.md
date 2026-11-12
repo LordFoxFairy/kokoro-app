@@ -1,5 +1,7 @@
 # 断线后 replay
 
+本页是[受信第一方服务端参考](/api/authentication)，不代表外部 API Key 可调用此任务接口。
+
 在确认对应 UI 状态之前，保存最后一个**完整收到**的 SSE `id`。重连相同 session 时原样发送：
 
 ```http

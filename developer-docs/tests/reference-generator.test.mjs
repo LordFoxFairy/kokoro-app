@@ -134,7 +134,8 @@ test('renders schema regex constraints as literal code, never inferred links', a
   const renderer = await createMarkdownRenderer('/tmp/kokoro-reference-render');
   const environment = {};
   const html = renderer.render(generateReferenceFiles(contract, catalogEntry).get('chat.md'), environment);
-  assert.ok(environment.links.every((link) => /^\.\/schemas(?:\.html)?#/u.test(link)));
+  assert.ok(environment.links.every((link) => /^\.\/schemas(?:\.html)?#/u.test(link)
+    || ['/api/authentication', '#create-message'].includes(link)));
   assert.match(html, /<code>\^https:\/\/github/);
   for (const pattern of ['^(yes|no)$', '^(yes|no`)$']) {
     contract.components.schemas.MessageCreateRequest.properties.content.pattern = pattern;
@@ -242,6 +243,8 @@ test('generates deterministic operation, schema, and manifest files', () => {
     /\]\(\/api\/reference\/v1\/generated\/chat#create-message\)/,
   );
   assert.doesNotMatch(indexFragment, /\]\(\.\//);
+  assert.match(indexFragment, /\| 资源 \| 操作数 \|/u);
+  assert.match(chatPage, /\[POST Submit a message\]\(#create-message\)/u);
 
   const manifest = JSON.parse(first.get('manifest.json'));
   assert.deepEqual(manifest.items, [

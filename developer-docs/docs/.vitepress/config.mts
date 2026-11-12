@@ -60,9 +60,12 @@ const referenceItems = loadReferenceItems();
 export default defineConfig({
   lang: 'zh-CN',
   title: 'Kokoro 文档',
-  description: 'Kokoro 产品使用指南与 contract-first 开发者文档。',
+  description: 'Kokoro 产品指南、外部接入与第一方 API 参考。',
   cleanUrls: true,
   lastUpdated: false,
+  markdown: {
+    theme: { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' },
+  },
   themeConfig: {
     nav: [
       { text: '产品指南', link: '/product/' },
@@ -104,11 +107,13 @@ export default defineConfig({
           items: [
             { text: '介绍', link: '/api/' },
             { text: '快速开始', link: '/api/quickstart' },
-            { text: '认证与请求约定', link: '/api/authentication' },
+            { text: '认证与适用范围', link: '/api/authentication' },
+            { text: '技能读取与精确版本', link: '/api/guides/skills' },
           ],
         },
         {
-          text: 'API 参考',
+          text: '字段参考',
+          collapsed: true,
           items: [
             { text: 'Kokoro API v1', link: '/api/reference/v1/' },
             ...referenceItems,
@@ -127,9 +132,9 @@ export default defineConfig({
           ],
         },
         {
-          text: '工作流指南',
+          text: '第一方工作流参考',
+          collapsed: true,
           items: [
-            { text: '技能读取与精确版本', link: '/api/guides/skills' },
             { text: '创建 run', link: '/api/guides/create-run' },
             { text: '继续对话', link: '/api/guides/follow-up' },
             { text: '取消 run', link: '/api/guides/cancel-run' },

@@ -1,3 +1,11 @@
+## 2026-11-12 · Public documentation clarity
+
+The existing `developer-docs/` portal separates external skill-list access from first-party workbench references; product guides stay under feature directories and internal engineering documents remain outside the public build. Removed the obsolete Task Bearer quickstart, generic upload-success claim and undeclared `run.steer` instruction. The original five examples retain their lifecycle behavior with native first-party admission; a sixth covers the public Web skill-list route. Upload and skill-list response fixtures are checked against the pinned schemas.
+
+The reference opens with a resource directory and per-tag operation links. All 209 public operations and 446 reachable schemas remain generated from the unchanged 28.35 artifact. No canonical contract, dependency or production runtime changed. The artifact's ordinary-operation authentication metadata still describes historical Bearer admission; the authentication page discloses the difference pending a versioned BFF owner correction, rather than editing generated security claims.
+
+Validation: portal lint/types, 55 tests, provenance, deterministic generation, six fixture examples, publication boundary, static build and links passed. Root verified real browser navigation, Chinese search with keyboard selection, operation anchors and the mobile sidebar at 390px. The light code-block background now matches Shiki light tokens; dark mode keeps its dark background; both use locked Shiki built-in high-contrast palettes. The sampled quickstart token contrast minima were 4.96 (light) and 8.93 (dark), recorded in the private browser receipt rather than assumed from CSS. Fixtures are not live IAM/API-key deployment acceptance; no product-default suite or deployment was run for this documentation-only slice.
+
 ## A‑13 Slack workspace association
 
 The same Agents dialog offers official Slack authorization in the current tab. Its callback gives the one-time code to BFF through the existing authenticated boundary and redirects to the fixed Agents page. Only the admitted BFF read can show connected; personal disconnect does not uninstall Slack. Public 28.35 is pinned; real Chromium and live-provider evidence are tracked by Root.

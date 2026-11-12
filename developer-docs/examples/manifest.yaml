@@ -1,5 +1,10 @@
 schema_version: 1
 examples:
+  - id: curl-list-skills
+    file: examples/curl/list-skills.sh
+    runtime: bash
+    operations:
+      - operation_id: listSkills
   - id: curl-create-run
     file: examples/curl/create-run.sh
     runtime: bash

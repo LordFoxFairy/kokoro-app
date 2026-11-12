@@ -1,5 +1,7 @@
 # 取消 run
 
+本页是[受信第一方服务端参考](/api/authentication)，不代表外部 API Key 可调用此任务接口。
+
 对 session 和 run 的 control operation 发送 `run.cancel`。
 
 <<< ../../../examples/curl/cancel-run.sh{bash}

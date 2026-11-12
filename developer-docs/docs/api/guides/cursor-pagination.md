@@ -1,5 +1,7 @@
 # Cursor 分页
 
+本页是[受信第一方服务端参考](/api/authentication)，不代表外部 API Key 可调用此任务接口。
+
 发布分页的 list operation 会返回 opaque `next_cursor`。下一页把它原样放回 query 的 `cursor`，并保持其余 filter 不变。分页字段、默认值和约束以生成 reference 为准。
 
 <<< ../../../examples/python/cursor-pagination.py{py}

@@ -20,8 +20,9 @@ def required_environment(name: str) -> str:
 BASE_URL = required_environment("KOKORO_API_BASE_URL")
 HEADERS = {
     "x-kokoro-service": "web-bff",
-    "x-kokoro-internal-secret": required_environment("KOKORO_API_TOKEN"),
-    "authorization": "Bearer " + required_environment("KOKORO_USER_BEARER"),
+    "x-kokoro-internal-secret": required_environment("KOKORO_INTERNAL_SECRET"),
+    "cookie": required_environment("KOKORO_SESSION_COOKIE"),
+    "origin": required_environment("KOKORO_WEB_ORIGIN"),
 }
 
 

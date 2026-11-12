@@ -1,18 +1,30 @@
 # 认证与请求约定
 
-Kokoro API v1 由受信任的后端或 Web 同源服务端 adapter 调用。浏览器代码不持有服务凭据，也不直接连接内部 BFF。唯一字段事实源是已固定 owner artifact 的 securitySchemes 和各 operation.security；健康／就绪按其 `security: []` 匿名读取，不据此放开业务接口。
+## 选择正确的接入方式
 
-对外 App 的 `GET /v1/skill.list` 仅携带 User API Key 或已登记 OAuth App 的 Bearer；下表的 service envelope 由同源服务端 adapter 注入，外部调用方不持有或发送内部服务凭据。此入口不依赖浏览器 Product Session，也不把这种身份支持推及其他 operation。
+| 场景 | 客户端发送什么 | 服务端职责 |
+| --- | --- | --- |
+| 外部 `GET /v1/skill.list` | `Authorization: Bearer TOKEN`；User API Key 或已登记 Open App 令牌 | 公开 Web 入口注入受信服务身份，BFF／IAM核验当前读取资格 |
+| 浏览器工作台 | 同源请求携带原生登录 Cookie；写请求遵循 Origin 约束 | Web adapter 注入服务凭据；BFF 准入取得当前 tenant／actor |
+| 第一方 Web → BFF | 原始登录 Cookie、固定 Web Origin，以及受信服务 envelope | 不把用户身份改成 body 参数，不把这一接线开放给外部调用方 |
 
-此公开 API 合同声明的 service-envelope 调用组合如下；具体 operation 以生成参考的 security 为准：
+外部调用方只访问公开 Web，不直连内部 BFF，不持有 `x-kokoro-service` 或 `x-kokoro-internal-secret`。API Key 不替代工作台登录；Cookie 也不是 `skill.list` 的兜底身份。
 
-| Header | 含义与来源 |
+### 第一方参考与机器契约的已知差异
+
+固定 artifact 的普通产品接口仍保留旧 `userBearer` security 声明，与当前原生 Cookie／Origin 运行边界不一致，待 BFF owner 版本化纠正。生成页原样保留其声明以追溯来源，**不要据此把用户 Session 作为 Bearer 构造新的 Task 接入**。本门户不手改机器契约，也不声称认证 metadata 已完成纠正。
+
+任务、分页、上传和恢复示例是受信第一方服务端参考，在本地 fixture 中使用以下配置；不是给外部客户端索取内部凭据的步骤：
+
+| 配置／Header | 第一方含义 |
 | --- | --- |
-| `x-kokoro-service` | 已配置的受信服务调用方，不是浏览器自报身份。 |
-| `x-kokoro-internal-secret` | 该服务的独立凭据，仅服务端读取。 |
-| `Authorization` | `Bearer` 携带当前 IAM 用户会话，BFF 在线准入并取得固定 tenant 与 actor。 |
+| `KOKORO_API_BASE_URL` | 受信环境的 BFF 地址；外部快速开始中则是公开 Web 地址，两者不混用 |
+| `KOKORO_INTERNAL_SECRET` → `x-kokoro-internal-secret` | 仅服务端读取的独立服务凭据；不复用外部快速开始中的 API Key |
+| `x-kokoro-service: web-bff` | 已配置的第一方调用者 |
+| `KOKORO_SESSION_COOKIE` → `Cookie` | 正式原生登录取得、issuer allowlist 接受的 Session Cookie（例如 `kokoro-issuer.session_token`），不是整串浏览器 Cookie；不转为用户 Bearer |
+| `KOKORO_WEB_ORIGIN` → `Origin` | 固定 Web origin，不使用任意客户端自报值建立信任 |
 
-工作台第一方登录采用原生 Cookie／Session 与同源入口，不等同于这里的 API Bearer 接入；BFF 到内部 owner 也不因此逐跳转发用户 Bearer 或重复 OAuth。浏览器不自行构造上述服务凭据。
+BFF 到内部 owner 使用服务身份与受信 actor 上下文，不逐跳转发浏览器 Cookie／用户 Bearer 或重复 OAuth；账户会话等原生认证生命周期按其专门契约处理。
 
 旧的 namespace／principal 自报上下文头不再是身份来源；请求 body、URL、Host、X-Domain 和 X-Forwarded 字段也不建立主体或租户权限。资源 ID、分享链接及 opaque cursor 只定位对象，不替代授权；返回前仍可能重新检查当前资格。
 
