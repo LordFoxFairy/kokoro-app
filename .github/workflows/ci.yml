@@ -60,11 +60,8 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-      - name: Check wire and architecture contracts
-        run: pnpm contract
-
-      - name: Check architecture governance
-        run: pnpm test:architecture
+      - name: Check generated contracts
+        run: pnpm run --sequential "/^contract:check:/"
 
       - name: Lint
         run: pnpm lint
