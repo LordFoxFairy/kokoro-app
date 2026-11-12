@@ -22,4 +22,4 @@ hero:
 
 ## 接入 API
 
-[开发者介绍](/api/)、[认证约定](/api/authentication)和[API v1 参考](/api/reference/v1/)沿既有 contract-first 入口维护。字段、响应头和约束的唯一事实源仍是固定的 BFF public contract，不因新增使用指南而改变。
+从[外部快速开始](/api/quickstart)读取技能；维护工作台适配器时，再读[认证与适用范围](/api/authentication)及[API v1 参考](/api/reference/v1/)。外部接入和第一方服务端参考分开，字段与约束由固定 owner 契约生成。

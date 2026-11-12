@@ -2,7 +2,7 @@
 
 ## 把服务边界留在服务端
 
-从受信任的 backend 或同源 server adapter 调用 Kokoro。不要把 service credential、namespace、principal 或其他认证上下文暴露给浏览器、移动端 bundle、URL 或客户端日志。浏览器提交的 host、forwarded、tenant 和 identity 值都视为不受信输入。
+外部 `skill.list` 从公开 Web 使用 Bearer 接入，不发送内部服务凭据。工作台产品请求才由受信第一方服务端 adapter 调用 BFF，详见[认证与适用范围](/api/authentication)。不要把 service credential、namespace、principal 或其他认证上下文暴露给浏览器、移动端 bundle、URL 或客户端日志。浏览器提交的 host、forwarded、tenant 和 identity 值都视为不受信输入。
 
 ## 最小化数据暴露
 

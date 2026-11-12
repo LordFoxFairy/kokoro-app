@@ -3,6 +3,8 @@ import { dirname, join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 
 import { loadCatalog } from '../scripts/lib/catalog.mjs';
 import { loadPinnedPublicContract } from '../scripts/lib/contract.mjs';
@@ -28,6 +30,7 @@ test('runs every published example against the credential-free HTTP fixture', as
   assert.deepEqual(
     results.map((result) => result.id),
     [
+      'curl-list-skills',
       'curl-create-run',
       'curl-cancel-run',
       'curl-upload-resource',
@@ -36,6 +39,21 @@ test('runs every published example against the credential-free HTTP fixture', as
     ],
   );
   assert.ok(results.every((result) => result.exitCode === 0));
+  // Guard against stale fixture success shapes that request-only validation misses.
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  addFormats(ajv);
+  for (const [id, schemaName] of [
+    ['curl-upload-resource', 'ProjectResourceUploadResponse'],
+    ['curl-list-skills', 'SpecificationPublicSkillList'],
+  ]) {
+    const result = results.find((candidate) => candidate.id === id);
+    assert.ok(result);
+    const validate = ajv.compile({
+      ...contract.components.schemas[schemaName],
+      components: contract.components,
+    });
+    assert.equal(validate(JSON.parse(result.stdout)), true, JSON.stringify(validate.errors));
+  }
 });
 
 test('lifecycle example consumes a live stream incrementally before resuming', () => {

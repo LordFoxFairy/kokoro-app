@@ -1,5 +1,7 @@
 # 构建幂等 command
 
+本页是[受信第一方服务端参考](/api/authentication)，不代表外部 API Key 可调用此任务接口。
+
 为每个逻辑 mutation 创建不可预测且稳定的 key，并在本地 command 结果确定前保存它。哪些 operation 必须带 key 不由本页推测，而由生成 reference 的 `x-kokoro-idempotency` metadata 决定。
 
 ## Retry contract

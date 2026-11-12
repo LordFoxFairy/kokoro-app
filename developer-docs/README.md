@@ -8,11 +8,11 @@
 
 字段名、类型、必填性、约束、响应头和 operation 元数据的唯一字段事实源是目录中固定的 `kokoro-bff` public contract artifact。先读[介绍](/api/)，再按[快速开始](/api/quickstart)和[认证与服务上下文](/api/authentication)完成第一次调用；随后按需阅读[核心概念](/api/concepts/projects)、[工作流指南](/api/guides/create-run)和[API v1 参考](/api/reference/v1/)。
 
-生成参考页时，脚本从 `catalog/contracts.yaml` 的 commit 与 SHA-256 绑定位置读取 owner artifact。手写页面只解释调用流程、当前边界和客户端策略，不复制字段表；若手写说明与生成参考冲突，以 owner contract 和生成页为准。
+生成参考页时，脚本从 `catalog/contracts.yaml` 的 commit 与 SHA-256 绑定位置读取 owner artifact。手写页面只解释调用流程、当前边界和客户端策略，不复制字段表；若发现机器声明与当前运行边界有差异，先在认证适用范围中显式列出并交 owner 纠正，不以生成页覆盖已核实的运行事实。
 
 ## 前置条件
 
-- Node.js `22.22.x`
+- Node.js `>=22.22.0 <23`
 - Corepack，以及 `pnpm@11.25.0`
 - 执行 Python 示例需 `python3` 3.10 或更新版本；cURL 示例需 `curl`
 - `../../kokoro-bff` 的本地 checkout，或通过 `KOKORO_BFF_CHECKOUT` 指向该 checkout
@@ -32,7 +32,7 @@
 | `corepack pnpm provenance:check` | 校验 origin、canonical blob、工作树字节、版本和摘要。 |
 | `corepack pnpm reference:generate` | 从固定 BFF OpenAPI 生成被忽略的参考页。 |
 | `corepack pnpm reference:check` | 证明两次隔离生成的字节完全一致。 |
-| `corepack pnpm examples:check` | 用本地 fixture 校验并运行所有公开示例。 |
+| `corepack pnpm examples:check` | 用本地 fixture 校验并运行外部接入示例与第一方服务端参考。 |
 | `corepack pnpm architecture:check` | 执行公开发布边界和来源白名单。 |
 | `corepack pnpm links:check` | 检查构建后的内部路由、锚点和静态资源。 |
 | `corepack pnpm preview` | 预览已经构建的静态站点。 |

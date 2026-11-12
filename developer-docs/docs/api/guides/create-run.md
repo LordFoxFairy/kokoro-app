@@ -1,5 +1,7 @@
 # 创建 run
 
+本页是[受信第一方服务端参考](/api/authentication)，不代表外部 API Key 可调用此任务接口。
+
 向已有 session context 提交一条 message。path 中的 session ID 和 receipt 中的 run ID 都是 opaque 值。
 
 <<< ../../../examples/curl/create-run.sh{bash}

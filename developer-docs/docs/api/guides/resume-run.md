@@ -1,5 +1,7 @@
 # 恢复等待中的 run
 
+本页是[受信第一方服务端参考](/api/authentication)，不代表外部 API Key 可调用此任务接口。
+
 读取正式 `CUSTOM kokoro.interaction.state` 的完整 `ChatInteractionState`，只在 `phase=waiting` 时展示待处理集合。它是整体替换，不是增量；界面不根据HTTP202删除pending，仍等待权威新状态。
 
 用户确认所有required决定后，按精确 `pause_ref` 与 `pause_revision` 构造 `run.resume`：请求为 `pause_ref`、`expected_pause_revision` 及对应 `decisions[].item_id`；不猜内部tool引用，不使用退役的tool_id或旧awaiting_approval事件。字段、decision分支与约束见[API参考](/api/reference/v1/generated/chat)。

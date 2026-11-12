@@ -495,6 +495,13 @@ function renderTagPage(contract, tag, operations, entry) {
     ...(description === '' ? [] : [description, '']),
     `契约版本（Version）\`${entry.version}\` · owner \`${entry.owner}\` · visibility \`${entry.visibility}\` · source commit \`${entry.source.commit}\` · SHA-256 \`${entry.digest.value}\``,
     '',
+    '> 接入前先看[认证与适用范围](/api/authentication)。公开 wire reference 不等于所有接口均支持外部 API Key；历史认证声明的差异在该页列明。',
+    '',
+    '## 操作目录',
+    '',
+    ...operations.map(({ method, operation, path }) =>
+      `- [${method} ${escapeTable(normalizeDescription(operation.summary, operation.operationId))}](#${slugify(operation.operationId)}) — \`${escapeTable(path)}\``),
+    '',
     operations.map((operation) => renderOperation(contract, operation)).join('\n\n'),
     '',
   ].join('\n');
@@ -607,13 +614,10 @@ export function generateReferenceFiles(contract, catalogEntry) {
       text: tagName,
       link: `/api/reference/v1/generated/${tagSlug}`,
     });
-    for (const collectedOperation of tagOperations) {
-      const { method, operation, path } = collectedOperation;
-      const operationId = requireString(operation, 'operationId', path);
-      indexRows.push(
-      `| <span class="api-method api-method--${method.toLowerCase()}">${method}</span> | [${escapeTable(normalizeDescription(operation.summary, operationId))}](/api/reference/v1/generated/${tagSlug}#${slugify(operationId)}) | \`${escapeTable(path)}\` | \`${operation['x-kokoro-owner']}\` | \`${operation['x-kokoro-visibility']}\` | \`${operation['x-kokoro-stability']}\` | \`${operation['x-kokoro-idempotency']}\` |`,
-      );
-    }
+    const firstOperation = tagOperations[0]?.operation;
+    indexRows.push(
+      `| [${escapeTable(tagName)}](/api/reference/v1/generated/${tagSlug}) | ${tagOperations.length} | [${escapeTable(normalizeDescription(tag.description, tagName))}](/api/reference/v1/generated/${tagSlug}#${slugify(firstOperation.operationId)}) |`,
+    );
   }
 
   manifestItems.push({
@@ -628,8 +632,10 @@ export function generateReferenceFiles(contract, catalogEntry) {
       '',
       `契约版本（Version）\`${catalogEntry.version}\` · owner \`${catalogEntry.owner}\` · visibility \`${catalogEntry.visibility}\` · ${operations.length} operations · source \`${catalogEntry.source.commit}\``,
       '',
-      '| Method | Operation | Path | Owner | Visibility | Stability | Idempotency |',
-      '| --- | --- | --- | --- | --- | --- | --- |',
+      '按资源进入，再从页首操作目录定位 method、path 和字段。Owner、Visibility、Stability、Idempotency 与权限保留在每项操作详情中。',
+      '',
+      '| 资源 | 操作数 | 说明与首项操作 |',
+      '| --- | --- | --- |',
       ...indexRows,
       '',
     ].join('\n'),

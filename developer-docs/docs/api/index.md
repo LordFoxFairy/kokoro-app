@@ -1,29 +1,26 @@
-# 介绍
+# API 文档
 
-Kokoro API v1 是由 `kokoro-bff` 拥有的 public Product API contract。它在一个版本化的 HTTP surface 中提供项目、session、异步 Agent run、定时任务、资源投影和其他产品能力。
+按你的目标选择入口，不必先阅读全部接口。
 
-门户由两部分组成：中文手写指南和从固定 artifact 生成的 reference。门户不拥有或复制 API schema；字段名、类型、必填性、约束、响应头和 operation metadata 的唯一字段事实源是 `catalog/contracts.yaml` 所 pin 的 BFF public contract。
+| 你想做什么 | 从这里开始 |
+| --- | --- |
+| 从外部应用读取可用技能 | [快速开始](/api/quickstart) → [技能读取](/api/guides/skills) |
+| 使用 Kokoro 工作台完成任务 | [产品指南](/product/) → [任务与对话](/product/tasks/) |
+| 维护工作台的第一方服务端适配器 | [认证与适用范围](/api/authentication) → [创建 run](/api/guides/create-run) → [事件流恢复](/api/guides/replay-after-disconnect) |
+| 查方法、参数、响应和错误 | [API v1 参考](/api/reference/v1/) |
 
-## 当前 contract 状态
+## 接入范围
 
-当前版本、完整来源、公开 operation 数量与稳定性以 catalog 和生成参考首页为准，不在手写页维护第二份数字。业务路径前缀为 `/v1`；门户只发布正式标记为 `public` 的 operation，排除 `browser-private` 操作及其独占引用。接口出现在合同中只说明公开 wire shape，不代表每个运行环境、上游依赖或 SLO 已经完成验收。
+**外部接入：**公开 Web 的 `GET /v1/skill.list` 支持 IAM User API Key 或已登记 OAuth Open App 令牌。外部调用方不发送内部服务凭据。
 
-本门户位于 App 独立文档包，参考已固定的 BFF Public22.4 正式契约；原始 commit 与 SHA-256 见[来源说明](/api/provenance)。公开 `skill.list` 的 User API Key／OAuth Open App／trusted 资格由固定 operation 的身份与权限说明限定，不套用到其他业务接口，见[认证与请求约定](/api/authentication)。生成参考不改变这些能力状态。
+**工作台服务端参考：**项目、会话、任务、资源及管理接口由受信第一方适配器调用。浏览器经同源入口，由服务端注入凭据；普通产品请求使用原生 Cookie／Session。不要把参考中的全部 operation 当成可用一个 API Key 调用的外部接口。具体差异与尚待 owner 纠正的认证声明见[认证约定](/api/authentication)。
 
-## 异步请求模型
+## 提交任务与接收结果
 
-Agent 工作遵循以下可观察流程：
+任务指南解释现有第一方链路：提交 message → 保存异步 receipt → 跟随 AG-UI → 断线后用原 cursor 恢复。`202 Accepted` 表示接纳，不表示任务完成；连接断开也不是业务终态。
 
-1. 使用 `Idempotency-Key` 提交 session message 或其他标记为 `required` 的 mutation。
-2. 接收 `202 Accepted` 或 operation reference 中声明的成功状态和稳定标识符。
-3. 通过 session 的 `text/event-stream` endpoint 跟随 AG-UI 进度。
-4. 完整接收每个 SSE frame 后保存原始 `id`，断线时原样放入 `Last-Event-ID`。
-5. 将 `RUN_FINISHED` 或 `RUN_ERROR` 作为 AG-UI run 的终态信号；传输断开本身不是业务结果。
+常见 JSON 使用 `data/meta` 或 `error/meta`；技能列表使用独立的 `ok/request_id` 包装。方法、错误和响应头按具体 operation 查询，不套用一种统一 envelope。
 
-JSON 成功和错误常见 `data`/`meta` 或 `error`/`meta` envelope；技能列表使用 `{ok, request_id, data}` 或 `{ok, request_id, error}`。`/readyz` 在依赖未就绪时的 `503` 是 contract 明确的 `HealthResponse` 例外；请以生成 reference 的 response schema 为准。
+## 版本与来源
 
-## Owner 边界
-
-门户只发布 canonical metadata 同时满足 `x-kokoro-owner: kokoro-bff` 和 `x-kokoro-visibility: public` 的 operation。internal-owner API、数据库 schema、provider payload 和 generated internal DTO 不属于 public reference 的输入。
-
-先读[快速开始](/api/quickstart)，再看[认证](/api/authentication)、[AG-UI 概念](/api/concepts/ag-ui)和[API v1 reference](/api/reference/v1/)。
+字段参考从固定的 BFF owner artifact 自动生成；版本、commit 与摘要见[来源说明](/api/provenance)，不在手写页复制第二份版本号或字段表。只发布标为 `public` 的 wire shape，排除 `browser-private` 与内部 owner API。发布分类不代表匿名权限、外部接入资格、部署状态或性能承诺。

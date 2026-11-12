@@ -35,9 +35,13 @@ function sendJson(response, status, payload) {
 }
 
 function assertServiceContext(request) {
+  if (request.headers.authorization !== undefined) {
+    throw new Error('first-party fixture does not accept user Bearer');
+  }
   const expected = {
     'x-kokoro-internal-secret': FIXTURE_TOKEN,
-    authorization: 'Bearer example-user-session',
+    cookie: 'kokoro-issuer.session_token=fixture-only',
+    origin: 'https://web.example.test',
     'x-kokoro-service': 'web-bff',
   };
   for (const [name, value] of Object.entries(expected)) {
@@ -203,7 +207,10 @@ async function handleUpload(request, response, url, method, requests) {
   }
   requests.push('uploadProjectResources');
   sendJson(response, 200, {
-    data: { ok: true },
+    data: { resources: [{
+      upload_id: 'upload_example', asset_id: 'asset_example', filename: 'fixture.txt',
+      mime_type: 'text/plain', size_bytes: '17', content_sha256: 'a'.repeat(64), scan_state: 'clean',
+    }] },
     meta: { request_id: 'req_upload_example' },
   });
   return true;
@@ -239,9 +246,22 @@ async function handleSessionList(request, response, url, method, requests) {
 
 async function handleFixtureRequest(request, response, requests) {
   try {
-    assertServiceContext(request);
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
     const method = request.method ?? 'GET';
+    if (url.pathname === '/v1/skill.list' && method === 'GET') {
+      if (request.headers.authorization !== `Bearer ${FIXTURE_TOKEN}`
+          || request.headers.accept !== 'application/json'
+          || ['cookie', 'x-kokoro-service', 'x-kokoro-internal-secret', 'idempotency-key']
+            .some((name) => request.headers[name] !== undefined)) {
+        throw new Error('external skill.list expects Bearer only, not first-party credentials');
+      }
+      requests.push('listSkills');
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('x-request-id', 'req_skills_example');
+      sendJson(response, 200, { ok: true, request_id: 'req_skills_example', data: [] });
+      return;
+    }
+    assertServiceContext(request);
     const handlers = [
       handleCreateMessage,
       handleControlRun,
@@ -370,7 +390,9 @@ export async function runExecutableExamples(manifest, options) {
     EXAMPLE_FILE: exampleFile,
     KOKORO_API_BASE_URL: fixture.baseUrl,
     KOKORO_API_TOKEN: FIXTURE_TOKEN,
-    KOKORO_USER_BEARER: 'example-user-session',
+    KOKORO_INTERNAL_SECRET: FIXTURE_TOKEN,
+    KOKORO_SESSION_COOKIE: 'kokoro-issuer.session_token=fixture-only',
+    KOKORO_WEB_ORIGIN: 'https://web.example.test',
     KOKORO_PROJECT_ID: 'project_example',
     KOKORO_RUN_ID: 'run_example',
     KOKORO_SESSION_ID: 'session_example',
