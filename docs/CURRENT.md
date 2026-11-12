@@ -1,3 +1,7 @@
+## 2026-11-12 Skills 当前语言展示修正
+
+正常英文页复现 scope radio 两词条回退中文、日期固定 zh。仅补 en 两已有 key（其他八语言原本齐备），installed/catalog 两日期调用显式使用当前 locale，保 UTC／Unix秒与旧毫秒值；不改筛选／启停／详情行为、CSS、认证或契约。writer 7 RED 后修复，主控冻结5输入：两相关文件41 PASS／types／production build，writer scoped lint零警告，两独审输入核等／CLEAR。英／中／德及动态切语言由现实际组件承接；正常浏览器复验待主控，不冒九语言全站QA或完整默认全绿。沿原#49继续，未部署。
+
 ## 2026-11-12 · Task B Share／MCP正式消费者候选
 
 固定BFF已提交0a2c98ae（原PR17后继609b0e93完整源树相同）的Public28.37与独立private reauthorization profile；现23正规生成/check、门户既有clean-checkout+blob验证通过，旧独立profiles与父证明不改。Share复用现generated事实源读取metadata，打开零发布；原unknown key/body/scope与ACK分离、读失败仅GET、失准入无locator/不写，重新verified同subject+tenant保持原key。MCP仅已移除/disabled配置可显式新授权，原source双CAS冻结，safeACK后fresh exact Server/Connector；坏provider绑定拒绝、不自动Prepare/OAuth/enable。无新认证／session探测／store／SDK框架，preview不造live metadata。

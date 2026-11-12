@@ -1034,6 +1034,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "skills.filterAria": "Filter by scope",
   "skills.filterAll": "All",
   "skills.filterOfficial": "Official",
+  "skills.filterPersonal": "Personal",
+  "skills.filterThirdParty": "Third-party",
   "skills.filterOwn": "Own",
   "skills.browse": "Browse skills",
   "skills.create": "Create",

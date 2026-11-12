@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import type { SkillCard } from "@/hub/schemas";
-import { useT } from "@/i18n/context";
+import { useLocale } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import { formatSkillDate } from "./skills-format";
 import styles from "./skills-panel.module.css";
@@ -39,7 +39,7 @@ export function InstalledSkillCard({
   onUpdate,
   onRemoveInstallation,
 }: InstalledSkillCardProps) {
-  const t = useT();
+  const { t, locale } = useLocale();
   const removeTrigger = useRef<HTMLButtonElement | null>(null);
   const sourceUnavailable = skill.source_status !== undefined && skill.source_status !== "active";
   return (
@@ -86,7 +86,7 @@ export function InstalledSkillCard({
         {sourceUnavailable ? <p className={styles.installedCardMeta} role="status">{t("skills.sourceUnavailable")}</p> : skill.updated_at ? (
           <p className={styles.installedCardMeta}>
             <ShieldCheck aria-hidden="true" />
-            {t("skills.updatedAt", { date: formatSkillDate(skill.updated_at) })}
+            {t("skills.updatedAt", { date: formatSkillDate(skill.updated_at, locale) })}
           </p>
         ) : null}
         {skill.available_update ? <Button type="button" variant="ghost" className={styles.installedCardUpdate} disabled={busy || skill.source_status === "deleted"} aria-label={`${t("skills.update.available", { revision: skill.available_update.revision })} ${skill.name}`} onClick={event => onUpdate(event.currentTarget)}>{t("skills.update.available", { revision: skill.available_update.revision })}</Button> : null}

@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import type { ManusSkillHubClient } from "./manus-skill-client";
 import type { CatalogSkillCategory, SkillCard, SkillCatalog, SkillCatalogCard } from "@/hub/schemas";
-import { useT } from "@/i18n/context";
+import { useLocale } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import { useResource } from "@/lib/query";
 import { formatSkillDate } from "./skills-format";
@@ -109,7 +109,7 @@ export function SkillCatalogDialog({
   /** Renders inside Settings so its left navigation remains visible. */
   inline?: boolean;
 }) {
-  const t = useT();
+  const { t, locale } = useLocale();
   const [query, setQuery] = useState("");
   const [committedQuery, setCommittedQuery] = useState("");
   useEffect(() => {
@@ -584,7 +584,7 @@ export function SkillCatalogDialog({
                         <p className={styles.installedCardMeta}>
                           <ShieldCheck aria-hidden="true" />
                           {t("skills.updatedAt", {
-                            date: formatSkillDate(skill.updated_at),
+                            date: formatSkillDate(skill.updated_at, locale),
                           })}
                         </p>
                       ) : null}
