@@ -1,31 +1,32 @@
 # Shared package boundary
 
-当前 `packages/` 是 `kokoro` 的可提取 package bootstrap 层。它让第一个产品
-可以在一个可复现的 pnpm workspace 内开发，同时提前锁定未来跨产品复用的 API 边界。
+当前 `packages/` 是 `kokoro-app` 的私有 workspace 层，实际包含 `i18n`、
+`tsconfig`，App 的 manifest 与 lockfile 仍以 `workspace:*`／本仓 link 消费。
+独立 `libs/kokoro-web-shared` 已存在，Mori 通过显式 `file:` package bridge 消费其中同名三包；
+App 未使用的 `web-core` 副本及依赖已退役；共享仓 canonical 包保持，未迁移或发布。
+App 在用 `i18n` 副本尚未切换，仍有双 writer，不能把局部删除当成完整迁移完成。
 
-## 最终仓库边界
+## 当前仓库边界与后续交付
 
-当第二个产品开始消费同一能力，或者某个 package 需要独立版本发布时，把这里的通用包
-整体迁移到兄弟子仓库：
+Root 当前组合如下；各产品只通过 package 公共入口消费，不互相导入产品源码：
 
 ```text
 Kokoro/
-├── kokoro/       # 第一个产品：页面、布局、品牌、组合方式
-└── kokoro-web-shared/        # 一个共享 package 子仓库，不是每个 package 一个仓库
-    ├── packages/web-core
-    ├── packages/i18n
-    ├── packages/web-data
-    ├── packages/web-ui
-    ├── packages/web-blocks
-    ├── packages/web-runtime
-    └── packages/tsconfig      # 开发工具包
+├── apps/kokoro-app/packages/ # App 当前消费的 i18n 与 tsconfig
+├── apps/kokoro-mori/         # file: bridge 消费下方独立共享包
+└── libs/kokoro-web-shared/
+    └── packages/{web-core,i18n,tsconfig}
 ```
 
-共享仓库只发布 package；产品仓库只消费版本化 package。不要用 Git submodule，也不要让
-不同产品通过相对路径引用彼此源码。共享仓库内部使用 pnpm workspace，跨仓库通过私有
-registry、semver 和 lockfile 交付。
+Root 通过 gitlink 组合独立子仓，不等于产品通过 submodule 嵌入共享源码。
+独立共享仓库允许本地显式 `file:` package bridge；私有 registry、semver 与 lockfile 的版本化
+发布仍是后续交付目标，不是当前已完成事实。App 切换与副本删除须先收敛唯一源码 owner，
+逐个验证消费者，再停止双 writer；本轮只退役无消费者的本地 web-core，不切换在用 i18n 或发布包；App 六项额外严格编译检查保持。
 
-## 当前包的职责
+## 包职责与提取规划
+
+本仓实际包为 `i18n`、`tsconfig`；`web-core` 仅保留在独立共享仓，下表其余包及后续依赖图是提取规划，
+不代表仓内已存在，不因规划创建空包或迁移现业务契约。
 
 | package | 允许拥有 | 禁止拥有 |
 | --- | --- | --- |
@@ -38,8 +39,8 @@ registry、semver 和 lockfile 交付。
 | `@kokoro/tsconfig` | 共享 TypeScript 基线 | 运行时代码 |
 
 菜单、i18n 资源、主题 token 和 feature flag 的**事实数据**由 System/BFF 提供；package
-只提供类型、投影和交互能力。Skills、Library、通知等业务也先进入 `web-data` 的契约和
-对应的可组合 block，不为每个新需求创建一个 package 仓库。
+只提供类型、投影和交互能力。未来确有跨产品复用需求时，再评估 `web-data` 和
+对应的可组合 block；不为每个新需求创建一个 package 仓库。
 
 ## 依赖方向
 
@@ -50,7 +51,7 @@ web-core / i18n ───────→ web-data / web-runtime
                              ╲   │  (通过 props / adapter 注入)
                               → web-blocks
                                      ↓
-                    kokoro/src/features + src/ui
+                 kokoro-app/src/features + src/ui
 ```
 
 `web-data` 不依赖 React/CSS，`web-ui` 不依赖业务数据；`web-blocks` 只接受数据和动作
@@ -75,15 +76,12 @@ Live backend。
 
 ## 当前阶段规则
 
-- 目前包仍以 `private` workspace package 形式放在本仓库，优先保证第一个产品的测试、截图
-  和构建可复现。
-- `@kokoro/web-core` 当前只有本仓库一个实际消费方；`@kokoro/i18n` 和 `@kokoro/tsconfig`
-  曾在已归档的旧 Web workspace 中存在第二个消费方/重复实现，因此它们是未来最先应提取和去重的包。
-- 当前保留 `@kokoro/i18n` 这个稳定包名，不为增加 `web-` 前缀制造无收益的重命名；产品与旧
-  workspace 完成切换后再统一由 shared repo 发布。
-- 一旦新增第二个产品消费同一包，先把 package 迁入 `kokoro-web-shared`，再把产品的
-  `workspace:*` 依赖替换为 registry 版本并提交 lockfile。
+- App 保持当前 `private` workspace 消费；Mori 已消费独立共享仓库的三包，不再按单消费者
+  或仅有已归档旧 workspace 判断。两份实现的 owner／交付收敛仍待完成。
+- 保留 `@kokoro/i18n` 稳定包名，不为增加 `web-` 前缀制造无收益的重命名。
+- 后续 App 切换须同步 manifest 与 lockfile，并验证公共入口后删除本仓副本；
+  不以文档修改代替 package 迁移或 registry 发布。
 - 迁移前必须保证 package 不依赖产品路径，并为每个公共入口提供 typecheck、unit test、
   changelog 和 semver 变更记录。
 - 产品自己的布局、品牌文案、SEO、Logo、素材和 token preset 始终留在
-  `kokoro/src/features`，不因为“方便复用”而抽进 shared package。
+  `kokoro-app/src/features`，不因为“方便复用”而抽进 shared package。

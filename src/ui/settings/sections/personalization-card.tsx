@@ -92,7 +92,7 @@ export function PersonalizationCard({
         </TabsList>
         <TabsContent value="profile">
           <MemoryImportDialog key={`intro:${draftScope}`} triggerLabel={t("settings.importMemoryAction")} card />
-      <div className={styles.personalizationProfile}>
+      <div>
         {phase === "loading" ? (
           <p className={styles.profileStatus}>{t("settings.loading")}</p>
         ) : null}

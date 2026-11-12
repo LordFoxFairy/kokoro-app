@@ -7,7 +7,6 @@ import { CircleHelp, KeyRound, LogOut, Sparkles } from "lucide-react"
 import { useT } from "@/i18n/context"
 import { endProductSession } from "@/ui/auth/product-auth-client"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
@@ -354,10 +353,7 @@ export function AccountCard({
       {copyState?.scope===copyScope && copyState.status==="failed" ? <p role="alert">{t("share.projectCopyFailed")}</p> : null}
       <div className={styles.accountIdentityRow}>
         <div className={styles.identity}>
-          <Avatar key={JSON.stringify([live.scope, live.profile?.picture])} className={styles.identityAvatar} aria-hidden>
-            {!preview && live.profile?.picture ? <AvatarImage src={live.profile.picture} alt="" referrerPolicy="no-referrer" crossOrigin="anonymous" /> : null}
-            <AvatarFallback className={styles.identityAvatarFallback}>{initial}</AvatarFallback>
-          </Avatar>
+          <span className={styles.identityAvatar} aria-hidden>{initial}</span>
           <div className={styles.identityText}>
             <span className={styles.identityFieldLabel}>{t("settings.fullName")}</span>
             <Input

@@ -1,0 +1,11 @@
+.dialog { max-height: min(40rem, calc(100dvh - 32px)); overflow-y: auto; }
+.tabs { display: flex; gap: 4px; }
+.tabs [aria-pressed="true"] { background: var(--accent); }
+.list { display: flex; min-height: 3rem; max-height: 18rem; flex-direction: column; gap: 4px; overflow-y: auto; overscroll-behavior: contain; }
+.list > button { justify-content: flex-start; min-height: 40px; height: auto; white-space: normal; text-align: start; }
+.list > button > span { min-width: 0; overflow-wrap: anywhere; }
+.hint { margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.5; }
+.selected { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
+.selected > li { display: inline-flex; max-width: 100%; min-width: 0; align-items: center; gap: 4px; padding-inline-start: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); font-size: 13px; }
+.selected > li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selected svg { width: 14px; height: 14px; flex-shrink: 0; }

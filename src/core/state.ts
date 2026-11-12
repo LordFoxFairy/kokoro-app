@@ -23,6 +23,7 @@ export type SessionMessage = {
   id: string
   role: "assistant" | "user"
   content: string
+  deliveryStatus?: "pending" | "failed"
   // Only an authoritative whole body can establish completed text; END has no body.
   textState?: "streaming" | "completed"
   // 该消息所属 run；用于把同一 run 的连续 assistant 段归并到一个 turn（用户消息以自身 id 充当）。
@@ -97,6 +98,8 @@ export type SessionDelivery = {
   conversationId: string
   artifactId: string
   assetId: string
+  /** Owner-proven virtual origin for display only, never a read locator. */
+  displayPath?: string
   artifactKind: "document" | "code" | "image" | "audio" | "video" | "data" | "archive" | "other"
   title: string
   mime: string
@@ -146,25 +149,7 @@ export type SessionStreamState = {
   meta: SessionMeta | null
 }
 
-// A retained page Engine can outlive a hot module update. Retire its old RAM
-// field on the next pure write; only previously confirmed cancellations migrate.
 // Text completion and the single current runStatus never establish a terminal.
-export function normalizeRunTerminals(state: SessionStreamState): SessionStreamState {
-  const hasLegacy = Object.hasOwn(state, "cancelledRuns")
-  if (state.runTerminalsById !== undefined && !hasLegacy) return state
-  const terminals: SessionStreamState["runTerminalsById"] = state.runTerminalsById ?? {}
-  if (state.runTerminalsById === undefined) {
-    const legacy: unknown = Reflect.get(state, "cancelledRuns")
-    if (legacy !== null && typeof legacy === "object" && !Array.isArray(legacy)) {
-      for (const [runId, value] of Object.entries(legacy)) {
-        if (value === true) Object.defineProperty(terminals, runId, { value: "cancelled", enumerable: true, writable: true, configurable: true })
-      }
-    }
-  }
-  const normalized = { ...state, runTerminalsById: terminals }
-  Reflect.deleteProperty(normalized, "cancelledRuns")
-  return normalized
-}
 
 export function createSessionStreamState(): SessionStreamState {
   return {

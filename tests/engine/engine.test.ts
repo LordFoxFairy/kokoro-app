@@ -1,3 +1,4 @@
+import { projectionFrame } from "./fakes"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { addConversation, type ConversationStore } from "@/core/conversations"
@@ -650,15 +651,18 @@ describe("提交链路", () => {
     })
   })
 
-  it("错误态可重新提交（错误即清）", async () => {
+  it("提交结果未知时只能重试原意图，收到回执后清除失败状态", async () => {
     buildEngine()
     client.nextCreate = () => Promise.reject(new SessionClientError("network", "down"))
     engine.submit("hello")
     await settle()
     client.nextCreate = () => Promise.resolve(makeReceipt("run_retry"))
-    engine.submit("hello again")
+    expect(engine.submit("hello again")).toBe(false)
+    engine.retry()
     await settle()
-    expect(engine.getSnapshot().machine).toMatchObject({ phase: "queued", runId: "run_retry" })
+    expect(client.createCalls).toHaveLength(2)
+    expect(client.createCalls[1]).toEqual(client.createCalls[0])
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "queued", runId: "run_retry", error: null })
   })
 
   it("SSE 入站未过契约 → fail closed 为连接不可用且不伪造 run terminal", async () => {
@@ -739,7 +743,7 @@ describe("提交链路", () => {
     engine.reconnect()
     await settle()
     expect(engine.getSnapshot()).toMatchObject({
-      machine: { phase: "error", error: "create rejected" },
+      machine: { phase: "error", error: "submission_outcome_unknown" },
       connection: { status: "connected" },
       canRetryPendingSubmission: true,
     })
@@ -2132,6 +2136,7 @@ describe("失败重试", () => {
 
   it.each([
     AGENT_FAILURE_PROFILES.find((profile) => profile.code === "internal_error")!,
+    AGENT_FAILURE_PROFILES.find((profile) => profile.code === "context_window_exceeded")!,
     AGENT_FAILURE_PROFILES.find((profile) => profile.code === "model_unavailable" && profile.retryable)!,
   ])("Agent terminal $code retryable=$retryable 后 retry 不重发原 user", async (profile) => {
     buildEngine()
@@ -2342,21 +2347,25 @@ describe("运行中插话（steer）", () => {
   })
 })
 
-  it("插话投递失败 → 瞬态 notice 可见；下次提交自动清空", async () => {
-    buildEngine()
-    engine.submit("hello")
-    await settle()
-    client.lastStream().emit([makeEvent("run.created", { run_id: "run_1" })])
-    await settle()
-    const okStart = client.nextCreate
-    client.nextCreate = () => Promise.reject(new SessionClientError("http", "boom"))
-    engine.submit("插话一")
-    await settle()
-    expect(engine.getSnapshot().notice?.key).toBe("steer.sendFailed")
-    client.nextCreate = okStart
-    engine.submit("插话二")
-    expect(engine.getSnapshot().notice).toBeNull()
+it("排队消息回执未知时保留原 Run，并拒绝覆盖未决意图", async () => {
+  buildEngine()
+  engine.submit("hello")
+  await settle()
+  client.lastStream().emit([makeEvent("run.created", { run_id: "run_1" })])
+  await settle()
+  const stream = client.lastStream()
+  client.nextCreate = () => Promise.reject(new SessionClientError("http", "boom"))
+  engine.submit("插话一")
+  await settle()
+  expect(engine.getSnapshot()).toMatchObject({
+    pendingSubmissionFailureCode: "submission_outcome_unknown",
+    canRetryPendingSubmission: true,
+    machine: { phase: "streaming", runId: "run_1", error: null },
   })
+  expect(engine.submit("插话二")).toBe(false)
+  expect(client.createCalls).toHaveLength(2)
+  expect(client.lastStream()).toBe(stream)
+})
 
 describe("会话软删除（technical/16 SD-W1）", () => {
   it("deleteConversation：服务端确认删除后才移除本地会话", async () => {
@@ -2902,8 +2911,8 @@ describe("R74 atomic terminal RR snapshot takeover", () => {
     // prove a non-cooperative old producer cannot bypass the adapter generation.
     oldCallbacks.onCursor(R74_OLD)
     for (const revision of [1, 2]) {
-      oldCallbacks.onEvent(makeEvent("interaction.state", r66Interaction({ interaction_revision: revision,
-        pause_revision: revision, pause_ref: `old_pause_${revision}` }), { run_id: "run_2", seq: revision }))
+      oldCallbacks.onFrame(projectionFrame(makeEvent("interaction.state", r66Interaction({ interaction_revision: revision,
+        pause_revision: revision, pause_ref: `old_pause_${revision}` }), { run_id: "run_2", seq: revision }), R74_OLD))
     }
     oldCallbacks.onReconnecting?.(R74_OLD)
     oldCallbacks.onStreamError(new SessionClientError("parse", "obsolete subscription"))
@@ -2930,7 +2939,7 @@ describe("R74 atomic terminal RR snapshot takeover", () => {
     expect(http.streams[1]?.headers.get("last-event-id")).toBe(R74_W3)
     expect(thread().lastSeq).toBe(4)
     oldCallbacks.onCursor(R74_OLD)
-    oldCallbacks.onEvent(makeEvent("message.delta", { segment_id: "b_wire", delta: " obsolete" }, { run_id: "run_2", seq: 2 }))
+    oldCallbacks.onFrame(projectionFrame(makeEvent("message.delta", { segment_id: "b_wire", delta: " obsolete" }, { run_id: "run_2", seq: 2 }), R74_OLD))
     await settle()
     expect(thread().resumeCursor).toBe(R74_NEXT)
     expect(thread().messages.find((message) => message.snapshotMessageId === "b_assistant")?.content).toBe("B full prefix plus tail")
@@ -2976,28 +2985,31 @@ function r74UserFrame(id: string, content: string, seq: number, runId = "run_2")
   return r66Frame({ type: "CUSTOM", name: "kokoro.message.user", value: { message_id: id, content } }, seq, runId)
 }
 
-describe("R74 exact concurrent admission identity", () => {
+describe("R74 exact queued admission identity", () => {
   afterEach(() => vi.restoreAllMocks())
-  for (const order of ["normal", "reverse", "SSE-first"] as const) {
-    it(`reconciles only the frozen B/C optimistic IDs in ${order} receipt order`, async () => {
+  for (const sseFirst of [false, true]) {
+    it(`reconciles exact B and C IDs in order (B SSE first=${sseFirst})`, async () => {
       const { http, receipt } = r74BuildAdmissionEngine()
       await settle()
-      engine.submit("B request")
+      expect(engine.submit("B request")).toBe(true)
       const bId = thread().messages.at(-1)!.id
-      engine.submit("C request")
-      const cId = thread().messages.at(-1)!.id
+      expect(engine.submit("C request")).toBe(false)
       await settle()
-      if (order === "SSE-first") {
+      expect(http.requests.filter((request) => request.method === "POST")).toHaveLength(1)
+      if (sseFirst) {
         http.emit(R74_OLD, r74UserFrame("b_canonical", "B request", 31))
         await settle()
+        expect(thread().messages.some(message => message.id === bId)).toBe(true)
       }
-      const first = order === "reverse" ? "c" : "b"
-      receipt(first === "b" ? 0 : 1, first)
+      receipt(0, "b")
       await settle()
-      expect(thread().messages.find((message) => message.id === `${first}_canonical`)?.content).toBe(first === "b" ? "B request" : "C request")
-      expect(thread().messages.find((message) => message.id === (first === "b" ? cId : bId))?.content).toBe(first === "b" ? "C request" : "B request")
-      receipt(first === "b" ? 1 : 0, first === "b" ? "c" : "b")
+      expect(thread().messages.some(message => message.id === bId)).toBe(false)
+      expect(engine.submit("C request")).toBe(true)
+      const cId = thread().messages.at(-1)!.id
       await settle()
+      receipt(1, "c")
+      await settle()
+      expect(thread().messages.some(message => message.id === cId)).toBe(false)
       expect(thread().messages.filter((message) => message.role === "user" && message.id !== "r66_user").map((message) => [message.id, message.content])).toEqual([
         ["b_canonical", "B request"], ["c_canonical", "C request"],
       ])
@@ -3007,44 +3019,52 @@ describe("R74 exact concurrent admission identity", () => {
     })
   }
 
-  it("does not infer pending admission identity from equal user content in SSE", async () => {
+  it("does not bind a pending submission to equal content projected from another tab", async () => {
     const { http, receipt } = r74BuildAdmissionEngine()
     await settle()
-    engine.submit("same content")
+    expect(engine.submit("same content")).toBe(true)
     const bId = thread().messages.at(-1)!.id
-    engine.submit("same content")
-    const cId = thread().messages.at(-1)!.id
     await settle()
-    http.emit(R74_OLD, r74UserFrame("b_canonical", "same content", 31))
+    http.emit(R74_OLD, r74UserFrame("other_tab", "same content", 31, "run_4"))
     await settle()
     expect(thread().messages.some((message) => message.id === bId)).toBe(true)
-    expect(thread().messages.some((message) => message.id === cId)).toBe(true)
+    expect(thread().messages.some((message) => message.id === "other_tab")).toBe(true)
     receipt(0, "b")
     await settle()
-    expect(thread().messages.some((message) => message.id === cId)).toBe(true)
-    receipt(1, "c")
-    await settle()
-    expect(thread().messages.filter((message) => message.role === "user" && message.id !== "r66_user").map((message) => message.id)).toEqual(["b_canonical", "c_canonical"])
+    expect(thread().messages.some((message) => message.id === bId)).toBe(false)
+    expect(thread().messages.filter((message) => message.role === "user" && message.id !== "r66_user").map((message) => message.id).sort()).toEqual(["b_canonical", "other_tab"])
   })
 
   for (const alreadyReceived of [false, true]) {
     it(`retains exact local admissions across atomic RR takeover (B received=${alreadyReceived})`, async () => {
       const { http, receipt } = r74BuildAdmissionEngine()
       await settle()
-      engine.submit("B request")
-      engine.submit("C request")
-      const cId = thread().messages.at(-1)!.id
+      expect(engine.submit("B request")).toBe(true)
+      const bId = thread().messages.at(-1)!.id
       await settle()
-      if (alreadyReceived) { receipt(0, "b"); await settle() }
+      let pendingId = bId
+      if (alreadyReceived) {
+        receipt(0, "b")
+        await settle()
+        expect(engine.submit("C request")).toBe(true)
+        pendingId = thread().messages.at(-1)!.id
+        await settle()
+      }
       await r74Terminal(http, "waiting")
       expect(http.streams).toHaveLength(2)
-      expect(thread().messages.find((message) => message.id === cId)?.content).toBe("C request")
-      if (!alreadyReceived) { receipt(0, "b"); await settle() }
+      expect(thread().messages.find((message) => message.id === pendingId)?.content).toBe(alreadyReceived ? "C request" : "B request")
+      if (!alreadyReceived) {
+        receipt(0, "b")
+        await settle()
+        expect(engine.submit("C request")).toBe(true)
+        pendingId = thread().messages.at(-1)!.id
+        await settle()
+      }
       expect(thread().messages.find((message) => message.id === "b_canonical")?.content).toBe("B request")
       receipt(1, "c")
       await settle()
       expect(thread().messages.find((message) => message.id === "c_canonical")?.content).toBe("C request")
-      expect(thread().messages.some((message) => message.id === cId)).toBe(false)
+      expect(thread().messages.some((message) => message.id === pendingId)).toBe(false)
       expect(engine.getSnapshot().machine).toMatchObject({ phase: "waiting", runId: "run_2" })
       expect(thread().resumeCursor).toBe(R74_W3)
       expect(http.streams).toHaveLength(2)

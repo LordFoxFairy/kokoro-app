@@ -8,17 +8,19 @@ import details from "./activity-detail.module.css"
 type SkillActivity = Extract<RunProcessActivity, { activity: "skill" }>
 
 /** Display only the package facts attached to this actual Run; never current catalog metadata. */
-export function SkillActivityRow({ activity, continuation }: {
+export function SkillActivityRow({ activity, continuation, terminal = false }: {
   activity: SkillActivity
   continuation?: ReactNode
+  terminal?: boolean
 }) {
   const t = useT()
+  const ended = terminal && (activity.phase === "resolving" || activity.phase === "loading")
   const displays = activity.phase === "ready" ? activity.display_skills : undefined
-  return <div className={styles.action} data-status={activity.phase}>
+  return <div className={styles.action} data-status={ended ? "ended" : activity.phase}>
     <div className={styles.actionRow}>
       <Sparkles className={styles.actionIcon} aria-hidden="true" />
       <span className={styles.actionLabel}>{t("thread.skill")}</span>
-      <span className={styles.actionStatus}>{t(activity.phase === "resolving" ? "thread.skillResolving" : activity.phase === "loading" ? "thread.skillLoading" : activity.phase === "ready" ? "thread.skillReady" : "thread.skillFailed")}</span>
+      <span className={styles.actionStatus}>{t(ended ? "thread.runEnded" : activity.phase === "resolving" ? "thread.skillResolving" : activity.phase === "loading" ? "thread.skillLoading" : activity.phase === "ready" ? "thread.skillReady" : "thread.skillFailed")}</span>
       {continuation}
     </div>
     {displays && displays.length > 0 ? <ul className={details.skills}>

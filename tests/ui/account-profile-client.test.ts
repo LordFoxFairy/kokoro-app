@@ -4,8 +4,8 @@ const fetcher = vi.fn();
 const data = {
   subject: "alice",
   name: "Alice",
-  email: null,
-  email_verified: null,
+  email: "",
+  email_verified: false,
 };
 const signal = () => new AbortController().signal;
 beforeEach(() => {
@@ -28,11 +28,6 @@ it("uses only the fixed same-origin readonly projection", async () => {
       headers: { accept: "application/json" },
     }),
   );
-});
-it("reads a validated issuer picture through the existing account projection", async () => {
-  const profile = { ...data, picture: "https://images.example.test/alice.png" };
-  fetcher.mockResolvedValue(Response.json({ data: profile }));
-  expect(await readAccountProfile(signal())).toEqual(profile);
 });
 it.each([
   { data: { ...data, token: "secret" } },
@@ -130,8 +125,8 @@ it("headers do not restart the total body deadline", async () => {
   expect(cancel).toHaveBeenCalled();
 });
 
-it("preserves original 16384 UTF16 name including escaped controls and lone code units", async () => {
-  const name = "\ud800\u0000 ".repeat(5461) + "x";
+it("preserves the maximum valid 16384-character name", async () => {
+  const name = "x".repeat(16_384);
   fetcher.mockResolvedValue(Response.json({ data: { ...data, name } }));
   expect((await readAccountProfile(signal())).name).toBe(name);
 });

@@ -10,9 +10,9 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-agent-failure.ts")
-const ownerCommit = "1e6765b3230d55fa17d0f6aa989278b97d00f338"
-const expectedDigest = "4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333"
-const expectedVersion = "29.3.0"
+const ownerCommit = "18dcc30179632eb32a86f160a5f13c71eb1c5d27"
+const expectedDigest = "a26431d45ad96c4e80e6751d61e66a14b3933ae7c2ffb6f9e7df57fcc7e6808f"
+const expectedVersion = "28.35.0"
 const expectedChatMessageFingerprint = "2f3471297de580e2931d8d768d86f9c0d7fc037de99993237b933d29fe25dc7b"
 
 const digest = (value) => createHash("sha256").update(value).digest("hex")
@@ -39,11 +39,10 @@ export function inspectBffAgentFailureContract(spec) {
   const sourceSchemas = [schemas.ChatMessageRead,schemas.OrderedAssistantMessageRead,schemas.CancelledAssistantMessageRead,schemas.RegeneratedAssistantMessageRead]
   const closedFingerprint=digest(stableJson(sourceSchemas))
   assert.equal(closedFingerprint,"26c72d0c3061e1eaf40632d379cacee525e27a4e5fd558a125c705a485cc4b7f","BFF regenerated private graph drift")
-  assert.equal(privateReads[1].properties.failure.properties.code.enum.pop(), "context_window_exceeded", "exact capacity failure addition")
   privateReads[0].oneOf=privateReads[0].oneOf.filter(item=>item.$ref!=="#/components/schemas/RegeneratedAssistantMessageRead")
   delete privateReads[1].properties.regenerated_from_message_id
   delete privateReads[2].properties.regenerated_from_message_id
-  assert.equal(digest(stableJson(privateReads)), "86e632ab432cc13b6b3c3dcd6336949518d08d486484d8371c2c373f0ac8d896", "BFF private cancellation guard drift")
+  assert.equal(digest(stableJson(privateReads)), "431ac620945e7921c57f0a8838073ad8ffd6f76cd91916718563948de3f7ba90", "BFF private cancellation guard drift")
   const cancelledStatus = schemas.CancelledAssistantMessageRead.properties.terminal_status.const
   const roles = chatMessage.properties.role.enum
   const failure = chatMessage.properties.failure

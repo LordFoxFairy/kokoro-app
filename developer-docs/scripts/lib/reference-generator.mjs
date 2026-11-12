@@ -34,6 +34,19 @@ const HTTP_METHODS = new Set([
 ]);
 const STABILITY_VALUES = new Set(['stable', 'beta', 'experimental']);
 const IDEMPOTENCY_VALUES = new Set(['none', 'required', 'inherent']);
+// Reviewed owner natural-idempotency semantics, not a general HTTP-method inference.
+const NATURAL_OPERATIONS = new Map([
+  ['PUT /v1/projects/{projectId}/mcp-recommendations', 'replaceProjectMcpRecommendations'],
+  ['PUT /v1/projects/{projectId}/pin', 'setProjectPin'],
+  ['PUT /v1/projects/{project_id}/websites', 'replaceProjectWebsites'],
+  ['POST /v1/agents/connections/setup', 'changeAgentConnection'],
+  ['POST /v1/agents/connections/telegram/webhook', 'acceptTelegramConnectionUpdate'],
+  ['POST /v1/agents/connections/line/webhook', 'acceptLineConnectionEvent'],
+  ['POST /v1/agents/connections/line/continue', 'continueLineConnection'],
+  ['POST /v1/agents/connections/slack/complete', 'completeSlackConnection'],
+  ['PUT /v1/library/artifacts/{conversation_id}/{artifact_id}/favorite', 'setLibraryArtifactFavorite'],
+  ['PUT /v1/sessions/{id}/messages/{messageId}/feedback', 'setMessageFeedback'],
+]);
 const PERMISSION_PATTERN =
   /^(?:anonymous|[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)*)$/u;
 
@@ -183,11 +196,9 @@ export function assertPublicContract(contractValue, catalogEntry) {
       );
     }
     const idempotency = requireString(operation, 'x-kokoro-idempotency', label);
-    const naturalRecommendations = method === 'PUT' &&
-      ((path === '/v1/projects/{projectId}/mcp-recommendations' && operationId === 'replaceProjectMcpRecommendations') ||
-       (path === '/v1/projects/{projectId}/pin' && operationId === 'setProjectPin') ||
-       (path === '/v1/sessions/{id}/messages/{messageId}/feedback' && operationId === 'setMessageFeedback')) && idempotency === 'natural';
-    if (!IDEMPOTENCY_VALUES.has(idempotency) && !naturalRecommendations) {
+    const reviewedNatural = idempotency === 'natural' &&
+      NATURAL_OPERATIONS.get(`${method} ${path}`) === operationId;
+    if (!IDEMPOTENCY_VALUES.has(idempotency) && !reviewedNatural) {
       throw new ReferenceGenerationError(
         `${operationId} has unsupported x-kokoro-idempotency ${idempotency}`,
       );
@@ -219,7 +230,7 @@ export function assertPublicContract(contractValue, catalogEntry) {
         `${operationId} Idempotency-Key must be required`,
       );
     }
-    if ((idempotency === 'none' || idempotency === 'inherent' || naturalRecommendations) && idempotencyParameter !== undefined) {
+    if ((idempotency === 'none' || idempotency === 'inherent' || reviewedNatural) && idempotencyParameter !== undefined) {
       throw new ReferenceGenerationError(
         `${operationId} must not declare Idempotency-Key when idempotency is ${idempotency}`,
       );
@@ -484,6 +495,13 @@ function renderTagPage(contract, tag, operations, entry) {
     ...(description === '' ? [] : [description, '']),
     `契约版本（Version）\`${entry.version}\` · owner \`${entry.owner}\` · visibility \`${entry.visibility}\` · source commit \`${entry.source.commit}\` · SHA-256 \`${entry.digest.value}\``,
     '',
+    '> 接入前先看[认证与适用范围](/api/authentication)。公开 wire reference 不等于所有接口均支持外部 API Key；历史认证声明的差异在该页列明。',
+    '',
+    '## 操作目录',
+    '',
+    ...operations.map(({ method, operation, path }) =>
+      `- [${method} ${escapeTable(normalizeDescription(operation.summary, operation.operationId))}](#${slugify(operation.operationId)}) — \`${escapeTable(path)}\``),
+    '',
     operations.map((operation) => renderOperation(contract, operation)).join('\n\n'),
     '',
   ].join('\n');
@@ -594,20 +612,17 @@ export function generateReferenceFiles(contract, catalogEntry) {
     );
     manifestItems.push({
       text: tagName,
-      link: `/reference/v1/generated/${tagSlug}`,
+      link: `/api/reference/v1/generated/${tagSlug}`,
     });
-    for (const collectedOperation of tagOperations) {
-      const { method, operation, path } = collectedOperation;
-      const operationId = requireString(operation, 'operationId', path);
-      indexRows.push(
-      `| <span class="api-method api-method--${method.toLowerCase()}">${method}</span> | [${escapeTable(normalizeDescription(operation.summary, operationId))}](/reference/v1/generated/${tagSlug}#${slugify(operationId)}) | \`${escapeTable(path)}\` | \`${operation['x-kokoro-owner']}\` | \`${operation['x-kokoro-visibility']}\` | \`${operation['x-kokoro-stability']}\` | \`${operation['x-kokoro-idempotency']}\` |`,
-      );
-    }
+    const firstOperation = tagOperations[0]?.operation;
+    indexRows.push(
+      `| [${escapeTable(tagName)}](/api/reference/v1/generated/${tagSlug}) | ${tagOperations.length} | [${escapeTable(normalizeDescription(tag.description, tagName))}](/api/reference/v1/generated/${tagSlug}#${slugify(firstOperation.operationId)}) |`,
+    );
   }
 
   manifestItems.push({
     text: 'Schemas',
-    link: '/reference/v1/generated/schemas',
+    link: '/api/reference/v1/generated/schemas',
   });
   files.set('schemas.md', renderSchemasPage(contract, catalogEntry, schemaNames));
   files.set(
@@ -617,8 +632,10 @@ export function generateReferenceFiles(contract, catalogEntry) {
       '',
       `契约版本（Version）\`${catalogEntry.version}\` · owner \`${catalogEntry.owner}\` · visibility \`${catalogEntry.visibility}\` · ${operations.length} operations · source \`${catalogEntry.source.commit}\``,
       '',
-      '| Method | Operation | Path | Owner | Visibility | Stability | Idempotency |',
-      '| --- | --- | --- | --- | --- | --- | --- |',
+      '按资源进入，再从页首操作目录定位 method、path 和字段。Owner、Visibility、Stability、Idempotency 与权限保留在每项操作详情中。',
+      '',
+      '| 资源 | 操作数 | 说明与首项操作 |',
+      '| --- | --- | --- |',
       ...indexRows,
       '',
     ].join('\n'),

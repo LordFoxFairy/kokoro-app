@@ -8,19 +8,20 @@ import type {
 
 const client: ScheduledTaskClient = {
   listScheduledTasks: async () => [],
-  createScheduledTask: async () => ({ triggerKind: "calendar" as const,
+  listScheduledExecutions: async () => ({ executions: [], nextCursor: null }),
+  createScheduledTask: async () => ({
     id: "created",
     title: "Created",
     frequency: "daily",
     time: "08:00",
   }),
-  updateScheduledTask: async () => ({ triggerKind: "calendar" as const,
+  updateScheduledTask: async () => ({
     id: "updated",
     title: "Updated",
     frequency: "daily",
     time: "08:00",
   }),
-  retryScheduledTask: async () => ({ triggerKind: "calendar" as const,
+  retryScheduledTask: async () => ({
     id: "retried",
     title: "Retried",
     frequency: "daily",

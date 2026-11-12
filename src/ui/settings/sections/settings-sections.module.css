@@ -561,14 +561,6 @@
   padding-top: 1.25rem;
   border-top: 1px solid var(--border);
 }
-.profileFieldFeedback {
-  display: grid;
-  gap: 0.25rem;
-  min-width: 0;
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-  line-height: 1.125rem;
-}
 .profileFieldCount {
   flex: 0 0 auto;
   color: var(--muted-foreground);
@@ -2124,17 +2116,11 @@ button.personalizationImport {
   position: sticky;
   bottom: 0;
   z-index: 1;
-  margin-top: 1.5rem;
-  padding-block: 1.5rem;
-  background: var(--background);
+  margin-top: 1rem;
+  padding-block: 0.5rem;
+  background: var(--settings-surface, var(--background));
 }
 .personalizationFooter > button { max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; }
-
-/* Initial reads are silent and the cached snapshot keeps this section stable.
- * Mutation feedback still takes its natural space only when it exists. */
-.profileStatusSlot {
-  min-height: 0;
-}
 
 .personalizationTabs {
   min-width: 0;
@@ -2290,11 +2276,6 @@ button.personalizationImport {
   font-size: 0.8125rem;
   line-height: 1.5;
 }
-.memoryStep > button {
-  justify-self: start;
-  max-width: 100%;
-  white-space: normal;
-}
 .memoryPrompt {
   min-width: 0;
   height: 7.5rem;
@@ -2318,7 +2299,6 @@ button.personalizationImport {
     padding: 0.875rem;
   }
   .profileColumns { grid-template-columns: minmax(0, 1fr); }
-  .personalizationFooter { padding-block: 1rem; }
   .personalizationFooter > button { min-height: 2.75rem; }
   .personalizationImportIcon { width: 2rem; height: 2rem; flex-basis: 2rem; }
   .memoryStepHeader { align-items: flex-start; flex-wrap: wrap; }

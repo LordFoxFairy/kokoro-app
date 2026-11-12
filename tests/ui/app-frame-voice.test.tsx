@@ -11,6 +11,9 @@ function Harness({ preview = false, onSubmit }: { preview?: boolean; onSubmit: (
     preview={preview} brandName="Kokoro" projectWorkspace={false} hasMessages={true} creationIntent={null} onCreationIntentDismiss={() => {}}
     workspaceCapabilities={{ instructions: false, connectors: false, resources: false, skills: false, projectConversations: false }}
     onOpenSettings={() => {}} onOpenMcpCatalog={() => {}}
+    resources={{ boundary: { admitted: true, subject: "voice-fixture", tenant: "fixture-tenant", generation: 1 },
+      scopeKey: "voice-fixture-draft", selectable: false, selected: [], onChange: () => {},
+      recentTasks: [], readRecentTaskSnapshot: vi.fn() }}
     draft={draft} onDraftChange={setDraft} onKeyDown={() => {}} onSubmit={event => { event.preventDefault(); onSubmit() }}
     isStreaming={false} canSend={true} onStop={() => {}} composerRef={composerRef} mode="fast" onModeChange={() => {}} modeLocked={false}
     models={[]} selectedModel={null} onModelChange={() => {}} modelLocked={false}
@@ -21,6 +24,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.stubEnv("NODE_ENV", "development")
   window.localStorage.setItem("kokoro.locale", "en")
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "voice-fixture")
 })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); window.localStorage.clear() })
 

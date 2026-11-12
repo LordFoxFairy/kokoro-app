@@ -34,7 +34,7 @@ const cursorSchema = z
     sessionId: z.string().min(1),
   })
   .strict();
-export type ArchivedTasksCursorInput=Readonly<{value:string;subject:string;limit:number;tenant?:string}>;
+export type ArchivedTasksCursorInput=Readonly<{value:string;subject:string|undefined;limit:number;tenant?:string}>;
 export function archivedTasksCursor({value,subject,limit,tenant}:ArchivedTasksCursorInput) {
   if (value.length > 2048 || !/^arc1_[A-Za-z0-9_-]+$/u.test(value))
     throw new Error("Invalid cursor");
@@ -53,7 +53,7 @@ export function archivedTasksCursor({value,subject,limit,tenant}:ArchivedTasksCu
   }).decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
   const cursor = cursorSchema.parse(parseArchivedTasksJson(text));
   if (
-    cursor.subjectId !== subject ||
+    (subject !== undefined && cursor.subjectId !== subject) ||
     cursor.limit !== limit ||
     (tenant !== undefined && cursor.tenantId !== tenant)
   )
@@ -68,7 +68,7 @@ export function compareArchivedTasks(a: ArchivedTask, b: ArchivedTask) {
     if (x[i] !== y[i]) return x[i]! - y[i]!;
   return x.length - y.length;
 }
-export type ValidateArchivedTasksInput=Readonly<{raw:unknown;subject:string;limit:number;cursor?:string;tenant?:string}>;
+export type ValidateArchivedTasksInput=Readonly<{raw:unknown;subject:string|undefined;limit:number;cursor?:string;tenant?:string}>;
 export function validateArchivedTasks({raw,subject,limit,cursor,tenant}:ValidateArchivedTasksInput):ArchivedTasksPage {
   const page = archivedTasksSchema.parse(raw);
   const items = page.data.items;

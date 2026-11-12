@@ -83,33 +83,6 @@ const boundary = (subject = "alice", generation = 1, admitted = true) => ({
   generation,
   admitted,
 });
-it.each([true, false])("displays the issuer picture or the name fallback, then retires both with the identity (loaded=%s)", async (loaded) => {
-  vi.stubGlobal("Image", class extends EventTarget {
-    complete = true;
-    naturalWidth = loaded ? 60 : 0;
-  });
-  fetcher.mockResolvedValue(Response.json({ data: {
-    subject: "alice", name: "Alice Actual", email: null, email_verified: null,
-    picture: "https://images.example.test/alice.png",
-  } }));
-  const { container, rerender } = render(<LocaleProvider><AccountCard {...props} readBoundary={boundary()} /></LocaleProvider>);
-  await waitFor(() => expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue("Alice Actual"));
-  const avatar = container.querySelector('[data-slot="avatar"]')!;
-  if (loaded) {
-    const image = avatar.querySelector("img");
-    expect(image).toHaveAttribute("src", "https://images.example.test/alice.png");
-    expect(image).toHaveAttribute("referrerpolicy", "no-referrer");
-    expect(image).toHaveAttribute("crossorigin", "anonymous");
-    expect(avatar.querySelector('[data-slot="avatar-fallback"]')).toBeNull();
-  } else {
-    expect(avatar.querySelector("img")).toBeNull();
-    expect(avatar.querySelector('[data-slot="avatar-fallback"]')).toHaveTextContent("A");
-  }
-  fetcher.mockImplementation(() => new Promise(() => {}));
-  rerender(<LocaleProvider><AccountCard {...props} readBoundary={boundary("bob", 2)} /></LocaleProvider>);
-  expect(container.querySelector("img")).toBeNull();
-  expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue("—");
-});
 const card = (
   subject = "alice",
   generation = 1,
@@ -151,7 +124,7 @@ it("clears old identity synchronously and aborts then ignores its late response"
   const signal = fetcher.mock.calls[0]![1].signal as AbortSignal;
   fetcher.mockResolvedValueOnce(
     Response.json({
-      data: { subject: "bob", name: "Bob", email: null, email_verified: null },
+      data: { subject: "bob", name: "Bob", email: "", email_verified: false },
     }),
   );
   view.rerender(card("bob", 2));
@@ -177,7 +150,7 @@ it("clears old identity synchronously and aborts then ignores its late response"
 it("rejects a successful response for another subject", async () => {
   fetcher.mockResolvedValueOnce(
     Response.json({
-      data: { subject: "bob", name: "Bob", email: null, email_verified: null },
+      data: { subject: "bob", name: "Bob", email: "", email_verified: false },
     }),
   );
   render(card());
@@ -223,7 +196,7 @@ it("ignores a late clipboard success after an identity switch", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Copy" }));
   fetcher.mockResolvedValueOnce(
     Response.json({
-      data: { subject: "bob", name: "Bob", email: null, email_verified: null },
+      data: { subject: "bob", name: "Bob", email: "", email_verified: false },
     }),
   );
   view.rerender(card("bob", 2));

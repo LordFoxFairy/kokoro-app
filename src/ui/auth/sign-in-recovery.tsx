@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { browserAuthSessionResponseSchema } from "@/generated/bff-auth-session"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
@@ -20,14 +21,12 @@ type Episode = {
 
 /** A navigation observation only, never a cached identity or product admission. */
 function currentSession(raw: unknown): boolean {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return false
-  const value = raw as Record<string, unknown>
-  return Object.keys(value).sort().join(",") === "authenticated,expires_at,subject" && value.authenticated === true &&
-    typeof value.subject === "string" && value.subject.trim() !== "" && value.subject.length <= 256 &&
-    typeof value.expires_at === "number" && Number.isFinite(value.expires_at) && value.expires_at > Date.now()
+  const parsed = browserAuthSessionResponseSchema.safeParse(raw)
+  return parsed.success && parsed.data.data.authenticated && parsed.data.data.subject.trim() !== "" &&
+    Date.parse(parsed.data.data.expires_at) > Date.now()
 }
 
-/** Observe an existing Session after a native login failure; never renew or start OAuth. */
+/** Observe existing safe status after a native login failure; native rolling stays with the owner, without a separate refresh or OAuth flow. */
 export function SignInRecovery() {
   const router = useRouter()
   const [checking, setChecking] = useState(false)

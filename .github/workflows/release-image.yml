@@ -68,8 +68,7 @@ jobs:
 
       - name: Run contract, architecture, lint, typecheck, and tests
         run: |
-          pnpm contract
-          pnpm test:architecture
+          pnpm run --sequential "/^contract:check:/"
           pnpm lint
           pnpm typecheck
           pnpm test

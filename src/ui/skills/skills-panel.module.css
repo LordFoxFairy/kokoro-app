@@ -219,37 +219,19 @@
 /* —— 搜索 + 范围筛选栏 —— */
 .filterBar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
   margin-bottom: 0.85rem;
 }
 
-/* Embedded Settings follows Manus' two-row toolbar: search + actions on the
- * first row, scope filters on the second. Keeping this composition local to
- * the embedded surface prevents the standalone Skills dialog from changing
- * its existing interaction geometry. */
+/* Keep search, actions and scope filters distinct without fixing translated
+ * controls to a reference language's width or a single line's height. */
 .embeddedFilterLayout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: 2rem 2rem;
   column-gap: 0.75rem;
   row-gap: 0.75rem;
   align-items: center;
   margin-bottom: 0.75rem;
-}
-
-/* The embedded Settings toolbar is measured against the same 32px control
- * band as the reference surface. Keep this selector after the base filterBar
- * rules so the compact 12px gap is not widened by the generic 16px rhythm. */
-.filterBar.embeddedFilterLayout {
-  margin-bottom: 0.75rem;
-}
-
-.embeddedSearchField {
-  grid-column: 1;
-  grid-row: 1;
-  width: min(12.5rem, 100%);
-  height: 2rem;
 }
 
 .searchField {
@@ -257,6 +239,13 @@
   display: flex;
   min-width: 0;
   align-items: center;
+}
+
+.embeddedSearchField {
+  flex: 0 1 12.5rem;
+  min-width: min(100%, 12.5rem);
+  width: min(12.5rem, 100%);
+  height: 2rem;
 }
 
 .embeddedSearchField > svg {
@@ -286,16 +275,22 @@
 
 .embeddedSkillActions {
   display: inline-flex;
-  grid-column: 2;
-  grid-row: 1;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+  margin-inline-start: auto;
   gap: 0.5rem;
 }
 
 .embeddedBrowse,
 .embeddedCreate {
-  height: 2rem;
+  height: auto;
   min-height: 2rem;
+  max-width: 100%;
+  padding-block: 0.375rem;
   padding-inline: 0.5rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
   border: 0;
   border-radius: 0.5rem;
   background: transparent;
@@ -310,27 +305,11 @@
 .embeddedCreate { gap: 0.25rem; }
 .embeddedCreate > svg { width: 1rem; height: 1rem; }
 
-.embeddedFilterLayout .embeddedCreate {
-  width: 5.25rem;
-}
-
-@media (pointer: fine) {
-  .embeddedBrowse {
-    width: 4.5rem;
-    justify-content: center;
-  }
-  .embeddedCreate {
-    /* Preserve the standalone dialog's action footprint. The embedded
-       Settings toolbar uses the narrower context-specific rule above. */
-    width: 7.25rem;
-    justify-content: center;
-  }
-}
-
 .embeddedFilterSeg[data-slot="toggle-group"] {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  justify-self: start;
+  flex: 0 0 100%;
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-start;
   background: transparent;
   padding: 0;
   gap: 0.25rem;
@@ -1522,11 +1501,8 @@
 
 }
 
-/* At the compact Settings width the former fixed 200px search field and
- * 116px create control occupied more horizontal space than their grid track.
- * The search therefore painted over the Browse button: it looked visible but
- * intercepted the click. Keep all three controls in their assigned tracks,
- * using the Manus compact Create footprint. */
+/* Compact Settings keeps its existing leading rhythm and list spacing;
+ * toolbar content wraps independently of this viewport breakpoint. */
 @media (max-width: 47.99rem) {
   .tabs.embeddedTabs .embeddedBody {
     /* Manus starts the installed-skills toolbar 8px below the shared Settings
@@ -1538,10 +1514,6 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .embeddedSearchField {
-    width: auto;
-  }
-
   /* The compact Settings card has only the remaining content viewport below
    * the shared nav and two-row toolbar. A desktop-sized 25rem empty stage
    * pushes its title and guidance below the clipped dialog instead of
@@ -1550,23 +1522,12 @@
     min-height: 10.25rem;
   }
 
-  /* The standalone Skills dialog shares this action class too. */
-  .embeddedCreate {
-    width: 5.25rem;
-  }
 }
 
-/* The Settings surface remains a horizontal control row at the compact Web
- * width used by the reference (the 2x browser capture is 447 CSS px). The
- * previous 640px breakpoint stacked the search field and scope selector,
- * pushing the first skill card far below the fold. Only genuinely phone-sized
- * content stacks these controls; desktop zoom keeps the one-row composition. */
+/* Phone scope filters may stretch within their own row. Toolbar line breaks
+ * remain content-driven; switching its flex axis would turn the search's
+ * preferred width into a tall, empty vertical slot. */
 @media (max-width: 380px) {
-  .filterBar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
   .filterSeg {
     width: 100%;
     max-width: 100%;
@@ -1574,7 +1535,7 @@
 
   .filterBtn {
     min-width: 0;
-    flex: 1 1 0;
+    flex: 0 1 auto;
     white-space: normal;
     overflow-wrap: anywhere;
     padding-inline: 0.35rem;

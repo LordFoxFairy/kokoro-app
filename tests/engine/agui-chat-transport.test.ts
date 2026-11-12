@@ -424,7 +424,7 @@ describe("R66 public4 revision acceptance before cursor", () => {
       const stopped = new Promise<void>((resolve) => { finish = resolve })
       const handle = transport.openProjectionEvents({
         chatId: "conv_9", resumeCursor: null,
-        onFrame: (frame) => frames.push(frame),
+        onFrame: (frame) => { frames.push(frame) },
         onStreamError: (error) => { errors.push(error); finish() },
         onReconnecting: finish,
       })

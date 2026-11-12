@@ -7,8 +7,8 @@ vi.mock("@/lib/server/upstream-http", async (importOriginal) => ({
   fetchWithDomain: vi.fn(),
 }))
 
-const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+
+
 
 const ENV = {
   KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
@@ -23,18 +23,18 @@ const params = (path: string[]) => ({ params: Promise.resolve({ path }) })
 
 beforeEach(() => {
   for (const [key, value] of Object.entries(ENV)) process.env[key] = value
-  currentProductSession.mockReset()
-  currentProductSession.mockResolvedValue({ access: "product-access", accessExpiresAt: Date.now() + 60_000 })
+
+
   vi.mocked(fetchWithDomain).mockReset()
 })
 
 afterEach(() => {
-  currentProductSession.mockReset()
+
   vi.unstubAllGlobals()
   for (const key of Object.keys(ENV)) delete process.env[key]
 })
 
-describe("/api/admin/[...path] product-session adapter", () => {
+describe("/api/admin/[...path] native session adapter", () => {
   it("forwards an admitted provider mutation to the BFF's formal MCP path", async () => {
     vi.mocked(fetchWithDomain).mockImplementation(async (_url, _domain, init) =>
       new Response(JSON.stringify({ data: { provider_key: "fixture" } }), {
@@ -50,7 +50,7 @@ describe("/api/admin/[...path] product-session adapter", () => {
     const response = await POST(
       new Request("http://localhost/api/admin/mcp/providers?limit=50", {
         method: "POST",
-        headers: {
+        headers: {cookie: "kokoro-issuer.session_token=fixture",
           "content-type": "application/json",
           "content-length": "2",
           "idempotency-key": "command-key",
@@ -70,29 +70,29 @@ describe("/api/admin/[...path] product-session adapter", () => {
       expect.objectContaining({ method: "POST", cache: "no-store" }),
     )
     const init = vi.mocked(fetchWithDomain).mock.calls[0]![2]!
-    expect(new Headers(init.headers).get("authorization")).toBe("Bearer product-access")
+    expect(new Headers(init.headers).get("authorization")).toBeNull()
     expect(new Headers(init.headers).get("idempotency-key")).toBe("command-key")
   })
 
-  it("keeps unsupported paths and missing product sessions out of the BFF", async () => {
+  it("keeps unsupported paths and missing native sessions out of the BFF", async () => {
     const { GET } = await import("@/app/api/admin/[...path]/route")
-    const unknown = await GET(new Request("http://localhost/api/admin/admin/mcp/providers"), params(["admin", "mcp", "providers"]))
+    const unknown = await GET(new Request("http://localhost/api/admin/admin/mcp/providers", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["admin", "mcp", "providers"]))
     expect(unknown.status).toBe(404)
 
-    currentProductSession.mockResolvedValueOnce(null)
-    const denied = await GET(new Request("http://localhost/api/admin/mcp/providers"), params(["mcp", "providers"]))
+    vi.mocked(fetchWithDomain).mockImplementationOnce(async(_url,_domain,init)=>Response.json({error:{code:"session_authentication_required",message:"Sign in",retryable:false}},{status:401,headers:{"cache-control":"no-store","x-request-id":new Headers(init?.headers).get("x-kokoro-request-id")!}}))
+    const denied = await GET(new Request("http://localhost/api/admin/mcp/providers", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["mcp", "providers"]))
     expect(denied.status).toBe(401)
     expect(await denied.json()).toEqual({ error: {
       code: "session_authentication_required", message: expect.any(String), retryable: false,
     } })
-    expect(fetchWithDomain).not.toHaveBeenCalled()
+    expect(fetchWithDomain).toHaveBeenCalledOnce()
   })
 
   it("keeps local gateway failures in the complete error envelope without forwarding session failures", async () => {
     const { GET } = await import("@/app/api/admin/[...path]/route")
-    currentProductSession.mockRejectedValueOnce(new Error("private auth implementation detail"))
+    vi.mocked(fetchWithDomain).mockRejectedValueOnce(new Error("private auth implementation detail"))
     const response = await GET(new Request("http://localhost/api/admin/skills", {
-      headers: { "x-kokoro-request-id": "gateway-failure-id" },
+      headers: {cookie: "kokoro-issuer.session_token=fixture",  "x-kokoro-request-id": "gateway-failure-id" },
     }), params(["skills"]))
     expect(response.status).toBe(503)
     expect(response.headers.get("x-request-id")).toBe("gateway-failure-id")
@@ -100,7 +100,7 @@ describe("/api/admin/[...path] product-session adapter", () => {
     expect(await response.json()).toEqual({ error: {
       code: "admin_gateway_unavailable", message: expect.any(String), retryable: true,
     } })
-    expect(fetchWithDomain).not.toHaveBeenCalled()
+    expect(fetchWithDomain).toHaveBeenCalledOnce()
   })
   it("admits the three formal model reads with the original query and request ID", async () => {
     vi.mocked(fetchWithDomain).mockImplementation(async (_url, _domain, init) => Response.json({ data: [], meta: { next_cursor: null } }, {
@@ -109,7 +109,7 @@ describe("/api/admin/[...path] product-session adapter", () => {
     const { GET } = await import("@/app/api/admin/[...path]/route")
     for (const kind of ["model-labels", "model-revisions", "model-routing"]) {
       const response = await GET(new Request(`http://localhost/api/admin/${kind}?limit=25&cursor=opaque`, {
-        headers: { "x-kokoro-request-id": "model-list-request" },
+        headers: {cookie: "kokoro-issuer.session_token=fixture",  "x-kokoro-request-id": "model-list-request" },
       }), params([kind]))
       expect(response.status).toBe(200)
       expect(response.headers.get("x-request-id")).toBe("model-list-request")
@@ -125,7 +125,7 @@ describe("/api/admin/[...path] product-session adapter", () => {
     const id = "6ea106a4-031f-460b-9ab3-a3c8cd5f4c92"
     const body = JSON.stringify({ model_revision_id: null, visible: false, is_default: false, priority: 0 })
     const response = await PUT(new Request(`http://localhost/api/admin/model-routing/${id}`, {
-      method: "PUT", headers: { ...precondition, "content-type": "application/json", "content-length": String(new TextEncoder().encode(body).length), "idempotency-key": "frozen-model-command", "x-kokoro-request-id": "model-write-request" }, body,
+      method: "PUT", headers: {cookie: "kokoro-issuer.session_token=fixture",  ...precondition, "content-type": "application/json", "content-length": String(new TextEncoder().encode(body).length), "idempotency-key": "frozen-model-command", "x-kokoro-request-id": "model-write-request" }, body,
     }), params(["model-routing", id]))
     expect(response.status).toBe(409)
     expect((await response.json()).error.code).toBe("admin_model_routing_version_conflict")
@@ -140,10 +140,10 @@ describe("/api/admin/[...path] product-session adapter", () => {
   it("rejects model prefix expansion, unsupported methods and command headers on reads before BFF I/O", async () => {
     const { GET, POST, PUT } = await import("@/app/api/admin/[...path]/route")
     for (const [handler, method, path] of [[GET, "GET", ["model-provider-secrets"]], [GET, "GET", ["model-revisions", "publish"]], [POST, "POST", ["model-labels", "unexpected"]], [PUT, "PUT", ["model-routing", "not-a-label-id"]]] as const) {
-      const response = await handler(new Request(`http://localhost/api/admin/${path.join("/")}`, { method }), params([...path]))
+      const response = await handler(new Request(`http://localhost/api/admin/${path.join("/")}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"},  method }), params([...path]))
       expect(response.status).toBe(404)
     }
-    const response = await GET(new Request("http://localhost/api/admin/model-routing", { headers: { "if-match": '\"1\"' } }), params(["model-routing"]))
+    const response = await GET(new Request("http://localhost/api/admin/model-routing", { headers: {cookie: "kokoro-issuer.session_token=fixture",  "if-match": '\"1\"' } }), params(["model-routing"]))
     expect(response.status).toBe(400)
     expect(fetchWithDomain).not.toHaveBeenCalled()
   })
@@ -154,11 +154,11 @@ describe("/api/admin/[...path] product-session adapter", () => {
 it("forwards bodyless model publication with original key/CAS and no invented JSON",async()=>{
  vi.mocked(fetchWithDomain).mockImplementation(async(_url,_domain,init)=>Response.json({data:{}},{headers:{"cache-control":"no-store","x-request-id":new Headers(init?.headers).get("x-kokoro-request-id")!}}));
  const {POST}=await import("@/app/api/admin/[...path]/route");const id="11111111-1111-4111-8111-111111111111";
- const response=await POST(new Request(`http://localhost/api/admin/model-revisions/${id}/publish`,{method:"POST",headers:{"idempotency-key":"original-publish","if-match":'"3"',"content-length":"0","x-kokoro-request-id":"publish-check"},body:new ReadableStream({start(controller){controller.close();}}),duplex:"half"} as RequestInit),params(["model-revisions",id,"publish"]));
+ const response=await POST(new Request(`http://localhost/api/admin/model-revisions/${id}/publish`,{method:"POST",headers:{cookie: "kokoro-issuer.session_token=fixture", "idempotency-key":"original-publish","if-match":'"3"',"content-length":"0","x-kokoro-request-id":"publish-check"},body:new ReadableStream({start(controller){controller.close();}}),duplex:"half"} as RequestInit),params(["model-revisions",id,"publish"]));
  expect(response.status).toBe(200);expect(fetchWithDomain).toHaveBeenCalledTimes(1);const init=vi.mocked(fetchWithDomain).mock.calls[0]![2]!;
  expect(new Headers(init.headers).get("if-match")).toBe('"3"');expect(new Headers(init.headers).get("idempotency-key")).toBe("original-publish");expect(new Headers(init.headers).has("content-type")).toBe(false);expect(init.body).toBeUndefined();
 });
 it("rejects nonempty publish streams before BFF I/O",async()=>{
  const {POST}=await import("@/app/api/admin/[...path]/route");const id="11111111-1111-4111-8111-111111111111";
- const response=await POST(new Request(`http://localhost/api/admin/model-revisions/${id}/publish`,{method:"POST",headers:{"idempotency-key":"original-publish","if-match":'"3"',"content-length":"0"},body:new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode("x"));controller.close();}}),duplex:"half"} as RequestInit),params(["model-revisions",id,"publish"]));expect(response.status).toBe(400);expect(fetchWithDomain).not.toHaveBeenCalled();
+ const response=await POST(new Request(`http://localhost/api/admin/model-revisions/${id}/publish`,{method:"POST",headers:{cookie: "kokoro-issuer.session_token=fixture", "idempotency-key":"original-publish","if-match":'"3"',"content-length":"0"},body:new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode("x"));controller.close();}}),duplex:"half"} as RequestInit),params(["model-revisions",id,"publish"]));expect(response.status).toBe(400);expect(fetchWithDomain).not.toHaveBeenCalled();
 });

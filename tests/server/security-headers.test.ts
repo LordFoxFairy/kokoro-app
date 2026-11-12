@@ -1,6 +1,8 @@
+import { NextRequest } from "next/server"
 import { describe, expect, it } from "vitest"
 
 import { contentSecurityPolicy, securityHeaders, shouldDisableCaching } from "@/lib/server/security-headers"
+import { proxy } from "@/proxy"
 
 describe("security headers", () => {
   it("binds the enforced CSP to the request nonce", () => {
@@ -8,6 +10,25 @@ describe("security headers", () => {
     expect(headers["Content-Security-Policy"]).toContain("'nonce-nonce-token'")
     expect(headers["Content-Security-Policy"]).toContain("frame-ancestors 'none'")
     expect(headers["X-Content-Type-Options"]).toBe("nosniff")
+  })
+
+  it("admits microphone only in documents of the same mounted workbench", async () => {
+    const project = "/app/project/project_00000000-0000-0000-0000-000000000001"
+    for (const path of ["/app", "/app/library", project, "/", "/auth/sign-out", "/auth/sign-in/form", "/shared/example", "/manage", "/api/session/sessions", "/app/unknown"]) {
+      const response = await proxy(new NextRequest(`https://workbench.example.test${path}`, {
+        headers: { "sec-fetch-dest": "document", accept: "text/html" },
+      }))
+      const microphone = ["/app", "/app/library", project].includes(path) ? "self" : ""
+      expect(response.headers.get("Permissions-Policy"), path).toBe(`camera=(), microphone=(${microphone}), geolocation=(), browsing-topics=()`)
+    }
+    const rsc = await proxy(new NextRequest("https://workbench.example.test/app", {
+      headers: { "sec-fetch-dest": "empty", accept: "text/x-component", rsc: "1" },
+    }))
+    expect(rsc.headers.get("Permissions-Policy")).toContain("microphone=()")
+    const iframe = await proxy(new NextRequest("https://workbench.example.test/app", {
+      headers: { "sec-fetch-dest": "iframe", accept: "text/html" },
+    }))
+    expect(iframe.headers.get("Permissions-Policy")).toContain("microphone=()")
   })
 
   it("only permits development eval in development policy", () => {

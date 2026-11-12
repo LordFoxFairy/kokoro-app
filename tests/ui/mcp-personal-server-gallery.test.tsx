@@ -102,7 +102,7 @@ it.each(["catalog", "connections"] as const)("opens a saved disconnected configu
   expect(client.getPrivateMcpServer).toHaveBeenCalledExactlyOnceWith(saved.server_id, expect.any(AbortSignal))
   expect(within(detail).getByText("https://mcp.example.test/mcp")).toBeVisible()
   expect(within(detail).getByText("Disconnected")).toBeVisible()
-  expect(within(detail).getByText("This connection has been disconnected. Saved configuration is read-only. Create a new authorization, then connect again.")).toBeVisible()
+  expect(within(detail).getByText("This connection has been disconnected. Saved configuration is read-only. Reconnecting is currently unavailable.")).toBeVisible()
   expect(within(detail).queryByText("Currently unavailable")).toBeNull()
   expect(within(detail).queryByRole("button", { name: "管理" })).toBeNull()
   expect(within(detail).queryByRole("button", { name: /Connect|连接|试用/ })).toBeNull()
@@ -110,53 +110,6 @@ it.each(["catalog", "connections"] as const)("opens a saved disconnected configu
   expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
   expect(client.updatePrivateMcpServer).not.toHaveBeenCalled()
 })
-it.each([false, true])("creates a separate authorization and requires fresh new identity reads before explicit Connect (lost ACK=%s)", async lost => {
-  const saved = { ...personal, status: "revoked" as const, enabled: false, state_version: "4" }
-  const next = { ...personal, connector_id: "new-authorization-connector", status: "pending" as const, enabled: false, state_version: "1" }
-  const list = vi.fn<HubClient["listMcpConnectors"]>().mockResolvedValue({ items: [saved], next_cursor: null })
-  const client = clientFor(list)
-  const oldServer = personal.server_id
-  const server = { server_id: oldServer, display_name: "New authorization current", server_url: "https://mcp.example.test/mcp", status: "pending" as const,
-    availability: "unavailable" as const, state_version: "4", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
-  let release!: (value: McpConnector) => void
-  const fresh = new Promise<McpConnector>(done => { release = done })
-  client.getMcpConnector.mockImplementation(async id => id === next.connector_id ? fresh : saved)
-  client.getPrivateMcpServer.mockResolvedValue({ ...server, display_name: saved.display_name, state_version: "3", status: "registered" })
-  const reauthorize = vi.fn().mockImplementation(async () => {
-    if (lost && reauthorize.mock.calls.length === 1) throw new Error("lost new authorization ACK")
-    list.mockResolvedValue({ items: [next], next_cursor: null })
-    client.getPrivateMcpServer.mockResolvedValue(server)
-    return { server, connector: next, replayed: lost }
-  })
-  const hub = { ...client, reauthorizePrivateMcpServer: reauthorize }
-  render(plaza(hub, `new-authorization-${lost}`))
-  fireEvent.click(await screen.findByRole("button", { name: saved.display_name }))
-  const detail = await screen.findByRole("dialog", { name: saved.display_name })
-  const create = within(detail).getByRole("button", { name: "Create new authorization" })
-  await waitFor(() => expect(create).toBeEnabled())
-  fireEvent.click(create); fireEvent.click(create)
-  await waitFor(() => expect(reauthorize).toHaveBeenCalledOnce())
-  expect(reauthorize.mock.calls[0]?.slice(0, 2)).toEqual([saved.server_id, { source_connector_id: saved.connector_id, expected_server_state_version: "3", expected_connector_state_version: "4" }])
-  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
-  if (lost) {
-    fireEvent.click(await within(detail).findByRole("button", { name: "Retry original request" }))
-    await waitFor(() => expect(reauthorize).toHaveBeenCalledTimes(2))
-    expect(reauthorize.mock.calls[1]?.slice(0, 3)).toEqual(reauthorize.mock.calls[0]?.slice(0, 3))
-  }
-  await waitFor(() => expect(client.getMcpConnector).toHaveBeenCalledWith(next.connector_id, expect.any(AbortSignal)))
-  expect(screen.queryByRole("button", { name: "Connect" })).toBeNull()
-  expect(screen.queryByText(server.display_name)).toBeNull()
-  await act(async () => { release(next) })
-  const current = await screen.findByRole("dialog", { name: server.display_name })
-  expect(client.getPrivateMcpServer).toHaveBeenLastCalledWith(server.server_id, expect.any(AbortSignal))
-  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
-  expect(within(current).queryByText("Disconnected")).toBeNull()
-  client.preparePrivateMcpServer.mockRejectedValue(new Error("stop after explicit new Connect"))
-  fireEvent.click(within(current).getByRole("button", { name: "Connect" }))
-  await waitFor(() => expect(client.preparePrivateMcpServer).toHaveBeenCalledOnce())
-  expect(client.preparePrivateMcpServer.mock.calls[0]?.slice(0, 2)).toEqual([server.server_id, server.state_version])
-})
-
 it("uses exact connector identities for duplicate personal names without turning an empty gallery into an empty-directory assertion", () => {
   const other = { ...personal, connector_id: "other-exact", server_id: "other-server", description: "Other description" }
   const select = vi.fn()
@@ -281,51 +234,12 @@ vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
 it("keeps an old read-only window locked when its exact owner read is active", async () => {
   const saved = { ...personal, status: "revoked" as const, enabled: false, state_version: "4" }
   const client = clientFor(vi.fn().mockResolvedValue({ items: [saved], next_cursor: null }))
-  const reauthorize = vi.fn()
   client.getMcpConnector.mockResolvedValue({ ...personal, state_version: "4" })
-  render(plaza({ ...client, reauthorizePrivateMcpServer: reauthorize }, "old-readonly-active"))
+  render(plaza(client, "old-readonly-active"))
   fireEvent.click(await screen.findByRole("button", { name: saved.display_name }))
   const dialog = await screen.findByRole("dialog")
   await within(dialog).findByText("Added connectors could not load")
   expect(within(dialog).queryByRole("button", { name: "Create new authorization" })).toBeNull()
   expect(within(dialog).queryByRole("button", { name: /Connect|管理/ })).toBeNull()
-  expect(reauthorize).not.toHaveBeenCalled()
   expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
-})
-it("recovers the original unknown authorization after closing and source404, and refuses to prepare from its ACK when the new exact GET fails", async () => {
-  const saved = { ...personal, status: "revoked" as const, enabled: false, state_version: "4" }
-  const list = vi.fn<HubClient["listMcpConnectors"]>().mockResolvedValue({ items: [saved], next_cursor: null })
-  const client = clientFor(list)
-  client.getMcpConnector.mockResolvedValue(saved)
-  const server = { server_id: saved.server_id!, display_name: saved.display_name, server_url: "https://mcp.example.test/mcp", status: "pending" as const,
-    availability: "unavailable" as const, state_version: "4", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false }
-  const next = { ...saved, connector_id: "next-authorization", status: "pending" as const, state_version: "1" }
-  const reauthorize = vi.fn().mockRejectedValueOnce(new Error("unknown command outcome"))
-    .mockResolvedValue({ server, connector: next, replayed: true })
-  const hub = { ...client, reauthorizePrivateMcpServer: reauthorize }
-  const page = (refreshKey = 0) => <LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ subject: "unknown-closed", admitted: true, generation: 0 }}>
-    <McpProjectionRead client={hub} identity="unknown-closed" embedded initialView="connections" refreshKey={refreshKey} />
-  </ConnectorCommandProvider></LocaleProvider>
-  const view = render(page())
-  fireEvent.click(await screen.findByRole("button", { name: saved.display_name }))
-  const detail = await screen.findByRole("dialog", { name: saved.display_name })
-  await waitFor(() => expect(within(detail).getByRole("button", { name: "Create new authorization" })).toBeEnabled())
-  fireEvent.click(within(detail).getByRole("button", { name: "Create new authorization" }))
-  await within(detail).findByRole("button", { name: "Retry original request" })
-  fireEvent.keyDown(detail, { key: "Escape" })
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
-  list.mockResolvedValue({ items: [], next_cursor: null })
-  client.getMcpConnector.mockRejectedValue(new Error("exact current owner read unavailable"))
-  view.rerender(page(1))
-  fireEvent.click(await screen.findByRole("button", { name: `Retry original request · ${saved.connector_id}` }))
-  const recovery = await screen.findByRole("dialog")
-  await within(recovery).findByText("Added connectors could not load")
-  fireEvent.click(within(recovery).getByRole("button", { name: "Retry original request" }))
-  await waitFor(() => expect(reauthorize).toHaveBeenCalledTimes(2))
-  expect(reauthorize.mock.calls[1]?.slice(0,3)).toEqual(reauthorize.mock.calls[0]?.slice(0,3))
-  await waitFor(() => expect(client.getMcpConnector).toHaveBeenCalledWith(next.connector_id, expect.any(AbortSignal)))
-  expect(screen.queryByRole("button", { name: "Connect" })).toBeNull()
-  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
-  expect(client.updatePrivateMcpServer).not.toHaveBeenCalled()
-  expect(reauthorize).toHaveBeenCalledTimes(2)
 })

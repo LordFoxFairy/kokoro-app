@@ -1,6 +1,8 @@
+2026-11-12：`chat-projection-event.ts` 区分原始文本输入与 reducer 事件；reducer 只接 SDK 绝对 `message.text_snapshot`，不再手工拼接 `message.delta`。ordered baseline 的原始后缀由 engine 经同一 SDK 重放后合并；现 event_id／publicSequence／Run归属、活动与终态规则保持。该 snapshot 仅本地视图事件，不是新 wire。
+
 2026-10-28 最终答复引用沿原AG-UI/快照/parts读取链消费：仅exact Run与公共revision可建立分层事实；旧版本、跨页不一致和未完整正文不替代新事实。无新读取通道，正常配对状态见CURRENT。
 
-HMR RAM：页面Engine可沿用旧thread；纯normalizer仅将旧cancelledRuns中已确认true迁为cancelled并退休旧字段。新读容忍缺map，写入口一次规范后幂等；不由textState/runStatus补成功，不改消息/草稿或持久状态。
+运行时只接受 `runTerminalsById` canonical 状态；已删除 `cancelledRuns` HMR 兼容迁移，旧内存形状不会再被写入口接纳。不由 textState/runStatus 补成功，不改消息/草稿或持久状态。
 
 取消投影：只有真实 run.completed(cancelled) 或私有 MessageRead 显式 terminal_status=cancelled 进入唯一 exact runTerminalsById（completed/cancelled/failed），不与cancelmap并存；真实Run完成/失败与可信snapshot status写该索引；TEXT_END不写。失败空正文／无profile不推断取消，本地 markRunCancelled 只收工具，不造远端终态。取消不改变文字／ordered parts完整性。
 
@@ -67,6 +69,7 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
 - message.user 三态吸收（id 命中更新 / 本地 echo 就地改 id / 新建）：SSE 常跑赢 HTTP 回执。
 - delivery.created 以 `(conversationId, artifactId)` 幂等（非 hash）；同 hash 的不同成果保留两件。
 - snapshot 最近 100 件与 `deliveriesHasMore` 一并水合；完整历史由 Library 分页读取。
+- 私有 snapshot 与 live 只投影 owner 证明的可选 `display_path`；live 证明与原路径精确相等。旧成果不猜目录，匿名分享不接受此字段；它不是内容读取定位。
 
 CHAT-1：ConversationEntry可选literal localDraft，activeIsLocalDraft/retireLocalDraft只操作UI来源，不表示owner存在；索引元数据不能撤销独立提交退休标记。
 

@@ -1,7 +1,10 @@
-import { mcpReauthorizationRequestSchema, mcpReauthorizationEnvelopeMatches, mcpReauthorizationErrorAllowed } from "@/hub/mcp-reauthorization.schema";
 import { proxyProjectSkillContent } from "@/lib/server/project-skill-content";
+import { proxyLibraryArtifactMutation } from "@/lib/server/library-artifact-mutation";
+import { proxyLibraryFileDelete } from "@/lib/server/library-file-delete";
 import { mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPreparePostErrorAllowed, mcpPrepareReceiptLookupOnly } from "@/hub/mcp-prepare-receipt.schema";
 import { proxyProjectPins } from "@/lib/server/project-pins";
+import { isProjectTaskFamily, proxyProjectTasks } from "@/lib/server/project-tasks";
+import { isProjectWebsitesFamily, proxyProjectWebsites } from "@/lib/server/project-websites";
 import { proxyProjectMcpRecommendations } from "@/lib/server/project-mcp-recommendations";
 import { proxyMcpServerIcon } from "@/lib/server/mcp-server-icon";
 import { mcpPublicationPath } from "@/hub/mcp-project-publication.schema";
@@ -101,7 +104,7 @@ import { proxyProjectRename } from "@/lib/server/project-rename";
 
 import { sameOriginOk } from "@/lib/server/same-origin";
 import {
-  admittedProductSession,
+  InvalidBrowserCookieError,
   productBffConfig,
   productBffHeaders,
 } from "@/lib/server/product-bff";
@@ -256,6 +259,7 @@ function connectionProjectionError(
 function safeDownloadHeaders(
   headers: Headers,
   maxBytes: number,
+  preserveLibraryLength: boolean,
 ): Headers | null {
   const type = headers.get("content-type");
   const rawLength = headers.get("content-length");
@@ -297,7 +301,8 @@ function safeDownloadHeaders(
     "content-type": type,
     "content-length": rawLength,
     "content-disposition": disposition ?? "",
-    "cache-control": "private, no-store",
+    // Next must not gzip exact Library bytes and drop the validated length.
+    "cache-control": preserveLibraryLength ? "private, no-store, no-transform" : "private, no-store",
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
     "x-request-id": requestId,
@@ -305,11 +310,11 @@ function safeDownloadHeaders(
 }
 
 function personalDownloadHeaders(headers: Headers): Headers | null {
-  return safeDownloadHeaders(headers, MAX_PERSONAL_DOWNLOAD_BYTES);
+  return safeDownloadHeaders(headers, MAX_PERSONAL_DOWNLOAD_BYTES, true);
 }
 
-function artifactDownloadHeaders(headers: Headers): Headers | null {
-  return safeDownloadHeaders(headers, MAX_ARTIFACT_DOWNLOAD_BYTES);
+function artifactDownloadHeaders(headers: Headers, preserveLibraryLength: boolean): Headers | null {
+  return safeDownloadHeaders(headers, MAX_ARTIFACT_DOWNLOAD_BYTES, preserveLibraryLength);
 }
 
 function invalidPersonalDownloadResponse(): Response {
@@ -434,15 +439,13 @@ async function proxyMcpConnector(
   const receiptPath = path.length === 4 && path[1] === "servers" && path[3] === "prepare-receipt";
   if (receiptPath && request.method !== "GET") return fail(405, "invalid_mcp_personal_request");
   const receiptOperation = receiptPath && request.method === "GET";
-  const reauthorizationOperation = path.length === 4 && path[1] === "servers" && path[3] === "reauthorize" && request.method === "POST";
   const operation:
     | McpConnectorOperation
     | McpConnectorAuthorizationOperation
     | McpPrivateServerOperation
     | McpIconOperation
     | "prepareReceipt"
-    | "reauthorizeServer"
-    | undefined = reauthorizationOperation ? "reauthorizeServer" : receiptOperation ? "prepareReceipt" : iconOperation ?? (
+    | undefined = receiptOperation ? "prepareReceipt" : iconOperation ?? (
     path.length === 3 &&
       path[1] === "servers" &&
       path[2] === "import" &&
@@ -555,7 +558,6 @@ async function proxyMcpConnector(
     "getIcon",
   ].includes(operation);
   const requiresIdempotency = [
-    "reauthorizeServer",
     "create",
     "update",
     "enabled",
@@ -582,7 +584,7 @@ async function proxyMcpConnector(
       "beginAuthorization",
       "reconnectAuthorization",
     ].includes(operation) ||
-    ["reauthorizeServer", "prepareServer", "prepareReceipt", "updateServer", "deleteServer", "getIcon", "completeIcon", "cancelIcon"].includes(operation)
+    ["prepareServer", "prepareReceipt", "updateServer", "deleteServer", "getIcon", "completeIcon", "cancelIcon"].includes(operation)
       ? path[2]
       : undefined;
   const query = url.searchParams;
@@ -690,7 +692,7 @@ async function proxyMcpConnector(
             : "invalid_mcp_personal_request",
         );
       }
-      const accepted = reauthorizationOperation ? mcpReauthorizationRequestSchema.safeParse(input).success : iconOperation && iconOperation !== "getIcon" ? mcpIconInputs[iconOperation].safeParse(input).success : authorization
+      const accepted = iconOperation && iconOperation !== "getIcon" ? mcpIconInputs[iconOperation].safeParse(input).success : authorization
         ? operation === "beginAuthorization" ||
           operation === "reconnectAuthorization"
           ? mcpConnectorAuthorizationRequestSchema.safeParse(input).success
@@ -711,16 +713,13 @@ async function proxyMcpConnector(
       if (!accepted) return fail(400, "invalid_mcp_personal_request");
     }
     signal.throwIfAborted();
-    const claims = await within(admittedProductSession(request, config)).catch(
-      () => undefined,
-    );
+
     signal.throwIfAborted();
     // Admission consumes the same receipt budget; never create a fresh 1ms owner budget after expiry.
     if (receiptOperation && performance.now() >= expires) controller.abort();
     signal.throwIfAborted();
-    if (claims === undefined) return fail(503, "iam_admission_unavailable");
-    if (claims === null) return fail(401, "session_authentication_required");
-    const headers = productBffHeaders(config, claims, requestId);
+
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     if (mutation) headers.set("content-type", "application/json");
     if (requiresIdempotency) headers.set("idempotency-key", key!);
@@ -795,7 +794,7 @@ async function proxyMcpConnector(
     let raw: unknown;
     try {
       const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-      raw = receiptOperation || reauthorizationOperation ? parseMcpConnectorJson(text) : JSON.parse(text);
+      raw = receiptOperation ? parseMcpConnectorJson(text) : JSON.parse(text);
     } catch {
       return fail(502, "mcp_personal_response_invalid");
     }
@@ -814,7 +813,7 @@ async function proxyMcpConnector(
           : operation;
     const valid =
       upstream.status === expected
-        ? reauthorizationOperation ? mcpReauthorizationEnvelopeMatches(raw, id!, input) : receiptOperation ? mcpPrepareReceiptMatches(raw, id!, receiptVersion!) : iconOperation ? mcpIconMatches(iconOperation, raw, id, input) : authorization
+        ? receiptOperation ? mcpPrepareReceiptMatches(raw, id!, receiptVersion!) : iconOperation ? mcpIconMatches(iconOperation, raw, id, input) : authorization
           ? mcpConnectorAuthorizationMatches(
               operation as McpConnectorAuthorizationOperation,
               raw,
@@ -837,7 +836,7 @@ async function proxyMcpConnector(
                 query,
                 input,
               )
-        : reauthorizationOperation ? mcpReauthorizationErrorAllowed(upstream.status, raw) : receiptOperation ? mcpPrepareReceiptErrorAllowed(upstream.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(upstream.status, raw) : authorization
+        : receiptOperation ? mcpPrepareReceiptErrorAllowed(upstream.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(upstream.status, raw) : authorization
           ? mcpConnectorErrorAllowed("authorization", upstream.status, raw)
           : mcpConnectorErrorAllowed(
               connectorOperation as McpConnectorOperation,
@@ -970,18 +969,12 @@ async function proxyCustomApi(
   const config = productBffConfig();
   if (!config?.bffBaseUrl)
     return fail(503, "product_tenant_not_configured", true);
-  let claims;
-  try {
-    claims = await admittedProductSession(request, config);
-  } catch {
-    return fail(503, "iam_admission_unavailable", true);
-  }
-  if (claims === null) return fail(401, "session_authentication_required");
+
   const deadline = new AbortController();
   const timer = setTimeout(() => deadline.abort(), 10_000);
   let upstream: Response | undefined;
   try {
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     if (mutation) {
       headers.set("content-type", "application/json");
@@ -1078,20 +1071,9 @@ async function proxySkillCover(
   );
   let upstream: Response;
   try {
-    const claims = await new Promise<
-      Awaited<ReturnType<typeof admittedProductSession>>
-    >((resolve, reject) => {
-      const abort = () => reject(signal.reason);
-      signal.addEventListener("abort", abort, { once: true });
-      void admittedProductSession(request, config)
-        .then(resolve, reject)
-        .finally(() => signal.removeEventListener("abort", abort));
-      if (signal.aborted) abort();
-    }).catch(() => undefined);
-    if (claims === undefined) return fail("iamUnavailable");
-    if (claims === null) return fail("unauthenticated");
+
     if (signal.aborted) return fail("bffUnavailable");
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "image/png, image/jpeg, image/webp");
     upstream = await requestWithDomain(
       `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/skills/${encodeURIComponent(revision)}/cover`,
@@ -1301,13 +1283,9 @@ async function proxyLocalSkillImport(
         !localImportCompleteRequestSchema.safeParse(parsedBody).success)
     )
       return fail("invalidSkillRequest");
-    const claims = await within(admittedProductSession(request, config)).catch(
-      () => undefined,
-    );
-    if (claims === undefined) return fail("iamUnavailable");
-    if (claims === null) return fail("unauthenticated");
+
     joined.throwIfAborted();
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     if (key !== null) headers.set("idempotency-key", key);
     if (body !== undefined) headers.set("content-type", "application/json");
@@ -1530,13 +1508,9 @@ async function proxyGithubSkillImport(
       ).safeParse(parsedBody).success
     )
       return fail("invalidSkillRequest");
-    const claims = await within(admittedProductSession(request, config)).catch(
-      () => undefined,
-    );
-    if (claims === undefined) return fail("iamUnavailable");
-    if (claims === null) return fail("unauthenticated");
+
     joined.throwIfAborted();
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     if (key !== null) headers.set("idempotency-key", key);
     if (body !== undefined) headers.set("content-type", "application/json");
@@ -1780,13 +1754,9 @@ async function proxySkillShare(
         : body !== undefined
     )
       return fail("invalidSkillRequest");
-    const claims = await within(admittedProductSession(request, config)).catch(
-      () => undefined,
-    );
-    if (claims === undefined) return fail("iamUnavailable");
-    if (claims === null) return fail("unauthenticated");
+
     joined.throwIfAborted();
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     if (body !== undefined) headers.set("content-type", "application/json");
     const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${operation === "download" ? "browser/v1" : "v1"}/${path.map(encodeURIComponent).join("/")}`;
@@ -1997,13 +1967,9 @@ async function proxySkillPackage(
         for (;;) { const part = await within(reader.read()); joined.throwIfAborted(); if (part.done) break; if (part.value.byteLength > 0) return fail("invalidSkillRequest"); }
       } finally { joined.removeEventListener("abort", cancel); void reader.cancel().catch(() => undefined); reader.releaseLock(); }
     }
-    const claims = await within(admittedProductSession(request, config)).catch(
-      () => undefined,
-    );
-    if (claims === undefined) return fail("iamUnavailable");
-    if (claims === null) return fail("unauthenticated");
+
     joined.throwIfAborted();
-    const headers = productBffHeaders(config, claims, requestId);
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("accept", "application/json");
     const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${download ? "browser/v1" : "v1"}/${managed && !download ? "self/skills" : installation ? "skill-installations" : "skills"}/${encodeURIComponent(targetId)}/${download ? "download" : "package"}${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`;
     upstream = await within(
@@ -2222,12 +2188,8 @@ async function proxyPersonalSkillLifecycle(
         : withdrawPersonalSkillRequestSchema
     ).safeParse(input);
     if (!parsed.success) return fail(400, "invalid_skill_request");
-    const claims = await within(admittedProductSession(request, config)).catch(
-      () => undefined,
-    );
-    if (claims === undefined) return fail(503, "iam_admission_unavailable");
-    if (claims === null) return fail(401, "session_authentication_required");
-    const headers = productBffHeaders(config, claims, requestId);
+
+    const headers = productBffHeaders(config, request, requestId);
     headers.set("content-type", "application/json");
     headers.set("idempotency-key", key);
     headers.set("content-length", String(bytes.byteLength));
@@ -2345,6 +2307,13 @@ async function proxyHubRequest(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params;
+  const libraryAt = path[0] === "self" ? 1 : 0;
+  if (request.method === "DELETE" && path[libraryAt] === "library" && path[libraryAt + 1] === "files")
+    return proxyLibraryFileDelete(request, path);
+  if ((request.method === "DELETE" || request.method === "PUT") && path[libraryAt] === "library" && path[libraryAt + 1] === "artifacts")
+    return proxyLibraryArtifactMutation(request, path);
+  if (isProjectTaskFamily(path)) return proxyProjectTasks(request, path);
+  if (isProjectWebsitesFamily(path)) return proxyProjectWebsites(request, path);
   if ((path[0] === "self" && path[1] === "project-pins") || (path[0] === "projects" && path[2] === "pin") || (path[0] === "self" && path[1] === "projects" && path[3] === "pin") || (path[0] === "self" && path[1] === "self" && path[2] === "project-pins")) return proxyProjectPins(request, path);
   if (path[0] === "mcp" && path[1] === "servers" && path[3] === "icon") return proxyMcpServerIcon(request, path);
   if (mcpPublicationPath(path)) return proxyMcpProjectPublication(request, path);
@@ -2510,23 +2479,7 @@ async function proxyHubRequest(
         : localSkillError("forbidden", requestId);
     return NextResponse.json({ error: "forbidden_origin" }, { status: 403 });
   }
-  let claims;
-  try {
-    claims = await admittedProductSession(request, config);
-  } catch {
-    if (publicSkillBoundary)
-      return mcpConnectionRead
-        ? connectionProjectionError("iamUnavailable", requestId)
-        : localSkillError("iamUnavailable", requestId);
-    return NextResponse.json({ error: "session_unavailable" }, { status: 503 });
-  }
-  if (claims === null) {
-    if (publicSkillBoundary)
-      return mcpConnectionRead
-        ? connectionProjectionError("unauthenticated", requestId)
-        : localSkillError("unauthenticated", requestId);
-    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
-  }
+
   // The multipart preview/confirm and GitHub pseudo-publish routes belong to
   // explicit local fixtures only; they are not a production publish fallback.
   if (
@@ -2721,14 +2674,6 @@ async function proxyHubRequest(
     .join("/");
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${managedSkillRead ? `self/skills${path.length >= 4 ? `/${encodeURIComponent(path[3]!)}${managedHistoryRead ? "/versions" : ""}` : ""}` : encodedBusinessPath}${search}`;
 
-  const headers = productBffHeaders(config, claims, requestId);
-  for (const name of FORWARD_HEADERS) {
-    const value = request.headers.get(name);
-    if (value !== null) {
-      headers.set(name, value);
-    }
-  }
-
   let body: ArrayBuffer | undefined;
   if (
     request.method !== "GET" &&
@@ -2786,6 +2731,11 @@ async function proxyHubRequest(
 
   let upstream: Response;
   try {
+    const headers = productBffHeaders(config, request, requestId);
+    for (const name of FORWARD_HEADERS) {
+      const value = request.headers.get(name);
+      if (value !== null) headers.set(name, value);
+    }
     upstream = await requestWithDomain(target, config.domain, {
       method: request.method,
       headers: Object.fromEntries(headers.entries()),
@@ -2812,7 +2762,14 @@ async function proxyHubRequest(
         ? { timeoutMs: 10_000, maxResponseBytes: 1024 * 1024 }
         : {}),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof InvalidBrowserCookieError) {
+      if (publicSkillBoundary)
+        return mcpConnectionRead
+          ? connectionProjectionError("invalidQuery", requestId)
+          : localSkillError("invalidQuery", requestId);
+      return NextResponse.json({ error: "invalid_browser_cookie" }, { status: 400, headers: { "cache-control": "private, no-store" } });
+    }
     if (publicSkillBoundary)
       return mcpConnectionRead
         ? connectionProjectionError("bffUnavailable", requestId)
@@ -2852,7 +2809,7 @@ async function proxyHubRequest(
       return invalidDownload();
     }
     if (upstream.status === 200) {
-      const safeHeaders = artifactDownloadHeaders(upstream.headers);
+      const safeHeaders = artifactDownloadHeaders(upstream.headers, artifactDownload);
       if (safeHeaders === null || upstream.body === null) {
         await upstream.body?.cancel();
         return invalidDownload();

@@ -1,4 +1,5 @@
 import { finalAnswerPartsComplete } from "./completed-turn-sections"
+import type { WorkspaceOutputFile } from "@/ui/canvas/canvas-store"
 import type { AnswerActionBoundary } from "./answer-action-scope"
 import { answerActionTarget } from "./answer-action-target"
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,6 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
 import { ArrowDown } from "lucide-react"
-import { Spinner } from "@/components/ui/spinner"
 
 import type { AgentFailureCode } from "@/contract/agent-failure"
 import type { AgentMode } from "@/core/conversations"
@@ -36,7 +36,7 @@ export type ConversationThreadProps = {
   preview?: boolean
   brandName?: string
   onOpenActivity?: (runId: string, activityId: string) => void
-  onOpenFile?: (path: string) => void
+  onOpenFile?: (file: WorkspaceOutputFile) => void
   // 成果卡点击 → canvas 打开冻结预览。
   onOpenDelivery?: (delivery: SessionDelivery) => void
   // 产物端点 URL 构造需要（透传到工具行的产物卡）。
@@ -49,8 +49,9 @@ export type ConversationThreadProps = {
   // 重连续传态：在途轮的 live 锚点改为「重连中…」，区别于普通「正在思考…」。
   isReconnecting: boolean
   hasFailed: boolean
-  // Public BFF code for a failed message admission before a Run exists.
-  submissionFailureCode?: string | null
+  // Message admission can fail while a different Run is still active.
+  pendingSubmissionFailureCode?: string
+  onRestoreDeliveryDraft?: () => void
   canRetryResume?: boolean
   onRetryResume?: () => void
   canRetryPendingSubmission: boolean
@@ -108,12 +109,8 @@ function agentFailureCopyKey(code: AgentFailureCode): MessageKey {
   }
 }
 
-export function failureCopyKey(runError: RunFailure | null, submissionFailureCode?: string | null): MessageKey {
+export function failureCopyKey(runError: RunFailure | null): MessageKey {
   if (runError?.kind === "agent") return agentFailureCopyKey(runError.profile.code)
-  // This code is part of the BFF's public mutation error contract. It means a
-  // retry cannot make the local Agent dependency available on its own.
-  if (submissionFailureCode === "personal_context_too_large") return "fail.personalContextTooLarge"
-  if (submissionFailureCode === "agent_not_configured") return "fail.agentNotConfigured"
   return "fail.generic"
 }
 
@@ -160,7 +157,8 @@ function ConversationThreadSurface({
   executionPhase,
   isReconnecting,
   hasFailed,
-  submissionFailureCode,
+  pendingSubmissionFailureCode,
+  onRestoreDeliveryDraft,
   canRetryResume = false,
   onRetryResume,
   canRetryPendingSubmission,
@@ -213,8 +211,40 @@ function ConversationThreadSurface({
   const showScaffoldTurn = isStreaming && (
     liveRunId === undefined || !items.some((item) => item.kind === "assistant-turn" && item.runId === liveRunId)
   )
+  const genericFailure = (runError: RunFailure | null, canRetry: boolean) => (
+    <Alert variant="destructive" className={styles.error}>
+      <AlertTitle>{t(failureCopyKey(runError))}</AlertTitle>
+      <AlertDescription className={styles.errorLayout}>
+        <div className={styles.errorBody}>
+          {runError?.kind === "agent" && runError.profile.code === "internal_error" ? (
+            <span className={styles.errorHint}>{t("fail.internalHint")}</span>
+          ) : null}
+        </div>
+        {canRetry ? (
+          <Button variant="outline" className={styles.retry} type="button" onClick={onRetry}>
+            {t("thread.retry")}
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  )
+  const hasSubmissionFailure = pendingSubmissionFailureCode !== undefined
+  const submissionFeedback = !hasSubmissionFailure || creditRejected ? null
+    : pendingSubmissionFailureCode === "agent_not_configured"
+      ? <ExecutionUnavailableFeedback canRetry={canRetryPendingSubmission} onRetry={onRetry} />
+      : pendingSubmissionFailureCode === "submission_outcome_unknown"
+        ? <UnconfirmedSubmissionFeedback canRetry={canRetryPendingSubmission} onRetry={onRetry} />
+        : pendingSubmissionFailureCode === "run_delivery_conflict" || pendingSubmissionFailureCode === "run_control_conflict"
+          ? <Alert variant="destructive" className={styles.error}>
+              <AlertTitle>{t(pendingSubmissionFailureCode === "run_control_conflict" ? "thread.steerRejected" : "thread.interruptRejected")}</AlertTitle>
+              <AlertDescription className={styles.errorLayout}>
+                <span>{t(pendingSubmissionFailureCode === "run_control_conflict" ? "thread.steerRejectedHint" : "thread.interruptRejectedHint")}</span>
+                {onRestoreDeliveryDraft ? <Button variant="outline" type="button" onClick={onRestoreDeliveryDraft}>{t("thread.restoreDraft")}</Button> : null}
+              </AlertDescription>
+            </Alert>
+          : genericFailure(null, canRetryPendingSubmission)
   const failureMessageId = creditRejected ? "credit-error" : "run-error"
-  const failureFeedback = !hasFailed ? null : (
+  const failureFeedback = !creditRejected && (!hasFailed || (hasSubmissionFailure && thread.unattributedFailure === null)) ? null : (
     <div>
       {creditRejected ? (
         <Alert variant="destructive" className={styles.error}>
@@ -235,46 +265,15 @@ function ConversationThreadSurface({
                   variant="outline"
                   className={styles.retry}
                   type="button"
-                  disabled={isStreaming}
-                  aria-busy={isStreaming}
                   onClick={onRetry}
                 >
-                  {isStreaming ? <Spinner aria-hidden="true" /> : null}
                   {t("thread.retry")}
                 </Button>
               ) : null}
             </div>
           </AlertDescription>
         </Alert>
-      ) : thread.unattributedFailure === null && submissionFailureCode === "agent_not_configured" ? (
-        <ExecutionUnavailableFeedback canRetry={canRetryPendingSubmission} retrying={isStreaming} onRetry={onRetry} />
-      ) : thread.unattributedFailure === null && submissionFailureCode === "submission_outcome_unknown" ? (
-        <UnconfirmedSubmissionFeedback canRetry={canRetryPendingSubmission} retrying={isStreaming} onRetry={onRetry} />
-      ) : (
-        <Alert variant="destructive" className={styles.error}>
-          <AlertTitle>{t(failureCopyKey(thread.unattributedFailure, submissionFailureCode))}</AlertTitle>
-          <AlertDescription className={styles.errorLayout}>
-            <div className={styles.errorBody}>
-              {thread.unattributedFailure?.kind === "agent" && thread.unattributedFailure.profile.code === "internal_error" ? (
-                <span className={styles.errorHint}>{t("fail.internalHint")}</span>
-              ) : null}
-            </div>
-            {canRetryPendingSubmission ? (
-              <Button
-                variant="outline"
-                className={styles.retry}
-                type="button"
-                disabled={isStreaming}
-                aria-busy={isStreaming}
-                onClick={onRetry}
-              >
-                {isStreaming ? <Spinner aria-hidden="true" /> : null}
-                {t("thread.retry")}
-              </Button>
-            ) : null}
-          </AlertDescription>
-        </Alert>
-      )}
+      ) : genericFailure(thread.unattributedFailure, canRetryPendingSubmission && !hasSubmissionFailure && !isStreaming)}
     </div>
   )
   return (
@@ -288,62 +287,65 @@ function ConversationThreadSurface({
         aria-label={t("thread.recordAria")}
       >
       <MessageScrollerContent data-conversation-thread-inner="true" className={styles.inner} aria-live="polite" aria-relevant="additions text">
-        {items.map((item, itemIndex) => (
-          <MessageScrollerItem
-            key={item.kind === "user" ? item.message.id : item.anchorId}
-            messageId={item.kind === "user" ? item.message.id : item.anchorId}
-          >
-            {item.kind === "user" ? (
-              <MessageBubble message={item.message} />
-            ) : (
-              <>
-                <AssistantTurn
-                  runId={item.runId}
-                  terminal={thread.runTerminalsById?.[item.runId] !== undefined}
-                  succeeded={thread.runTerminalsById?.[item.runId] === "completed"}
-                  {...(thread.finalAnswersByRun?.[item.runId]?.segmentId ? { finalSegmentId: thread.finalAnswersByRun[item.runId]!.segmentId! } : {})}
-                  finalPartsComplete={finalAnswerPartsComplete(thread.finalAnswersByRun?.[item.runId], thread.messageParts, item.runId)}
-                  {...(answerActionBoundary === undefined ? {} : { answerActionBoundary, answerActionTarget: answerActionTarget(thread, { actorId: answerActionBoundary.actorId, sessionId: answerActionBoundary.sessionId, scope: answerActionBoundary.scope, runId: item.runId }) })}
-                  {...(brandName === undefined ? {} : { brandName })}
-                  sessionId={sessionId}
-                  {...(onOpenActivity ? { onOpenActivity: (activityId: string) => onOpenActivity(item.runId, activityId) } : {})}
-                  {...(onOpenFile === undefined ? {} : { onOpenFile })}
-                  activities={thread.executionProcess?.runId === item.runId ? thread.executionProcess.activities : []}
-                  {...(thread.interactionsByRun[item.runId] === undefined ? {} : { interaction: thread.interactionsByRun[item.runId] })}
-                  parts={Object.values(thread.messageParts ?? {}).filter((part) => part.runId === item.runId)}
-                  {...(onRetryMessageParts === undefined ? {} : { onRetryMessageParts })}
-                  cancelled={item.cancelled === true}
-                  steps={item.steps}
-                  messagesById={item.messagesById}
-                  {...(item.runId === liveRunId && executionPhase ? { executionPhase } : {})}
-                  isLive={item.runId === liveRunId}
-                  reconnecting={item.runId === liveRunId && isReconnecting}
-                  mode={mode}
-                  stagedDecisions={stagingByRun[item.runId] ?? NO_DECISIONS}
-                  hitlActive={item.runId === hitlRunId}
-                  controlError={item.runId === hitlRunId ? controlError : null}
-                  {...(onToolDecision === undefined ? {} : { onToolDecision: (toolId: string, decision: ToolDecision) => onToolDecision(item.runId, toolId, decision) })}
-                  {...(onCancelRun === undefined || item.runId !== hitlRunId ? {} : { onCancelRun })}
-                  taskTitle={showTaskTitle && itemIndex > 0 && !items.slice(0, itemIndex).some((previous) => previous.kind === "assistant-turn")
-                    ? items.slice(0, itemIndex).reverse().find((previous) => previous.kind === "user")?.message.content ?? ""
-                    : ""}
-                  {...(item.failure === undefined
-                    ? {}
-                    : { failureFooter: <TerminalFailureFeedback failure={item.failure} /> })}
-                />
-                {onOpenDelivery && sessionId !== null && lastTurnByRun.get(item.runId) === itemIndex && deliveriesByRun.has(item.runId) ? (
-                  <DeliverySection
+        {items.map((item, itemIndex) => {
+          const ownsRunControls = item.kind === "assistant-turn" && lastTurnByRun.get(item.runId) === itemIndex
+          return (
+            <MessageScrollerItem
+              key={item.kind === "user" ? item.message.id : item.anchorId}
+              messageId={item.kind === "user" ? item.message.id : item.anchorId}
+            >
+              {item.kind === "user" ? (
+                <MessageBubble message={item.message} />
+              ) : (
+                <>
+                  <AssistantTurn
+                    runId={item.runId}
+                    terminal={thread.runTerminalsById?.[item.runId] !== undefined}
+                    succeeded={ownsRunControls && thread.runTerminalsById?.[item.runId] === "completed"}
+                    {...(ownsRunControls && thread.finalAnswersByRun?.[item.runId]?.segmentId ? { finalSegmentId: thread.finalAnswersByRun[item.runId]!.segmentId! } : {})}
+                    finalPartsComplete={ownsRunControls && finalAnswerPartsComplete(thread.finalAnswersByRun?.[item.runId], thread.messageParts, item.runId)}
+                    {...(!ownsRunControls || answerActionBoundary === undefined ? {} : { answerActionBoundary, answerActionTarget: answerActionTarget(thread, { actorId: answerActionBoundary.actorId, sessionId: answerActionBoundary.sessionId, scope: answerActionBoundary.scope, runId: item.runId }) })}
+                    {...(brandName === undefined ? {} : { brandName })}
                     sessionId={sessionId}
-                  {...(onOpenActivity ? { onOpenActivity: (activityId: string) => onOpenActivity(item.runId, activityId) } : {})}
-                    deliveries={deliveriesByRun.get(item.runId)!}
-                    preview={preview}
-                    onOpen={onOpenDelivery}
+                    {...(onOpenActivity ? { onOpenActivity: (activityId: string) => onOpenActivity(item.runId, activityId) } : {})}
+                    {...(onOpenFile === undefined ? {} : { onOpenFile })}
+                    activities={thread.executionProcess?.runId === item.runId ? thread.executionProcess.activities : []}
+                    {...(!ownsRunControls || thread.interactionsByRun[item.runId] === undefined ? {} : { interaction: thread.interactionsByRun[item.runId] })}
+                    parts={ownsRunControls ? Object.values(thread.messageParts ?? {}).filter((part) => part.runId === item.runId) : []}
+                    {...(onRetryMessageParts === undefined ? {} : { onRetryMessageParts })}
+                    cancelled={item.cancelled === true}
+                    steps={item.steps}
+                    messagesById={item.messagesById}
+                    {...(ownsRunControls && item.runId === liveRunId && executionPhase ? { executionPhase } : {})}
+                    isLive={ownsRunControls && item.runId === liveRunId}
+                    reconnecting={ownsRunControls && item.runId === liveRunId && isReconnecting}
+                    mode={mode}
+                    stagedDecisions={stagingByRun[item.runId] ?? NO_DECISIONS}
+                    hitlActive={ownsRunControls && item.runId === hitlRunId}
+                    controlError={ownsRunControls && item.runId === hitlRunId ? controlError : null}
+                    {...(onToolDecision === undefined ? {} : { onToolDecision: (toolId: string, decision: ToolDecision) => onToolDecision(item.runId, toolId, decision) })}
+                    {...(!ownsRunControls || onCancelRun === undefined || item.runId !== hitlRunId ? {} : { onCancelRun })}
+                    taskTitle={showTaskTitle && itemIndex > 0 && !items.slice(0, itemIndex).some((previous) => previous.kind === "assistant-turn")
+                      ? items.slice(0, itemIndex).reverse().find((previous) => previous.kind === "user")?.message.content ?? ""
+                      : ""}
+                    {...(item.failure === undefined
+                      ? {}
+                      : { failureFooter: <TerminalFailureFeedback failure={item.failure} /> })}
                   />
-                ) : null}
-              </>
-            )}
-          </MessageScrollerItem>
-        ))}
+                  {onOpenDelivery && sessionId !== null && lastTurnByRun.get(item.runId) === itemIndex && deliveriesByRun.has(item.runId) ? (
+                    <DeliverySection
+                      sessionId={sessionId}
+                    {...(onOpenActivity ? { onOpenActivity: (activityId: string) => onOpenActivity(item.runId, activityId) } : {})}
+                      deliveries={deliveriesByRun.get(item.runId)!}
+                      preview={preview}
+                      onOpen={onOpenDelivery}
+                    />
+                  ) : null}
+                </>
+              )}
+            </MessageScrollerItem>
+          )
+        })}
 
         {showScaffoldTurn ? (
           <MessageScrollerItem
@@ -389,6 +391,9 @@ function ConversationThreadSurface({
 
         {failureFeedback ? (
           <MessageScrollerItem messageId={failureMessageId}>{failureFeedback}</MessageScrollerItem>
+        ) : null}
+        {submissionFeedback ? (
+          <MessageScrollerItem messageId="submission-recovery">{submissionFeedback}</MessageScrollerItem>
         ) : null}
 
       </MessageScrollerContent>

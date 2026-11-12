@@ -43,7 +43,7 @@ const TEXT_EXTENSIONS = new Set([
 const EXCLUDED_DIRECTORIES = Object.freeze([
   'docs/.vitepress/cache',
   'docs/.vitepress/dist',
-  'docs/reference/v1/generated',
+  'docs/api/reference/v1/generated',
 ]);
 const PUBLIC_KOKORO_NAMES = new Set([
   'x-kokoro-idempotency',
@@ -149,7 +149,7 @@ function inspectPath(path, portalPath, violations) {
   }
   if (
     /(?:^|\/)generated(?:\/|$)/u.test(portalPath) &&
-    !portalPath.startsWith('docs/reference/v1/generated/')
+    !portalPath.startsWith('docs/api/reference/v1/generated/')
   ) {
     addViolation(
       violations,
@@ -274,7 +274,7 @@ function generatedReferenceFiles(directory) {
 
 export function assertGeneratedReferencePublication(portalRoot) {
   const root = resolve(portalRoot);
-  const directory = join(root, 'docs/reference/v1/generated');
+  const directory = join(root, 'docs/api/reference/v1/generated');
   const files = generatedReferenceFiles(directory);
   if (files.length === 0) return { filesScanned: 0 };
   const manifestPath = join(directory, 'manifest.json');

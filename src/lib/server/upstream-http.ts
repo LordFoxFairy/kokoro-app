@@ -46,7 +46,13 @@ export class UpstreamResponseIncompleteError extends Error {
 function responseHeaders(input: IncomingHttpHeaders): Headers {
   const headers = new Headers()
   for (const [key, value] of Object.entries(input)) {
-    if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(", ") : value)
+    if (value === undefined) continue
+    // Set-Cookie is not a comma-separated field: Expires itself contains commas.
+    if (key === "set-cookie" && Array.isArray(value)) {
+      for (const cookie of value) headers.append(key, cookie)
+    } else {
+      headers.set(key, Array.isArray(value) ? value.join(", ") : value)
+    }
   }
   return headers
 }
@@ -365,7 +371,7 @@ export function requestWithDomain(
 export async function readBoundedRequestBody(
   request: Request,
   maxBytes = DEFAULT_UPSTREAM_MAX_REQUEST_BYTES,
-  signal?: AbortSignal,
+  signal: AbortSignal = request.signal,
 ): Promise<ArrayBuffer> {
   signal?.throwIfAborted()
   const declared = request.headers.get("content-length")

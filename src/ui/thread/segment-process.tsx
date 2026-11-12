@@ -57,6 +57,7 @@ type SegmentProcessProps = {
   direct?: boolean
   activities: RunProcessActivity[]
   live: boolean
+  terminal?: boolean
   mode?: AgentMode
   // Parent owns Run/answer/connection facts. This never changes an activity's status.
   continueProcessing?: boolean
@@ -72,6 +73,7 @@ export function SegmentProcess({
   onOpenActivity,
   activityDetails,
   continueProcessing = false,
+  terminal = false,
   direct = false,
 }: SegmentProcessProps) {
   const t = useT()
@@ -97,7 +99,7 @@ export function SegmentProcess({
   if (!hasActivities) return null
 
   const allSettled = activities.every((activity) => activity.activity === "skill" ? activity.phase === "ready" || activity.phase === "failed" : activity.status !== "running")
-  const continuing = continueProcessing && allSettled
+  const continuing = !terminal && continueProcessing && allSettled
   const summary = summarizeProcessActivities(activities).map(({ key, count }) => t(key, { count })).join(" · ")
   const continuation = continuing ? <span className={styles.actionContinuation} role="status">{t("thread.continueProcessing")}</span> : null
 
@@ -112,7 +114,7 @@ export function SegmentProcess({
       {!single && !direct ? <CollapsibleTrigger asChild>
         <Button variant="ghost" type="button" className={styles.processSummary}>
           <span className={styles.processTitle} title={summary}>{summary}</span>
-          {!allSettled ? <span className={styles.actionStatus}>{t("thread.processRunning")}</span> : null}
+          {!allSettled ? <span className={styles.actionStatus}>{t(terminal ? "thread.runEnded" : "thread.processRunning")}</span> : null}
           {continuation}
           <ChevronDown className={styles.processChevron} aria-hidden="true" />
         </Button>
@@ -126,7 +128,7 @@ export function SegmentProcess({
             if (single) setFocusedDirectRow(true)
           }}>
             <div className={styles.actgroup}>
-              <ProcessActivityRows {...(activityDetails ? { activityDetails } : {})} {...(onOpenActivity ? { onOpenActivity } : {})} activities={activities} continuation={single ? continuation : null} />
+              <ProcessActivityRows {...(activityDetails ? { activityDetails } : {})} {...(onOpenActivity ? { onOpenActivity } : {})} activities={activities} terminal={terminal} continuation={single ? continuation : null} />
             </div>
           </div>
         </div>

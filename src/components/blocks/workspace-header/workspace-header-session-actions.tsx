@@ -21,9 +21,6 @@ export function WorkspaceHeaderSessionActions({
   projectInstruction,
   projectDelete,
   shareClient,
-  shareReadBoundary,
-  shareScope,
-  sharePreview,
 }: WorkspaceHeaderActionProps) {
   const t = useT()
 
@@ -76,7 +73,7 @@ export function WorkspaceHeaderSessionActions({
         emptyWorkspace={false}
         {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
       />
-      {activeId !== null ? <ShareButton key={activeId} client={shareClient} sessionId={activeId} {...(shareReadBoundary === undefined ? {} : { readBoundary: shareReadBoundary })} {...(shareScope === undefined ? {} : { scope: shareScope })} {...(sharePreview === undefined ? {} : { preview: sharePreview })} /> : null}
+      {activeId !== null ? <ShareButton key={activeId} client={shareClient} sessionId={activeId} /> : null}
       <Button
         type="button"
         variant="ghost"

@@ -24,7 +24,6 @@ import { createPricingClient, type PricingClient } from "@/billing/pricing"
 import { createHubClient, type HubClient } from "@/hub/client"
 import { createTeamClient, type TeamClient } from "@/team/client"
 import { createAgentClient, type AgentClient } from "@/agents/client"
-import { createPreviewAgentClient } from "@/agents/preview-client"
 import {
   createPreviewBillingClient,
   createPreviewHubClient,
@@ -35,15 +34,15 @@ import {
 import type { SubmissionRecovery } from "@/engine/submission-recovery"
 import { createBrowserSubmissionRecovery, SUBMISSION_RECOVERY_PREFIX } from "./browser-submission-recovery"
 
-import { consumeLandingPrompt } from "./use-draft"
+import { bindVerifiedDraftOwner, consumeLandingPrompt, DRAFTS_STORAGE_KEY, writeLandingPendingDraft } from "./use-draft"
 
 const STORAGE_KEY = "kokoro.web.conversations"
 export const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
-// Set only by successful Product Session admission in this document, never restored from a marker.
+// Set only by successful native admission in this document, never restored from a marker.
 let admittedBrowserSubject: string | null = null
 let capturePartsReadRecheck: ((subject: string) => MessagePartsReadRecheck | undefined) | undefined
 
-/** AppGate supplies its existing Product Session admission, never a cache marker. */
+/** AppGate supplies its existing native admission, never a cache marker. */
 export function bindBrowserMessagePartsReadRecheck(capture: NonNullable<typeof capturePartsReadRecheck>): () => void {
   capturePartsReadRecheck = capture
   return () => { if (capturePartsReadRecheck === capture) capturePartsReadRecheck = undefined }
@@ -53,6 +52,7 @@ export function bindBrowserMessagePartsReadRecheck(capture: NonNullable<typeof c
 export function invalidateBrowserAuthSessionIndexes(): void {
   if (typeof window === "undefined") return
   admittedBrowserSubject = null
+  bindVerifiedDraftOwner(null)
   for (const [key, entry] of pageEngines) {
     if (key.startsWith("live:")) {
       entry.invalidated = true
@@ -75,20 +75,20 @@ export function invalidateBrowserAuthSessionIndexes(): void {
   for (const key of keys) window.localStorage.removeItem(key)
 }
 
-/** Cache marker only; Product Session remains the sole authentication proof. */
+/** Cache marker only; native admission remains the sole authentication proof. */
 export function readBrowserAuthIndexSubject(): string | null {
   if (typeof window === "undefined") return null
   return window.localStorage.getItem(AUTH_INDEX_SUBJECT_KEY)
 }
 
 /** Invalidate browser-owned indexes only when a verified subject changes. */
-export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeStart: string | null): boolean {
+export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeStart: string | null, tenant?: string): boolean {
   const currentSubject = readBrowserAuthIndexSubject()
   if (currentSubject !== subjectAtProbeStart && currentSubject !== subject) return false
   if (currentSubject !== subject) {
     invalidateBrowserAuthSessionIndexes()
     // Never retain unknown/previous-actor data as an anonymous prompt.
-    window.localStorage.removeItem("kokoro.web.drafts")
+    window.localStorage.removeItem(DRAFTS_STORAGE_KEY)
     const projectDraftKeys: string[] = []
     for (let index = 0; index < window.sessionStorage.length; index += 1) {
       const key = window.sessionStorage.key(index)
@@ -98,16 +98,10 @@ export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeSt
     window.sessionStorage.removeItem("kokoro.web.pending-creation-intent")
   }
   const prompt = consumeLandingPrompt()
-  if (prompt !== null) {
-    const raw = window.localStorage.getItem("kokoro.web.drafts")
-    const drafts: unknown = raw === null ? {} : JSON.parse(raw)
-    if (typeof drafts !== "object" || drafts === null || Array.isArray(drafts) ||
-      Object.values(drafts).some((value) => typeof value !== "string")) throw new Error("invalid browser draft map")
-    // Do not use persisted-store.write: it intentionally swallows storage errors.
-    window.localStorage.setItem("kokoro.web.drafts", JSON.stringify({ ...drafts, __pending__: prompt }))
-  }
+  if (prompt !== null) writeLandingPendingDraft(prompt)
   if (currentSubject !== subject) window.localStorage.setItem(AUTH_INDEX_SUBJECT_KEY, subject)
   admittedBrowserSubject = subject
+  bindVerifiedDraftOwner(subject, tenant)
   return true
 }
 
@@ -170,12 +164,7 @@ export function browserTeamClient(options: { preview?: boolean } = {}): TeamClie
 }
 
 let pageAgentClient: AgentClient | null = null
-let pagePreviewAgentClient: AgentClient | null = null
-export function browserAgentClient(options: { preview?: boolean } = {}): AgentClient {
-  if (options.preview === true) {
-    if (!pagePreviewAgentClient) pagePreviewAgentClient = createPreviewAgentClient()
-    return pagePreviewAgentClient
-  }
+export function browserAgentClient(): AgentClient {
   if (!pageAgentClient) pageAgentClient = createAgentClient()
   return pageAgentClient
 }
@@ -423,7 +412,7 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
       })
     const url = new URL(window.location.href)
     const bareHome = scope.kind === "direct" && url.pathname.replace(/\/$/u, "") === "/app"
-      && !url.searchParams.has("conversation") && !/^#\/?conversation(?:=|\/)/u.test(url.hash)
+      && !url.searchParams.has("conversation")
     let initialHome = submissionRecovery && bareHome ? prepareDirectHome(storage, draftLifecycle, submissionRecovery) : undefined
     if (submissionRecovery && bareHome && initialHome === undefined) return null
     const engineStorage: PersistedStore<ConversationStore> = initialHome === undefined ? storage : {

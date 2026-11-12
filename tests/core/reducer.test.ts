@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
-import { parseChatProjectionEvent, type ChatProjectionEvent } from "@/core/chat-projection-event"
+import { parseChatProjectionEvent, type ReducerProjectionEvent as ChatProjectionEvent } from "@/core/chat-projection-event"
 import { stateFromSnapshot } from "@/core/hydration"
 import {
   applyChatProjectionEvent,
@@ -37,7 +37,7 @@ function toolStatusOf(state: SessionStreamState, runId: string, toolId: string) 
 
 describe("event_id 幂等去重", () => {
   it("同一 event_id 第二次折叠原样返回同一引用", () => {
-    const event = makeEvent("message.delta", { segment_id: "seg_1", delta: "hi" })
+    const event = makeEvent("message.text_snapshot", { segment_id: "seg_1", content: "hi" })
     const once = applyChatProjectionEvent(createSessionStreamState(), event)
     const twice = applyChatProjectionEvent(once, event)
     expect(twice).toBe(once)
@@ -46,7 +46,7 @@ describe("event_id 幂等去重", () => {
   })
 
   it("批内重复 event_id 只折叠一次", () => {
-    const event = makeEvent("message.delta", { segment_id: "seg_1", delta: "hi" })
+    const event = makeEvent("message.text_snapshot", { segment_id: "seg_1", content: "hi" })
     const state = applyChatProjectionEvents(createSessionStreamState(), [event, event, event])
     expect(state.messages[0]?.content).toBe("hi")
   })
@@ -58,9 +58,9 @@ describe("replay 收敛", () => {
     const skill = { activity: "skill" as const, activity_id: `act_${"3".repeat(64)}`, preflight_id: `spf_${"4".repeat(64)}`, source_refs: ["skill:alpha"], phase: "failed" as const, error_code: "skill_load_failed" as const }
     const first = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("run.created", { run_id: "run_1" }, { seq: 1 }),
-      makeEvent("message.delta", { segment_id: "text_a", delta: "A" }, { seq: 2 }),
+      makeEvent("message.text_snapshot", { segment_id: "text_a", content: "A" }, { seq: 2 }),
       makeEvent("activity.updated", tool, { seq: 3 }),
-      makeEvent("message.delta", { segment_id: "text_b", delta: "B" }, { seq: 4 }),
+      makeEvent("message.text_snapshot", { segment_id: "text_b", content: "B" }, { seq: 4 }),
       makeEvent("activity.updated", skill, { seq: 5 }),
     ])
     const completed = { ...tool, status: "completed" as const }
@@ -129,7 +129,7 @@ describe("replay 收敛", () => {
         result: "ok",
         is_error: false,
       }),
-      makeEvent("message.delta", { segment_id: "seg_2", delta: "half" }),
+      makeEvent("message.text_snapshot", { segment_id: "seg_2", content: "half" }),
       makeEvent("message.completed", { segment_id: "seg_2", content: "full answer" }),
       makeEvent("todo.updated", {
         todos: [{ content: "step", status: "completed" }],
@@ -189,7 +189,7 @@ describe("session.created / run.created 投影", () => {
 describe("乱序 seq 稳定插入", () => {
   it("迟到的低 seq 步骤插入到正确位置", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [
-      makeEvent("message.delta", { segment_id: "seg_2", delta: "answer" }, { seq: 7 }),
+      makeEvent("message.text_snapshot", { segment_id: "seg_2", content: "answer" }, { seq: 7 }),
       makeEvent(
         "tool.invoked",
         { segment_id: "seg_1", tool_id: "tool_1", name: "search", args: {} },
@@ -596,7 +596,7 @@ describe("边界矩阵", () => {
   ] as const)("%s 不崩溃且保持有序", (_label, payload) => {
     const state = applyChatProjectionEvent(
       createSessionStreamState(),
-      makeEvent("message.delta", payload),
+      makeEvent("message.text_snapshot", { segment_id: payload.segment_id, content: payload.delta }),
     )
     expect(state.messages).toHaveLength(1)
   })
@@ -720,7 +720,7 @@ describe("snapshot prefix association", () => {
   it("binds END without adding an empty segment or losing the durable identity", () => {
     const initial = prefix()
     const ended = applyChatProjectionEvent(initial,
-      makeEvent("message.delta", { segment_id: "wire", delta: "", text_boundary: "end" }))
+      makeEvent("message.text_snapshot", { segment_id: "wire", content: "prefix 0", text_boundary: "end" }))
     expect(ended.messages).toHaveLength(1)
     expect(ended.messages[0]).toMatchObject({ id: "wire", snapshotMessageId: "durable_0", content: "prefix 0", awaitingTextSegment: false })
     expect(ended.stepsByRun.run_1).toEqual([{ kind: "text", seq: -1, segmentId: "wire" }])
@@ -730,9 +730,9 @@ describe("snapshot prefix association", () => {
 
   it("new START cannot claim the prefix, including when later CONTENT has no boundary", () => {
     const state = applyChatProjectionEvents(prefix(), [
-      makeEvent("message.delta", { segment_id: "new", delta: "", text_boundary: "start" }),
-      makeEvent("message.delta", { segment_id: "new", delta: "new text" }),
-      makeEvent("message.delta", { segment_id: "new", delta: "", text_boundary: "end" }),
+      makeEvent("message.text_snapshot", { segment_id: "new", content: "", text_boundary: "start" }),
+      makeEvent("message.text_snapshot", { segment_id: "new", content: "new text" }),
+      makeEvent("message.text_snapshot", { segment_id: "new", content: "new text", text_boundary: "end" }),
     ])
     expect(state.messages.map((message) => [message.id, message.content])).toEqual([
       ["durable_0", "prefix 0"], ["new", "new text"],
@@ -743,7 +743,7 @@ describe("snapshot prefix association", () => {
   it.each(["terminal", "other-run", "ambiguous"])("does not infer a prefix association for %s", (mode) => {
     const initial = prefix(mode !== "terminal", mode === "ambiguous" ? 2 : 1)
     const next = applyChatProjectionEvent(initial,
-      makeEvent("message.delta", { segment_id: "wire", delta: "new" }, { run_id: mode === "other-run" ? "run_2" : "run_1" }))
+      makeEvent("message.text_snapshot", { segment_id: "wire", content: "new" }, { run_id: mode === "other-run" ? "run_2" : "run_1" }))
     expect(next.messages.slice(0, initial.messages.length)).toEqual(initial.messages)
     expect(next.messages.at(-1)).toMatchObject({ id: "wire", content: "new" })
     expect(next.messages).toHaveLength(initial.messages.length + 1)
@@ -751,7 +751,7 @@ describe("snapshot prefix association", () => {
 
   it("same render ID in another run never overwrites the snapshot prefix", () => {
     const next = applyChatProjectionEvent(prefix(),
-      makeEvent("message.delta", { segment_id: "durable_0", delta: "other" }, { run_id: "run_2" }))
+      makeEvent("message.text_snapshot", { segment_id: "durable_0", content: "other" }, { run_id: "run_2" }))
     expect(next.messages.map((message) => [message.runId, message.content])).toEqual([
       ["run_1", "prefix 0"], ["run_2", "other"],
     ])

@@ -209,15 +209,16 @@ export function AppFrameShell({
                       {...(readBoundary === undefined ? {} : { readBoundary })}
                       sessionId={activeId}
                       content={canvas.resolvedCanvas}
-                      files={thread.files}
+                      files={canvas.files}
                       deliveries={thread.deliveries}
                       deliveriesHasMore={thread.deliveriesHasMore}
                       todos={currentRunProgressTodos(thread)}
                       focusScopeRef={shellRef}
                       fullscreen={canvas.fullscreen}
-                      onSelectFile={canvas.onSelectFile}
+                      onSelectFile={canvas.openFile}
                       onSelectDelivery={canvas.onSelectDelivery}
                       onToggleFullscreen={canvas.onToggleFullscreen}
+                      isCurrentOpening={canvas.isCurrentOpening}
                       onClose={canvas.onClose}
                     />
                   </ResizablePanel>

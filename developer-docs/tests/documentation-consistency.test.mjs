@@ -11,6 +11,7 @@ import { collectSchemaRows } from '../scripts/lib/schema-renderer.mjs';
 
 const portalRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const docsRoot = join(portalRoot, 'docs');
+const apiRoot = join(docsRoot, 'api');
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
@@ -44,16 +45,16 @@ test('authored portal pages are Chinese and the required reading route exists', 
 
   const config = readFileSync(join(docsRoot, '.vitepress/config.mts'), 'utf8');
   for (const route of [
-    '/introduction',
-    '/quickstart',
-    '/authentication',
-    '/reference/v1/',
-    '/platform/responses-errors',
-    '/platform/idempotency',
-    '/concepts/ag-ui',
-    '/guides/cursor-pagination',
-    '/changelog',
-    '/provenance',
+    '/api/',
+    '/api/quickstart',
+    '/api/authentication',
+    '/api/reference/v1/',
+    '/api/platform/responses-errors',
+    '/api/platform/idempotency',
+    '/api/concepts/ag-ui',
+    '/api/guides/cursor-pagination',
+    '/api/changelog',
+    '/api/provenance',
   ]) {
     assert.match(config, new RegExp(`link: '${route.replaceAll('/', '\\/')}`));
   }
@@ -77,15 +78,7 @@ test('the generated reference is the metadata inventory for the pinned BFF contr
     operation.owner === entry.owner
       && operation.visibility === entry.visibility
       && ['stable', 'beta', 'experimental'].includes(operation.stability)
-      && (['none', 'required', 'inherent'].includes(operation.idempotency)
-        || (operation.idempotency === 'natural'
-          && operation.method === 'PUT'
-          && ((operation.path === '/v1/projects/{projectId}/mcp-recommendations'
-            && operation.operationId === 'replaceProjectMcpRecommendations')
-            || (operation.path === '/v1/projects/{projectId}/pin'
-              && operation.operationId === 'setProjectPin')
-            || (operation.path === '/v1/sessions/{id}/messages/{messageId}/feedback'
-              && operation.operationId === 'setMessageFeedback')))),
+      && ['none', 'required', 'inherent', 'natural'].includes(operation.idempotency),
   ));
 
   const referenceText = [...files.values()].join('\n');
@@ -103,11 +96,12 @@ test('the generated reference is the metadata inventory for the pinned BFF contr
         method: method.toUpperCase(),
         operationId: operation.operationId,
         path,
+        idempotency: operation['x-kokoro-idempotency'],
       });
     }
   }
   assert.deepEqual(
-    manifest.operations.map(({ method, operationId, path }) => ({ method, operationId, path })),
+    manifest.operations.map(({ method, operationId, path, idempotency }) => ({ method, operationId, path, idempotency })),
     sourceOperations,
   );
 
@@ -148,7 +142,7 @@ test('authored policy pages distinguish contract facts from non-contract guidanc
     'platform/rate-limits-retries.md',
     'platform/versioning.md',
     'concepts/ag-ui.md',
-  ].map((path) => readFileSync(join(docsRoot, path), 'utf8')).join('\n');
+  ].map((path) => readFileSync(join(apiRoot, path), 'utf8')).join('\n');
 
   assert.match(pages, /唯一字段事实源|唯一.*事实源/u);
   assert.match(pages, /不属于.*契约|未发布|当前.*未/u);
@@ -161,12 +155,12 @@ test('authored protocol pages cite only observable BFF facts', () => {
   const entry = catalog.contracts[0];
   assert.ok(entry);
   const { contract } = loadPinnedPublicContract(entry, { portalRoot });
-  const authentication = readFileSync(join(docsRoot, 'authentication.md'), 'utf8');
-  const requestIds = readFileSync(join(docsRoot, 'platform/request-ids.md'), 'utf8');
-  const errors = readFileSync(join(docsRoot, 'platform/responses-errors.md'), 'utf8');
-  const rateLimits = readFileSync(join(docsRoot, 'platform/rate-limits-retries.md'), 'utf8');
-  const time = readFileSync(join(docsRoot, 'platform/time.md'), 'utf8');
-  const projects = readFileSync(join(docsRoot, 'concepts/projects.md'), 'utf8');
+  const authentication = readFileSync(join(apiRoot, 'authentication.md'), 'utf8');
+  const requestIds = readFileSync(join(apiRoot, 'platform/request-ids.md'), 'utf8');
+  const errors = readFileSync(join(apiRoot, 'platform/responses-errors.md'), 'utf8');
+  const rateLimits = readFileSync(join(apiRoot, 'platform/rate-limits-retries.md'), 'utf8');
+  const time = readFileSync(join(apiRoot, 'platform/time.md'), 'utf8');
+  const projects = readFileSync(join(apiRoot, 'concepts/projects.md'), 'utf8');
 
   const schemes = contract.components?.securitySchemes ?? {};
   for (const scheme of Object.values(schemes)) {

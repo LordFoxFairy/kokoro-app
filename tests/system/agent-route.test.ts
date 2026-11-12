@@ -1,119 +1,124 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, expect, it, vi } from "vitest"
 
-const { productBffConfig, admittedProductSession, requestWithDomain, sameOriginOk } = vi.hoisted(() => ({
-  productBffConfig: vi.fn(),
-  admittedProductSession: vi.fn(),
-  requestWithDomain: vi.fn(),
-  sameOriginOk: vi.fn(() => true),
+const { productBffConfig, requestWithDomain } = vi.hoisted(() => ({
+  productBffConfig: vi.fn(), requestWithDomain: vi.fn(),
+}))
+vi.mock("@/lib/server/product-bff", async (load) => ({
+  ...(await load<typeof import("@/lib/server/product-bff")>()), productBffConfig,
+}))
+vi.mock("@/lib/server/upstream-http", async (load) => ({
+  ...(await load<typeof import("@/lib/server/upstream-http")>()), requestWithDomain,
 }))
 
-vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }))
-vi.mock("@/lib/server/product-bff", () => ({
-  productBffConfig,
-  admittedProductSession,
-  productBffHeaders: (config: { internalSecret?: string | null }, claims: { access: string }, requestId: string) => {
-    const headers = new Headers({
-      authorization: `Bearer ${claims.access}`,
-      "x-kokoro-service": "web-bff",
-      "x-kokoro-request-id": requestId,
-    })
-    if (config.internalSecret) headers.set("x-kokoro-internal-secret", config.internalSecret)
-    return headers
-  },
-}))
-vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }))
+import { GET, POST } from "@/app/api/agents/[...path]/route"
 
-import { GET } from "@/app/api/agents/[...path]/route"
+const url = "https://app.example/api/agents/connections/setup?platform=telegram"
+const cookie = "kokoro-issuer.session_token=fixture"
+const context = { params: Promise.resolve({ path: ["connections", "setup"] }) }
+const config = { bffBaseUrl: "https://bff.internal/", domain: "configured.product.test", internalSecret: "fixture",
+  session: { webOrigin: "https://app.example" } }
+afterEach(() => { vi.resetAllMocks() })
 
-describe("Agent connection setup BFF", () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-    productBffConfig.mockReset()
-    admittedProductSession.mockReset()
-    requestWithDomain.mockReset()
-    sameOriginOk.mockReset()
-    sameOriginOk.mockReturnValue(true)
-  })
-
-  it("forwards the authenticated setup request through the configured business BFF", async () => {
-    productBffConfig.mockReturnValue({
-      bffBaseUrl: "https://bff.internal/",
-      domain: "dev.kokoro.localhost",
-      internalSecret: "web-secret",
-    })
-    admittedProductSession.mockResolvedValue({
-      access: "product-access",
-      accessExpiresAt: Date.now() + 60_000,
-    })
-    requestWithDomain.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            platform: "telegram",
-            status: "disconnected",
-            qr_value: "https://agents.fixture.test/qr",
-            continue_url: "https://agents.fixture.test/continue",
-            expires_at: "2099-01-01T00:00:00.000Z",
-          },
-        }),
-        {
-          status: 200,
-          headers: {
-            "content-type": "application/json",
-            "cache-control": "no-store",
-          },
-        },
-      ),
-    )
-
-    const response = await GET(
-      new Request("https://app.example/api/agents/connections/setup?platform=telegram&ignored=drop", {
-        headers: { "x-kokoro-request-id": "req_1" },
-      }),
-      { params: Promise.resolve({ path: ["connections", "setup"] }) },
-    )
-
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ platform: "telegram" })
-    const [target, domain, init] = requestWithDomain.mock.calls[0] as [string, string, RequestInit]
+it("same-origin GET/POST carry only native identity and correlate the closed owner envelope", async () => {
+  productBffConfig.mockReturnValue(config)
+  const commands: string[] = []
+  requestWithDomain.mockImplementation(async (target: string, domain: string, init: { method: string; body?: ArrayBuffer; headers: Headers }) => {
     expect(target).toBe("https://bff.internal/v1/agents/connections/setup?platform=telegram")
-    expect(domain).toBe("dev.kokoro.localhost")
-    const headers = new Headers(init.headers)
-    expect(headers.get("authorization")).toBe("Bearer product-access")
-    expect(headers.get("x-kokoro-service")).toBe("web-bff")
-    expect(headers.get("x-kokoro-internal-secret")).toBe("web-secret")
-    expect(headers.get("x-kokoro-namespace")).toBeNull()
-    expect(headers.get("x-kokoro-principal-id")).toBeNull()
-    expect(headers.get("x-kokoro-request-id")).toBe("req_1")
+    expect(domain).toBe(config.domain)
+    expect(init.headers.get("cookie")).toBe(cookie)
+    expect(init.headers.get("x-kokoro-subject")).toBeNull()
+    const id = init.headers.get("x-kokoro-request-id")!
+    if (init.method === "POST") {
+      commands.push(new TextDecoder().decode(init.body))
+      return Response.json({ error: { code: "agent_connection_precondition_failed", message: "stale" }, meta: { request_id: id } },
+        { status: 412, headers: { "cache-control": "no-store", "x-request-id": id } })
+    }
+    return Response.json({ data: { platform: "telegram", status: "disconnected", state_version: "1" }, meta: { request_id: id } },
+      { headers: { "cache-control": "no-store", "x-request-id": id } })
   })
+  const get = await GET(new Request(url, { headers: { cookie } }), context)
+  expect(get.status).toBe(200)
+  expect(await get.json()).toMatchObject({ data: { status: "disconnected" }, meta: { request_id: get.headers.get("x-request-id") } })
+  const body = '{ "action":"start","expected_state_version":"1" }'
+  const post = await POST(new Request(url, { method: "POST", body, headers: {
+    cookie, "content-type": "application/json", origin: config.session.webOrigin, "x-kokoro-subject": "forged",
+  } }), context)
+  expect(post.status).toBe(412)
+  expect(commands).toEqual([body])
+})
 
-  it("rejects unsupported platforms and does not proxy them", async () => {
-    productBffConfig.mockReturnValue({
-      bffBaseUrl: "https://bff.internal",
-      domain: "dev.kokoro.localhost",
-    })
+it("unknown query, foreign POST and browser webhook aliases never dispatch", async () => {
+  productBffConfig.mockReturnValue(config)
+  const get = (target: string) => new Request(target, { headers: { cookie } })
+  expect((await GET(get(`${url}&ignored=1`), context)).status).toBe(400)
+  const post = new Request(url, { method: "POST", body: '{"action":"start","expected_state_version":"1"}',
+    headers: { cookie, "content-type": "application/json", origin: "https://foreign.example" } })
+  expect((await POST(post, context)).status).toBe(403)
+  expect((await POST(post, { params: Promise.resolve({ path: ["connections", "telegram", "webhook"] }) })).status).toBe(404)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
 
-    const response = await GET(new Request("https://app.example/api/agents/connections/setup?platform=irc"), {
-      params: Promise.resolve({ path: ["connections", "setup"] }),
-    })
-
-    expect(response.status).toBe(400)
-    expect(await response.json()).toEqual({ error: "invalid_agent_platform" })
-    expect(requestWithDomain).not.toHaveBeenCalled()
-    expect(admittedProductSession).not.toHaveBeenCalled()
+it("LINE continuation only returns the official URL bound to the original setup and link token", async () => {
+  productBffConfig.mockReturnValue(config)
+  const line = "https://app.example/api/agents/connections/line/continue"
+  const route = { params: Promise.resolve({ path: ["connections", "line", "continue"] }) }
+  const setup_id = "a".repeat(32)
+  const token = "line-test-token"
+  const nonce = setup_id + "b".repeat(32)
+  const official = `https://access.line.me/dialog/bot/accountLink?${new URLSearchParams({ linkToken: token, nonce })}`
+  const command = JSON.stringify({ setup_id, expected_state_version: "3", link_token: token })
+  const request = (origin = config.session.webOrigin) => new Request(line, { method: "POST", body: command,
+    headers: { cookie, "content-type": "application/json", origin } })
+  let returnedUrl = official
+  requestWithDomain.mockImplementation(async (target: string, domain: string, init: { body: ArrayBuffer; headers: Headers }) => {
+    expect(target).toBe("https://bff.internal/v1/agents/connections/line/continue")
+    expect(domain).toBe(config.domain)
+    expect(new TextDecoder().decode(init.body)).toBe(command)
+    const id = init.headers.get("x-kokoro-request-id")!
+    return Response.json({ data: { platform: "line", status: "awaiting_line_callback", setup_id,
+      state_version: "4", expires_at: "2099-08-30T06:30:00.000Z", continue_url: returnedUrl }, meta: { request_id: id } },
+      { headers: { "cache-control": "no-store", "referrer-policy": "no-referrer", "x-request-id": id } })
   })
+  expect((await POST(request("https://foreign.example"), route)).status).toBe(403)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+  const receipt = await POST(request(), route)
+  expect(receipt.status).toBe(200)
+  expect(receipt.headers.get("referrer-policy")).toBe("no-referrer")
+  expect((await receipt.json()).data.continue_url).toBe(official)
+  returnedUrl = official.replace(token, "wrong-token")
+  const wrong = await POST(request(), route)
+  expect(wrong.status).toBe(502)
+  expect(await wrong.text()).not.toContain("wrong-token")
+})
 
-  it("returns a typed unavailable response when the agent service is not configured", async () => {
-    productBffConfig.mockReturnValue({
-      bffBaseUrl: null,
-      domain: "dev.kokoro.localhost",
-    })
-
-    const response = await GET(new Request("https://app.example/api/agents/connections/setup?platform=telegram"), {
-      params: Promise.resolve({ path: ["connections", "setup"] }),
-    })
-
-    expect(response.status).toBe(503)
-    expect(await response.json()).toEqual({ error: "agent_not_configured" })
+it("Slack top-level callback sends a bounded private POST and always redirects without its query", async () => {
+  productBffConfig.mockReturnValue(config)
+  const callback = "https://app.example/api/agents/connections/slack/callback"
+  const route = { params: Promise.resolve({ path: ["connections", "slack", "callback"] }) }
+  const state = "a".repeat(32)
+  const code = "1234.5678.fixture"
+  const go = (query: string, session = cookie) => GET(new Request(`${callback}?${query}`, { headers: {
+    cookie: session, "sec-fetch-mode": "navigate", "sec-fetch-dest": "document",
+  } }), route)
+  requestWithDomain.mockImplementation(async (target: string, domain: string, init: { method: string; body: ArrayBuffer; headers: Headers }) => {
+    expect(target).toBe("https://bff.internal/v1/agents/connections/slack/complete")
+    expect(domain).toBe(config.domain)
+    expect(init.method).toBe("POST")
+    expect(init.headers.get("cookie")).toBe(cookie)
+    expect(init.headers.get("origin")).toBe(config.session.webOrigin)
+    expect(JSON.parse(new TextDecoder().decode(init.body))).toEqual({ state, code })
+    return new Response(null, { status: 409 }) // An owner refusal is never shown as a connection.
   })
+  const assertSafeReturn = async (result: Response) => {
+    expect(result.status).toBe(303)
+    expect(result.headers.get("location")).toBe("/app/agents?connection=slack")
+    expect(result.headers.get("cache-control")).toContain("no-store")
+    expect(result.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(await result.text()).toBe("")
+  }
+  await assertSafeReturn(await go(`error=access_denied&state=${state}`))
+  await assertSafeReturn(await go(`code=${code}&state=${state}`, ""))
+  expect(requestWithDomain).not.toHaveBeenCalled()
+  await assertSafeReturn(await go(`code=${code}&state=${state}`))
+  expect(requestWithDomain).toHaveBeenCalledTimes(1)
 })

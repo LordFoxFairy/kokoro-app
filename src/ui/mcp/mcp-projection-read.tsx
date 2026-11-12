@@ -19,7 +19,6 @@ import { McpCustomApiGallery, visibleCustomApiGalleryProfiles } from "./mcp-cust
 import { McpPersonalServerGallery, visiblePersonalMcpServers } from "./mcp-personal-server-gallery";
 import { McpConnectorEditorDialog } from "./mcp-connector-editor-dialog";
 import { useMcpTrial } from "./mcp-trial-context";
-import { McpManagementStatus } from "./mcp-management-status";
 import { McpPreparationStatus } from "./mcp-preparation-status";
 import { useMcpPreparationHistory } from "./use-mcp-preparation-history";
 import { samePreparationRecord, type McpPreparationRecord } from "./mcp-preparation-recovery";
@@ -460,29 +459,6 @@ export function McpProjectionRead({
     if (origin === "editor") resetEditor();
     else { setSelectedProviderKey(null); setSelectedProviderConnectionId(null); }
   };
-  // A new authorization is a separate command; the source detail stays read-only.
-  const runReauthorization = async (resume = false) => {
-    const intent = connectorIntent, wait = editorWindow.current;
-    if (!intent?.readOnlyConfiguration || !intent.serverId || !wait || wait.intent !== intent.window ||
-      !admitted || ownerRef.current !== owner || wait.controller.signal.aborted) return;
-    const pending = management.getSnapshot().find(item => item.connectorId === intent.connectorId);
-    if (resume ? pending?.operation !== "reauthorize_server" : pending !== undefined && pending.kind !== "rejected") return;
-    if (!resume && (!editor?.server || editor.server.server_id !== intent.serverId ||
-      editor.connector.connector_id !== intent.connectorId || !isDisconnectedMcpConfiguration(editor.connector) ||
-      !visibleSavedConfiguration(editor.connector) || management.getConfirmedDeletedSnapshot().includes(intent.connectorId) ||
-      management.getConfirmedRevokedSnapshot().some(fact => fact.connectorId === intent.connectorId &&
-        BigInt(editor.connector.state_version) < BigInt(fact.stateVersion)) || !preparation.recoveryReady())) return;
-    const confirmed = resume ? await management.resume(intent.connectorId, commandBoundary, wait.controller.signal)
-      : await management.submit({ operation: "reauthorize_server", connectorId: intent.connectorId, serverId: intent.serverId,
-        providerKey: editor!.connector.provider_key, input: { source_connector_id: intent.connectorId,
-          expected_server_state_version: editor!.server!.state_version, expected_connector_state_version: editor!.connector.state_version } }, commandBoundary, wait.controller.signal);
-    if (!confirmed || ownerRef.current !== owner || editorWindow.current !== wait || wait.controller.signal.aborted) return;
-    const target = management.getCompletion(intent.connectorId, commandBoundary);
-    if (!target || !management.finish(intent.connectorId, commandBoundary)) return;
-    setEditor(null); setDeleteId(null); setActionError(false); setDetailAttempt(null);
-    // Historical ACK is only a locator. This new window must read Current first.
-    setConnectorIntent({ ...target, exact: true, entered: false, window: {}, binding: { connectorType: "mcp", serverId: target.serverId } });
-  };
   const prepareDetail = async (newAttempt: boolean) => {
     if (editorCommandsBlocked() || !admitted || ownerRef.current !== owner || !preparation.available || !connectorIntent?.serverId) return;
     const intent = connectorIntent, serverId = intent.serverId!, connectorId = intent.connectorId, window = editorWindow.current;
@@ -848,8 +824,7 @@ export function McpProjectionRead({
       {view === "connections" && admitted ? managementStates.filter(item => item.kind !== "rejected" && !confirmedDeletedIds.includes(item.connectorId) && !connectors.some(connector => connector.connector_id === item.connectorId)).map(item =>
         <Button key={item.connectorId} type="button" variant="outline" className="max-w-full" onClick={event => {
           editorReturnFocusRef.current = event.currentTarget; setActionError(false); setEditor(null);
-          setConnectorIntent({ connectorId: item.connectorId, ...(item.serverId ? { serverId: item.serverId } : {}),
-            ...(item.operation === "reauthorize_server" ? { readOnlyConfiguration: true as const, exact: true } : {}), entered: true, window: {} });
+          setConnectorIntent({ connectorId: item.connectorId, ...(item.serverId ? { serverId: item.serverId } : {}), entered: true, window: {} });
         }}><span className="truncate">{t(item.kind === "completed" ? "mcp.creationDone" : "mcp.retryOriginal")} · {item.connectorId}</span></Button>) : null}
       {view === "connections" && admitted ? apiManagementStates.filter(item =>
         item.kind !== "rejected" && !confirmedDeletedApiIds.includes(item.profileId) && !customApis.some(profile => profile.profile_id === item.profileId)
@@ -927,10 +902,6 @@ export function McpProjectionRead({
         <CustomMcpDetailDialog
           iconClient={client.mcpIcons} iconBoundary={commandBoundary}
           readOnlyConfiguration={readOnlyDetail}
-          onNewAuthorization={connectorIntent.readOnlyConfiguration && client.reauthorizePrivateMcpServer ? () => { void runReauthorization(); } : undefined}
-          newAuthorizationDisabled={!admitted || !editor?.server || !isDisconnectedMcpConfiguration(editor.connector) || !preparation.recoveryReady() || management.isBlocked(connectorIntent.connectorId)}
-          reauthorizationStatus={connectorIntent.readOnlyConfiguration && managementState?.operation === "reauthorize_server" ? <McpManagementStatus
-            command={managementState} admitted={admitted} onResume={() => { void runReauthorization(true); }} /> : undefined}
           key={connectorIntent.serverId}
           connector={editor?.server ? editor.connector : null}
           server={editor?.server ?? null}

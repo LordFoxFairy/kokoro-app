@@ -1,10 +1,10 @@
 import { mergeFinalAnswerReference } from "./final-answer-reference"
 // 事件折叠：event_id 幂等去重 + 批量折叠（可变草稿一次快照）+ never 穷尽守卫。
 
-import { assertInteractionRevision, createSessionStreamState, normalizeRunTerminals } from "./state"
+import { assertInteractionRevision, createSessionStreamState } from "./state"
 import type { MessagePart } from "@/contract/chat"
 
-import type { ChatProjectionEvent } from "@/core/chat-projection-event"
+import type { ReducerProjectionEvent as ChatProjectionEvent } from "@/core/chat-projection-event"
 
 import type {
   SessionStep,
@@ -62,7 +62,7 @@ function closeSnapshotContinuation(draft: Draft, runId: string): void {
   }
 }
 
-function retainedByOrderedBaseline(state: SessionStreamState, event: EventOf<"message.delta"> | EventOf<"message.completed"> | EventOf<"activity.updated">): boolean {
+function retainedByOrderedBaseline(state: SessionStreamState, event: EventOf<"message.text_snapshot"> | EventOf<"message.completed"> | EventOf<"activity.updated">): boolean {
   const ordered = Object.values(state.messageParts ?? {}).find((part) => part.runId === event.run_id && part.descriptor)
   if (!ordered) return false
   // Missing coordinates are not upgraded from Agent seq, even if it is huge.
@@ -80,13 +80,13 @@ function stepPosition(event: { seq: number; publicSequence?: string | undefined 
 
 function applyAssistantText(
   draft: Draft,
-  event: EventOf<"message.delta"> | EventOf<"message.completed">,
+  event: EventOf<"message.text_snapshot"> | EventOf<"message.completed">,
 ): void {
   if (retainedByOrderedBaseline(draft.state, event)) return
   const { messages } = draft.state
   const segmentId = event.payload.segment_id
-  const incoming = event.kind === "message.completed" ? event.payload.content : event.payload.delta
-  const boundary = event.kind === "message.delta" ? event.payload.text_boundary : undefined
+  const incoming = event.payload.content
+  const boundary = event.kind === "message.text_snapshot" ? event.payload.text_boundary : undefined
   if (boundary === "start") {
     // A new segment is not a continuation of the pre-watermark prefix.
     closeSnapshotContinuation(draft, event.run_id)
@@ -110,10 +110,8 @@ function applyAssistantText(
   if (index >= 0) {
     const existing = messages[index]
     if (existing !== undefined) {
-      // completed 覆盖累计增量（replay 后不残留半句）；delta 追加。
-      const content =
-        event.kind === "message.completed" ? incoming : `${existing.content}${incoming}`
-      messages[index] = { ...existing, content, textState: event.kind === "message.completed" ? "completed" : "streaming", ...(existing.awaitingTextSegment ? { awaitingTextSegment: false } : {}) }
+      // Body assembly belongs solely to the SDK. Adopt its absolute snapshot.
+      messages[index] = { ...existing, content: incoming, textState: event.kind === "message.completed" ? "completed" : "streaming", ...(existing.awaitingTextSegment ? { awaitingTextSegment: false } : {}) }
     }
     return
   }
@@ -371,7 +369,7 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
       }
       break
     }
-    case "message.delta":
+    case "message.text_snapshot":
     case "message.completed":
       applyAssistantText(draft, event)
       break
@@ -481,6 +479,7 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
           runId: event.run_id,
           createdAt: event.timestamp,
           ...(payload.note !== undefined ? { note: payload.note } : {}),
+          ...(payload.display_path === undefined ? {} : { displayPath: payload.display_path }),
         },
       ]
       break
@@ -493,7 +492,7 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
     default: {
       // 穷尽保护：契约新增 kind 而未在此处理时编译期报错。
       const _exhaustive: never = event
-      return _exhaustive
+      throw new Error(`Unsupported reducer projection: ${String(_exhaustive)}`)
     }
   }
 }
@@ -504,7 +503,6 @@ export function applyChatProjectionEvents(
   state: SessionStreamState,
   events: readonly ChatProjectionEvent[],
 ): SessionStreamState {
-  state = normalizeRunTerminals(state)
   let draft: Draft | null = null
   for (const event of events) {
     const base = draft?.state ?? state
@@ -560,12 +558,12 @@ export function applyChatProjectionEvent(
 
 // —— 本地命令（非事件折叠）：用户动作驱动的纯状态迁移 ——
 
-// 用户输入本地产生、不进 seenEventIds；复位 runStatus 并清空 todo，历史步骤保留。
+// 新轮次清空旧进度；当前 Run 下排队的消息只追加输入，不动已有进度。
 export function appendUserMessage(
   state: SessionStreamState,
   message: { id: string; content: string },
+  preserveRun = false,
 ): SessionStreamState {
-  state = normalizeRunTerminals(state)
   return {
     ...state,
     messages: [
@@ -573,8 +571,7 @@ export function appendUserMessage(
       // 用户消息用自身 id 作 runId：投影据此把它与任一 assistant run 隔开，单独成行。
       { id: message.id, role: "user", content: message.content, runId: message.id },
     ],
-    todos: [],
-    runStatus: "idle",
+    ...(preserveRun ? {} : { todos: [], runStatus: "idle" }),
   }
 }
 
@@ -583,7 +580,6 @@ export function markRunCancelled(
   state: SessionStreamState,
   runId: string,
 ): SessionStreamState {
-  state = normalizeRunTerminals(state)
   const steps = state.stepsByRun[runId]
   if (!steps) {
     return state
@@ -601,7 +597,6 @@ export function markRunCancelled(
 export function mergeMessageParts(state: SessionStreamState, read: {
   message_id: string; run_id: string; revision: string; final_segment_id?: string | undefined; items: readonly MessagePart[];
 }, events: readonly ChatProjectionEvent[], complete: boolean): SessionStreamState {
-  state = normalizeRunTerminals(state)
   const known = state.messageParts?.[read.message_id]
   if (!known || known.runId !== read.run_id || BigInt(read.revision) < BigInt(known.revision)) return state
   let fragment = createSessionStreamState()
@@ -628,8 +623,8 @@ export function mergeMessageParts(state: SessionStreamState, read: {
     }
   }
   const newer = events.filter((event) => event.run_id === read.run_id && "publicSequence" in event && event.publicSequence !== undefined && BigInt(event.publicSequence) > BigInt(read.revision) &&
-    (event.kind === "message.delta" || event.kind === "message.completed" || event.kind === "activity.updated") &&
-    ((event.kind !== "message.delta" && event.kind !== "message.completed") || !heldTextSegments.has(event.payload.segment_id)))
+    (event.kind === "message.text_snapshot" || event.kind === "message.completed" || event.kind === "activity.updated") &&
+    ((event.kind !== "message.text_snapshot" && event.kind !== "message.completed") || !heldTextSegments.has(event.payload.segment_id)))
   fragment = applyChatProjectionEvents(fragment, newer)
   let messages = [...fragment.messages]
   const steps = [...(fragment.stepsByRun[read.run_id] ?? [])]
@@ -656,8 +651,6 @@ export function mergeMessageParts(state: SessionStreamState, read: {
 // A fresh private snapshot may omit all inline text. Keep confirmed visible
 // slots until its asynchronous version-bound read replaces this exact Message.
 export function preserveMessageParts(previous: SessionStreamState, next: SessionStreamState): SessionStreamState {
-  previous = normalizeRunTerminals(previous)
-  next = normalizeRunTerminals(next)
   let result = next
   for (const [runId, reference] of Object.entries(next.finalAnswersByRun ?? {})) {
     result = { ...result, finalAnswersByRun: { ...result.finalAnswersByRun, [runId]: mergeFinalAnswerReference(previous.finalAnswersByRun?.[runId], reference) } }

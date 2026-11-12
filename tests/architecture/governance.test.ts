@@ -50,7 +50,7 @@ describe("Web governance boundary", () => {
     expect(await exists("contract/openapi")).toBe(false)
   })
 
-  it("keeps Web free of database ownership and restricts Redis to server-only IAM/RP and Product Session coordination", async () => {
+  it("keeps Web free of database ownership and restricts Redis to server-only IAM interaction coordination", async () => {
     const packageSchema = z.object({
       dependencies: z.record(z.string()).optional(),
       devDependencies: z.record(z.string()).optional(),
@@ -64,8 +64,8 @@ describe("Web governance boundary", () => {
       expect(dependencies).not.toHaveProperty(dependency)
     }
     expect(parsed.dependencies?.redis).toBe("5.12.1")
-    expect(parsed.dependencies?.["next-auth"]).toBe("4.24.15")
-    expect(parsed.dependencies?.["openid-client"]).toBe("5.7.1")
+    expect(parsed.dependencies).not.toHaveProperty("next-auth")
+    expect(parsed.dependencies).not.toHaveProperty("openid-client")
     const sourceRoot = path.join(root, "src")
     const entries = await readdir(sourceRoot, { recursive: true })
     const redisImports: string[] = []
@@ -76,8 +76,6 @@ describe("Web governance boundary", () => {
     }
     expect(redisImports.sort()).toEqual([
       path.join("lib", "server", "iam-interaction-csrf.ts"),
-      path.join("lib", "server", "oidc-rp-transaction.ts"),
-      path.join("lib", "server", "product-session-store.ts"),
     ])
     for (const entry of redisImports) {
       expect(await readFile(path.join(sourceRoot, entry), "utf8")).not.toContain('"use client"')
@@ -126,7 +124,7 @@ describe("Web governance boundary", () => {
     expect(violations).toEqual([])
   })
 
-  it("probes the public page rather than a configured Product Session for candidate liveness", async () => {
+  it("probes the public page rather than a configured native session for candidate liveness", async () => {
     const dockerfile = await readFile(path.join(root, "Dockerfile"), "utf8")
     const release = await readFile(path.join(root, ".github/workflows/release-image.yml"), "utf8")
     const smoke = await readFile(path.join(root, "scripts/first-site-smoke.mjs"), "utf8")
@@ -174,6 +172,8 @@ describe("Web governance boundary", () => {
       scripts: z.object({
         contract: z.string().min(1),
         "test:architecture": z.string().min(1),
+        "contract:check:bff-auth-session": z.string().min(1),
+        "contract:check:iam-relay-policy": z.string().min(1),
         "contract:check:bff-connector-command-errors": z.string().min(1),
         "contract:check:bff-public-skill-list": z.string().min(1),
         "contract:check:bff-mcp-project-publication": z.string().min(1),
@@ -181,15 +181,13 @@ describe("Web governance boundary", () => {
         "contract:check:bff-tool-display": z.string().min(1),
         "contract:check:bff-project-resource": z.string().min(1),
         "contract:check:bff-project-skill-content": z.string().min(1),
-        "contract:generate:bff-mcp-reauthorization": z.string().min(1),
-        "contract:check:bff-mcp-reauthorization": z.string().min(1),
-        "contract:generate:bff-session-share-metadata": z.string().min(1),
-        "contract:check:bff-session-share-metadata": z.string().min(1),
         "contract:generate:bff-mcp-prepare-outcomes": z.string().min(1),
         "contract:check:bff-mcp-prepare-outcomes": z.string().min(1),
         "contract:generate:bff-mcp-prepare-receipt": z.string().min(1),
         "contract:check:bff-mcp-prepare-receipt": z.string().min(1),
         "contract:check:bff-project-pins": z.string().min(1),
+        "contract:check:bff-project-tasks": z.string().min(1),
+        "contract:check:bff-scheduled-executions": z.string().min(1),
         "contract:check:bff-project-mcp-recommendations": z.string().min(1),
       }),
     })
@@ -199,24 +197,31 @@ describe("Web governance boundary", () => {
     expect(scripts["contract:check:bff-project-skill-content"]).toBe("node scripts/generate-bff-project-skill-content.mjs --check")
     expect(scripts["contract:check:bff-project-resource"]).toBe("node scripts/generate-bff-project-resource.mjs --check")
     expect(scripts["contract:check:bff-project-pins"]).toBe("node scripts/generate-bff-project-pins.mjs --check")
+    expect(scripts["contract:check:bff-project-tasks"]).toBe("node scripts/generate-bff-project-tasks.mjs --check")
+    expect(scripts["contract:check:bff-scheduled-executions"]).toBe("node scripts/generate-bff-scheduled-executions.mjs --check")
     expect(scripts["contract:check:bff-project-mcp-recommendations"]).toBe("node scripts/generate-bff-project-mcp-recommendations.mjs --check")
     expect(scripts["contract:check:bff-tool-display"]).toBe("node scripts/generate-bff-tool-display.mjs --check")
-    expect(scripts["contract:generate:bff-mcp-reauthorization"]).toBe("node scripts/generate-bff-mcp-reauthorization.mjs --write")
-    expect(scripts["contract:check:bff-mcp-reauthorization"]).toBe("node scripts/generate-bff-mcp-reauthorization.mjs --check")
     expect(scripts["contract:generate:bff-mcp-prepare-outcomes"]).toBe("node scripts/generate-bff-mcp-prepare-outcomes.mjs --write")
     expect(scripts["contract:check:bff-mcp-prepare-outcomes"]).toBe("node scripts/generate-bff-mcp-prepare-outcomes.mjs --check")
     expect(scripts["contract:generate:bff-mcp-prepare-receipt"]).toBe("node scripts/generate-bff-mcp-prepare-receipt.mjs --write")
     expect(scripts["contract:check:bff-mcp-prepare-receipt"]).toBe("node scripts/generate-bff-mcp-prepare-receipt.mjs --check")
-    expect(scripts["contract:generate:bff-session-share-metadata"]).toBe("node scripts/generate-bff-session-share-metadata.mjs --write")
-    expect(scripts["contract:check:bff-session-share-metadata"]).toBe("node scripts/generate-bff-session-share-metadata.mjs --check")
     expect(scripts["test:architecture"]).toBe("vitest run tests/architecture")
     expect(scripts["contract:check:bff-connector-command-errors"]).toBe("node scripts/generate-bff-connector-command-errors.mjs --check")
     expect(scripts["contract:check:bff-public-skill-list"]).toBe("node scripts/generate-bff-public-skill-list.mjs --check")
     expect(scripts["contract:check:bff-mcp-server-icon"]).toBe("node scripts/generate-bff-mcp-server-icon.mjs --check")
     expect(scripts["contract:check:bff-mcp-project-publication"]).toBe("node scripts/generate-bff-mcp-project-publication.mjs --check")
-    expect(scripts.contract.split(" && ").sort()).toEqual([
-      "pnpm contract:check:bff-session-share-metadata",
-      "pnpm contract:check:bff-mcp-reauthorization",
+    const contractChain = scripts.contract.split(" && ")
+    for (const [name, file] of [
+      ["contract:check:bff-auth-session", "scripts/generate-bff-auth-session.mjs"],
+      ["contract:check:iam-relay-policy", "scripts/generate-iam-relay-policy.mjs"],
+    ] as const) {
+      expect(scripts[name]).toBe(`node ${file} --check`)
+      expect(await exists(file)).toBe(true)
+      expect(contractChain.filter(command => command === `pnpm ${name}`)).toHaveLength(1)
+    }
+    expect(contractChain.sort()).toEqual([
+      "pnpm contract:check:bff-auth-session",
+      "pnpm contract:check:iam-relay-policy",
       "pnpm contract:check:bff-mcp-prepare-outcomes",
       "pnpm contract:check:bff-mcp-prepare-receipt",
       "pnpm contract:check:bff-archived-tasks",
@@ -225,6 +230,7 @@ describe("Web governance boundary", () => {
       "pnpm contract:check:bff-account-sessions",
       "pnpm contract:check:bff-team",
       "pnpm contract:check:bff-agent-failure",
+      "pnpm contract:check:bff-agent-connections",
       "pnpm contract:check:bff-connector-command-errors",
       "pnpm contract:check:bff-public-skill-list",
       "pnpm contract:check:bff-mcp-project-publication",
@@ -233,6 +239,8 @@ describe("Web governance boundary", () => {
       "pnpm contract:check:bff-project-resource",
       "pnpm contract:check:bff-project-skill-content",
       "pnpm contract:check:bff-project-pins",
+      "pnpm contract:check:bff-project-tasks",
+      "pnpm contract:check:bff-scheduled-executions",
       "pnpm contract:check:bff-project-mcp-recommendations",
       "vitest run contract tests/contract",
     ].sort())

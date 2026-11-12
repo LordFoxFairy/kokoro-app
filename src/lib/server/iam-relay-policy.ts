@@ -1,10 +1,6 @@
 import policySnapshot from "@/generated/iam-relay-policy.json"
 
-export const IAM_RELAY_POLICY_PROVENANCE = Object.freeze({
-  ownerRepository: "kokoro-bff",
-  ownerCommit: "78d06f783c2bce28f646459929df3b0bab783d32",
-  policySha256: "63e36a79c7448d4b9e47442df4f5467f230ecf0e9ac702a350cbc92a2c77eb46",
-})
+export { IAM_RELAY_POLICY_PROVENANCE } from "@/generated/iam-relay-provenance"
 
 export type IamRelayPolicy = Readonly<{
   version: string
@@ -43,7 +39,7 @@ export type IamRelayPolicy = Readonly<{
   responseHeaders: readonly string[]
   cookieNames: readonly string[]
   cookieNamePrefixes: readonly string[]
-  cookiePaths: Readonly<{ default: string; logoutConfirmation: string }>
+  cookiePaths: Readonly<{ default: string }>
   webInteractionPaths: readonly string[]
   maxQueryBytes: number
   maxRequestBodyBytes: number
@@ -52,49 +48,52 @@ export type IamRelayPolicy = Readonly<{
   maxDurationMs: number
 }>
 
-const EXPECTED_IAM_COMMIT = "e3c035b99cf9479ac8357c7d38147f1541dcbcac"
+const EXPECTED_IAM_COMMIT = "896405d146c4ff96f5f39d5c2ce1bc788d46c2c7"
 const EXPECTED_INVITATION_ROUTES = [
   ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/context", "GET", "getTenantInvitationContext"],
   ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/accept", "POST", "acceptTenantInvitation"],
   ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/reject", "POST", "rejectTenantInvitation"],
 ] as const
 const EXPECTED_INVITATION_ERRORS = ["TOKEN_EXPIRED", "INVALID_TOKEN", "USER_NOT_FOUND", "INVALID_USER"] as const
-const BROWSER_GET_PATHS = new Set([
-  "/.well-known/openid-configuration",
-  "/.well-known/oauth-authorization-server",
-  "/jwks",
-  "/oauth2/authorize",
-  "/oauth2/end-session",
-  "/get-session",
-  "/verify-email",
-])
+const BROWSER_GET_PATHS = new Set(["/verify-email"])
 
 export function validateIamRelayPolicySnapshot(value: unknown): IamRelayPolicy {
   if (typeof value !== "object" || value === null) throw new Error("invalid IAM relay policy snapshot")
   const policy = value as Partial<IamRelayPolicy>
   if (
-    policy.version !== "2.1.0" ||
+    policy.version !== "3.0.0" ||
     policy.iamOwnerCommit !== EXPECTED_IAM_COMMIT ||
     policy.iamOpenapiPath !== "contract/openapi/iam.internal.v1.json" ||
-    policy.iamOpenapiVersion !== "0.7.0" ||
-    policy.iamOpenapiSha256 !== "c8d7af8a365ad5d13eaabccf7f31133e0918ef198bdc3e7c790d90933eae91b2" ||
-    !Array.isArray(policy.invitationRoutes) || policy.invitationRoutes.length !== 3 ||
-    !policy.invitationSignUp || !policy.invitationLocation ||
-    typeof policy.routes !== "object" || policy.routes === null ||
-    !Array.isArray(policy.cookieNames) || !Array.isArray(policy.cookieNamePrefixes) ||
+    policy.iamOpenapiVersion !== "0.20.0" ||
+    policy.iamOpenapiSha256 !== "61cf99b4fe836deafedb9f59d9fa2ea3446ce172f4069944f7facb14e816c7ca" ||
+    !Array.isArray(policy.invitationRoutes) ||
+    policy.invitationRoutes.length !== 3 ||
+    !policy.invitationSignUp ||
+    !policy.invitationLocation ||
+    typeof policy.routes !== "object" ||
+    policy.routes === null ||
+    !Array.isArray(policy.cookieNames) ||
+    !Array.isArray(policy.cookieNamePrefixes) ||
     policy.cookieNamePrefixes.length !== 2 ||
-    typeof policy.cookiePaths !== "object" || policy.cookiePaths === null ||
-    !Array.isArray(policy.responseHeaders) || !Array.isArray(policy.webInteractionPaths) ||
-    policy.maxQueryBytes !== 8192 || policy.maxHeaderBytes !== 16384 ||
-    policy.maxResponseBytes !== 1048576 || policy.maxDurationMs !== 5000
+    typeof policy.cookiePaths !== "object" ||
+    policy.cookiePaths === null ||
+    !Array.isArray(policy.responseHeaders) ||
+    !Array.isArray(policy.webInteractionPaths) ||
+    policy.maxQueryBytes !== 8192 ||
+    policy.maxHeaderBytes !== 16384 ||
+    policy.maxResponseBytes !== 1048576 ||
+    policy.maxDurationMs !== 5000
   ) {
     throw new Error("unsupported IAM relay policy snapshot")
   }
+  if (policy.routes["/get-session"] !== undefined) throw new Error("raw browser session is excluded")
   for (const path of BROWSER_GET_PATHS) {
     if (!policy.routes[path]?.includes("GET")) throw new Error("IAM relay policy is missing a browser GET route")
   }
-  if (JSON.stringify(policy.routes["/sign-up/email"]) !== '["POST"]' ||
-    policy.invitationSignUp.route !== "/sign-up/email" || policy.invitationSignUp.method !== "POST" ||
+  if (
+    JSON.stringify(policy.routes["/sign-up/email"]) !== '["POST"]' ||
+    policy.invitationSignUp.route !== "/sign-up/email" ||
+    policy.invitationSignUp.method !== "POST" ||
     JSON.stringify(policy.invitationSignUp.bodyFields) !== '["callbackURL","email","name","password"]' ||
     policy.invitationSignUp.callbackPath !== "/iam/interactions/invitation" ||
     policy.invitationSignUp.callbackQueryParameter !== "id" ||
@@ -106,11 +105,19 @@ export function validateIamRelayPolicySnapshot(value: unknown): IamRelayPolicy {
     JSON.stringify(policy.invitationLocation.allowedErrorCodes) !== JSON.stringify(EXPECTED_INVITATION_ERRORS) ||
     !policy.invitationRoutes.every((route, index) => {
       const expected = EXPECTED_INVITATION_ROUTES[index]
-      return expected !== undefined && route.template === expected[0] &&
-        JSON.stringify(route.methods) === JSON.stringify([expected[1]]) && route.operationId === expected[2] &&
-        route.owner === "kokoro-iam" && route.visibility === "browser-private" &&
-        route.stability === "stable" && route.idempotency === "none"
-    })) throw new Error("IAM relay invitation policy is invalid")
+      return (
+        expected !== undefined &&
+        route.template === expected[0] &&
+        JSON.stringify(route.methods) === JSON.stringify([expected[1]]) &&
+        route.operationId === expected[2] &&
+        route.owner === "kokoro-iam" &&
+        route.visibility === "browser-private" &&
+        route.stability === "stable" &&
+        route.idempotency === "none"
+      )
+    })
+  )
+    throw new Error("IAM relay invitation policy is invalid")
   return policy as IamRelayPolicy
 }
 
@@ -140,17 +147,21 @@ function validVerifyEmailQuery(query: string): boolean {
 }
 
 export function resolveBrowserIamGet(rawTarget: string, method: string): BrowserIamGet | null {
-  if (
-    method !== "GET" || !rawTarget.startsWith("/iam/") || rawTarget.startsWith("//") ||
-    rawTarget.includes("#") || /[\\\u0000-\u001f\u007f]/u.test(rawTarget)
-  ) return null
+  if (method !== "GET" || !rawTarget.startsWith("/iam/") || rawTarget.startsWith("//") || rawTarget.includes("#") || /[\\\u0000-\u001f\u007f]/u.test(rawTarget))
+    return null
   const question = rawTarget.indexOf("?")
   const path = question < 0 ? rawTarget : rawTarget.slice(0, question)
   const query = question < 0 ? "" : rawTarget.slice(question)
   if (
-    Buffer.byteLength(query) > IAM_RELAY_POLICY.maxQueryBytes || /%(?![0-9a-fA-F]{2})/u.test(query) ||
-    path.includes("%") || path.includes("//") || path.includes("/./") || path.includes("/../") || path.endsWith("/")
-  ) return null
+    Buffer.byteLength(query) > IAM_RELAY_POLICY.maxQueryBytes ||
+    /%(?![0-9a-fA-F]{2})/u.test(query) ||
+    path.includes("%") ||
+    path.includes("//") ||
+    path.includes("/./") ||
+    path.includes("/../") ||
+    path.endsWith("/")
+  )
+    return null
   const relativePath = path.slice("/iam".length)
   if (!BROWSER_GET_PATHS.has(relativePath) || !IAM_RELAY_POLICY.routes[relativePath]?.includes("GET")) return null
   if (relativePath === "/verify-email" && !validVerifyEmailQuery(query)) return null
@@ -163,7 +174,7 @@ function allowedCookieName(name: string, secure: boolean): boolean {
   return IAM_RELAY_POLICY.cookieNames.includes(name.slice(prefix.length))
 }
 
-export function filterIssuerCookies(raw: string | null, secure: boolean, includeLogoutConfirmation = false): string | null {
+export function filterIssuerCookies(raw: string | null, secure: boolean): string | null {
   if (raw === null || raw === "") return ""
   const seen = new Set<string>()
   const kept: string[] = []
@@ -175,7 +186,6 @@ export function filterIssuerCookies(raw: string | null, secure: boolean, include
     if (!allowedCookieName(name, secure)) continue
     if (seen.has(name)) return null
     seen.add(name)
-    if (name.endsWith(".oauth_logout_confirmation") && !includeLogoutConfirmation) continue
     kept.push(pair)
   }
   return kept.join("; ")

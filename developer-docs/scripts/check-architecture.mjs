@@ -30,7 +30,7 @@ function trackedGeneratedFiles(portalRoot) {
       portalRoot,
       'ls-files',
       '--',
-      'docs/reference/v1/generated',
+      'docs/api/reference/v1/generated',
     ],
     { encoding: 'utf8' },
   )

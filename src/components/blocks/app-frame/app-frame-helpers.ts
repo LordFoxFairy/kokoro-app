@@ -184,29 +184,7 @@ export function conversationIdFromLocation(): string | null {
     return null
   }
   const queryValue = new URLSearchParams(window.location.search).get("conversation")
-  if (queryValue?.trim()) {
-    return queryValue.trim()
-  }
-
-  // Conversation links can also arrive from the hash router. Keep
-  // the accepted forms deliberately narrow so settings/catalog hashes remain
-  // untouched: `#conversation=ID` and `#/conversation/ID`.
-  const hash = window.location.hash.replace(/^#\/?/, "")
-  if (hash.startsWith("conversation=")) {
-    const value = new URLSearchParams(hash).get("conversation")
-    return value?.trim() || null
-  }
-  const match = hash.match(/^conversation\/([^/]+)$/)
-  if (!match) {
-    return null
-  }
-  const encodedId = match[1]
-  if (encodedId === undefined) return null
-  try {
-    return decodeURIComponent(encodedId).trim() || null
-  } catch {
-    return null
-  }
+  return queryValue?.trim() || null
 }
 
 const PREVIEW_WORKSPACE_CAPABILITIES: WorkspaceCapabilities = {

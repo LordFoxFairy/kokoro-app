@@ -1,14 +1,8 @@
-个性化资料的编辑、失焦保存和冲突恢复回调绑定发起时准入 scope；换主体或准入代后，旧回调不能改写新草稿、发起读取或提交当前账户。原 CAS、未知结果保留及显式选择语义保持。
+## 个性化底部操作区
 
-数据管理的分享、到期与归档时间沿当前产品 locale 格式化；语言切换只更新展示，保留原权威时间、列表身份和读取生命周期。
+复用 Settings surface token，保原 sticky／正常流占位，收紧上下空白；长按钮自然增高、窄屏原44px触达保留。末字段与错误可滚到其上方，取消回原触发器；不新增固定底栏、第二滚动容器或业务写入口。相邻无定义class引用和无消费者样式已删除，保原组件／hook边界。
 
-设置导航的原有 ResizeObserver/可见项显露流程同时报告实际 CSS 排列方向：桌面竖栏使用上下键，窄屏横栏使用左右键，保持同一 Tabs 选择、原焦点和溢出菜单，不复制 CSS 断点。
-
-默认模型目录沿现 ProjectReadBoundary 的 preview／admitted／subject／generation 退休；缺正式身份不请求，换代取消原 signal／计时器并清退目录与旧 Select portal，重新准入 fresh GET，迟到结果和旧选项回调不写偏好。设备级模型草稿、localStorage 与保存失败重试语义保持。
-
-知识编辑与删除确认弹窗不显示上一笔操作遗留的“已保存”；成功提示留在已回读的列表，弹窗内继续显示当前失败、未确认与冲突恢复。
-
-账户被动读取反馈：`use-account-profile`在同准入scope刷新失败时保留最后确认资料，但phase仍为error、编辑禁用；`account-card`不追加读取失败/重试卡。初次未知显示原字段占位，切主体/代际立即清退；明确保存、复制、退出失败继续在对应动作处反馈。设备页保当前/已读列表、正常刷新和写入核对动作；初次读取失败与分页失败使用现有可见 Alert 分别说明读取失败或列表不完整，重试仍仅沿原 GET，加载播报保持无障碍，不冒成功空列表或重发未知移除。
+账户被动读取反馈：`use-account-profile`在同准入scope刷新失败时保留最后确认资料，但phase仍为error、编辑禁用；`account-card`不追加读取失败/重试卡。初次未知显示原字段占位，切主体/代际立即清退；明确保存、复制、退出失败继续在对应动作处反馈。设备页保当前/已读列表、正常刷新和写入核对动作，被动读取状态仅无障碍播报，不冒成功空列表。
 
 <!-- 2026-10-22 continuation retirement correction -->
 积分客户端每次续发 PUT 或核实 GET 前复验调用方 `getCurrent`；真实账户/用量/rail传入现 controller/current 与发起时已准入subject的marker一致性检查。只更新storage、无rerender/focus仍会抑制旧续发；marker丢失、不匹配或读取异常一律退休。marker只抑制，不授予session权限；非UI调用可不传callback，初次GET契约保持，无新store/轮询/锁。
@@ -160,4 +154,3 @@ SET54：现 settings-compact-more-menu 独占 More 的指针/键盘激活、enab
 参考：同日 Manus 技能设置 390×844，后续分区实际保留于横向滚动容器，更多菜单含账户等全部非当前分区。新增一个真实浏览器旅程覆盖 Skills 深链、更多→集成、320/390/767/768 缩放及键盘→开发者；只验证可见性/可达性，不锁 CSS 字符串或像素常量。隔离预览不代表正常业务数据/CRUD验收。
 
 紧凑More的portal在触发器随响应式模式隐藏时关闭；菜单拥有的焦点回到当前tab，外部焦点不被夺取。验收包含菜单打开状态跨断点，而非只有静态尺寸。
-账户头像沿原 `account-profile.schema.ts` / `/api/account/profile` / `useAccountProfile` 消费 IAM 标准可选 `picture`，在 `sections/account-card.tsx` 复用 Avatar。仅浏览器匿名 HTTPS 加载、无 referrer，失败保留首字母；原主体/代际退休隔离和姓名更新不变，不代表已提供头像上传。

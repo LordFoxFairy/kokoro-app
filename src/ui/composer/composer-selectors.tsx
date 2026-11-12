@@ -19,6 +19,7 @@ type ComposerSelectorsProps = {
   modelCatalogStatus: "loading" | "ready" | "error"
   onRetryModels: (() => void) | undefined
   hideModelSelector: boolean
+  lockedModelMissing: boolean
   currentModel: ModelCandidate | undefined
   currentSelector: string | undefined
   currentModelTriggerLabel: string
@@ -28,12 +29,20 @@ type ComposerSelectorsProps = {
   modelLocked: boolean
 }
 
-export function ComposerSelectors({ mode, modeLabel, onModeChange, modeLocked, models, modelCatalogStatus, hideModelSelector, currentModel, currentSelector, currentModelTriggerLabel, currentModelNewBadgeLabel, currentModelTriggerTitle, onModelChange, modelLocked }: ComposerSelectorsProps) {
+export function ComposerSelectors({ mode, modeLabel, onModeChange, modeLocked, models, modelCatalogStatus, onRetryModels, hideModelSelector, lockedModelMissing, currentModel, currentSelector, currentModelTriggerLabel, currentModelNewBadgeLabel, currentModelTriggerTitle, onModelChange, modelLocked }: ComposerSelectorsProps) {
   const t = useT()
   const ModeIcon = mode === "thinking" ? Sparkles : Zap
   return (
     <div className={styles.cluster} data-slot="composer-selector-cluster" aria-busy={!hideModelSelector && modelCatalogStatus === "loading"}>
-      {!hideModelSelector && modelCatalogStatus === "error" ? <span className="sr-only" role="status">{t("settings.modelCatalogFailed")}</span> : null}
+      {!hideModelSelector && modelCatalogStatus === "ready" && (lockedModelMissing || models.length === 0) ? (
+        <span className={styles.catalogFeedback} role="status">{t(lockedModelMissing ? "composer.modelNotInCatalog" : "composer.modelCatalogEmpty")}</span>
+      ) : null}
+      {!hideModelSelector && models.length === 0 && modelCatalogStatus !== "ready" ? (
+        <div className={styles.catalogFeedback}>
+          <span role="status">{t(modelCatalogStatus === "loading" ? "settings.modelCatalogLoading" : "settings.modelCatalogFailed")}</span>
+          {modelCatalogStatus === "error" && !modelLocked && onRetryModels ? <Button type="button" variant="ghost" size="sm" className={styles.catalogRetry} onClick={onRetryModels}>{t("settings.modelCatalogRetry")}</Button> : null}
+        </div>
+      ) : !hideModelSelector && modelCatalogStatus === "error" ? <span className="sr-only" role="status">{t("settings.modelCatalogFailed")}</span> : null}
       {!hideModelSelector && models.length > 0 && currentModel ? (modelLocked ? (
         <Button type="button" variant="ghost" className={`${styles.mode} ${styles.modeLocked}`} data-composer-control="model" disabled aria-label={t("composer.modelLocked", { model: modelLabel(currentModel) })} title={`${modelLabel(currentModel)} — ${t("composer.modelLockedTitle")}`}>
           <span>{modelLabel(currentModel)}</span><Lock className={styles.lock} data-icon="inline-end" />

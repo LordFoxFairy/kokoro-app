@@ -1466,24 +1466,24 @@ describe("SET24 bounded account logout", () => {
     endProductSession.mockImplementation(actual.endProductSession);
   }
 
-  it("real signout client cannot dispatch POST after retirement during pending CSRF body", async () => {
-    let finishBody!: (value: { csrfToken: string }) => void;
-    let csrfSignal: AbortSignal | undefined;
+  it("real native signout client cannot navigate after retirement during a pending request", async () => {
+    let finishRequest!: (value: Response) => void;
+    let requestSignal: AbortSignal | undefined;
     const fetcher = vi.fn().mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
-      csrfSignal = init?.signal ?? undefined;
-      return Promise.resolve({ ok: true, json: () => new Promise((resolve) => { finishBody = resolve; }) });
+      requestSignal = init?.signal ?? undefined;
+      return new Promise<Response>((resolve) => { finishRequest = resolve; });
     });
     try {
       await installActualSignout();
       vi.stubGlobal("fetch", fetcher);
       const mounted = renderSettings();
       fireEvent.click(screen.getByTestId("settings-logout"));
-      await waitFor(() => expect(finishBody).toBeTypeOf("function"));
+      await waitFor(() => expect(finishRequest).toBeTypeOf("function"));
       mounted.unmount();
-      expect(csrfSignal?.aborted).toBe(true);
+      expect(requestSignal?.aborted).toBe(true);
       const { act } = await import("@testing-library/react");
-      await act(async () => { finishBody({ csrfToken: "Csrf123" }); });
-      expect(fetcher).toHaveBeenCalledTimes(1); // no late signout POST
+      await act(async () => { finishRequest(new Response(null, { status: 204 })); });
+      expect(fetcher).toHaveBeenCalledExactlyOnceWith("/iam/sign-out", expect.objectContaining({ method: "POST" }));
     } finally {
       endProductSession.mockReset();
       endProductSession.mockResolvedValue(undefined);
@@ -1591,54 +1591,46 @@ describe("SET24 deadline and retirement followups", () => {
     } finally { restoreSignout(); }
   });
 
-  it("actual client suppresses late valid503 issuer navigation after identity retirement", async () => {
+  it("actual native signout suppresses a late unavailable response after identity retirement", async () => {
     const actual = await vi.importActual<typeof import("@/ui/auth/product-auth-client")>("@/ui/auth/product-auth-client");
     const navigate = vi.fn();
-    let finishBody!: (raw: { status: string; issuer_end_session_url: string }) => void;
+    let finishRequest!: (response: Response) => void;
     let requestSignal: AbortSignal | undefined;
-    const fetcher = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "Csrf123" }) })
-      .mockImplementationOnce((_input: unknown, init?: RequestInit) => {
+    const fetcher = vi.fn().mockImplementation((_input: unknown, init?: RequestInit) => {
         requestSignal = init?.signal ?? undefined;
-        return Promise.resolve({ ok: false, status: 503,
-          json: () => new Promise((resolve) => { finishBody = resolve; }) });
+        return new Promise<Response>((resolve) => { finishRequest = resolve; });
       });
     endProductSession.mockImplementation((_guardedNavigate: unknown, signal?: AbortSignal) => actual.endProductSession(navigate, signal));
     try {
       vi.stubGlobal("fetch", fetcher);
       const mounted = mountScopedLogout();
       fireEvent.click(screen.getByTestId("settings-logout"));
-      await waitFor(() => expect(finishBody).toBeTypeOf("function"));
+      await waitFor(() => expect(finishRequest).toBeTypeOf("function"));
       mounted.change("logout-owner", 2, true);
       expect(requestSignal?.aborted).toBe(true);
       const { act } = await import("@testing-library/react");
-      await act(async () => { finishBody({ status: "browser_cookie_cleared", issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }); });
+      await act(async () => { finishRequest(new Response(null, { status: 503 })); });
       expect(navigate).not.toHaveBeenCalled();
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenCalledTimes(1);
       expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.getByTestId("settings-logout")).toBeEnabled();
     } finally { restoreSignout(); }
   });
 
-  it("actual503 issuer handoff clears the deadline while leaving success busy", async () => {
+  it("actual unavailable native signout restores the explicit retry", async () => {
     const actual = await vi.importActual<typeof import("@/ui/auth/product-auth-client")>("@/ui/auth/product-auth-client");
     const navigate = vi.fn();
-    const fetcher = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "Csrf123" }) })
-      .mockResolvedValueOnce({ ok: false, status: 503,
-        json: async () => ({ status: "browser_cookie_cleared", issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }) });
+    const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
     endProductSession.mockImplementation((_guardedNavigate: unknown, signal?: AbortSignal) => actual.endProductSession(navigate, signal));
     try {
       vi.stubGlobal("fetch", fetcher);
       renderSettings();
-      vi.useFakeTimers();
       const { act } = await import("@testing-library/react");
       await act(async () => { fireEvent.click(screen.getByTestId("settings-logout")); });
-      expect(navigate).toHaveBeenCalledExactlyOnceWith("/iam/oauth2/end-session?fixture=valid");
-      await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
-      expect(screen.queryByRole("alert")).toBeNull();
-      expect(screen.getByTestId("settings-logout")).toBeDisabled();
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(await screen.findByRole("alert")).toHaveTextContent(/无法确认.*退出|退出.*无法确认/);
+      expect(screen.getByTestId("settings-logout")).toBeEnabled();
+      expect(fetcher).toHaveBeenCalledExactlyOnceWith("/iam/sign-out", expect.objectContaining({ method: "POST" }));
     } finally { restoreSignout(); }
   });
 
@@ -1675,7 +1667,7 @@ describe("SET24 deadline and retirement followups", () => {
       expect(oldNavigate).toBeTypeOf("function");
       mounted.change("another-owner", 1, true);
       expect(signal?.aborted).toBe(true);
-      oldNavigate("/iam/oauth2/end-session?fixture=valid");
+      oldNavigate("/");
       expect(navigate).not.toHaveBeenCalled();
       expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.getByTestId("settings-logout")).toBeEnabled();
@@ -2611,7 +2603,35 @@ describe("service detail previews", () => {
   });
 });
 
-it("task delivery options are inspectable while unsupported steering remains unavailable and queue stays unchanged", async () => {
+it("saves same-Run delivery without discarding the existing model", async () => {
+  const prefsKey = "kokoro.web.chat-prefs.v2";
+  localStorage.setItem(prefsKey, JSON.stringify({ model: "prior:stable" }));
+  const mounted = renderSettings(() => {}, undefined, false, undefined, "appearance");
+  const trigger = screen.getByTestId("settings-task-delivery");
+  expect(trigger).toHaveTextContent("添加到队列");
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  const list = await screen.findByRole("listbox");
+  const steer = within(list).getByRole("option", { name: "发送但不中断" });
+  expect(steer).not.toHaveAttribute("aria-disabled", "true");
+  const interrupt = within(list).getByRole("option", { name: "打断并发送" });
+  expect(interrupt).not.toHaveAttribute("aria-disabled", "true");
+  fireEvent.click(steer);
+  expect(trigger).toHaveTextContent("发送但不中断");
+  expect(JSON.parse(localStorage.getItem(prefsKey)!)).toEqual({ model: "prior:stable", taskDelivery: "steer" });
+
+  const { readChatDelivery, writeChatModel } = await import("@/ui/settings/chat-prefs");
+  expect(writeChatModel("new:model")).toBe(true);
+  expect(readChatDelivery()).toBe("steer");
+  expect(JSON.parse(localStorage.getItem(prefsKey)!)).toEqual({ model: "new:model", taskDelivery: "steer" });
+  mounted.unmount();
+  renderSettings(() => {}, undefined, false, undefined, "appearance");
+  expect(screen.getByTestId("settings-task-delivery")).toHaveTextContent("发送但不中断");
+});
+
+it("preview shows the queue and leaves a saved live delivery choice unchanged", async () => {
+  const prefsKey = "kokoro.web.chat-prefs.v2";
+  const stored = JSON.stringify({ taskDelivery: "interrupt" });
+  localStorage.setItem(prefsKey, stored);
   renderSettings(() => {}, undefined, true, undefined, "appearance");
   const trigger = screen.getByTestId("settings-task-delivery");
   expect(trigger).toBeEnabled();
@@ -2620,10 +2640,28 @@ it("task delivery options are inspectable while unsupported steering remains una
   for (const name of ["发送但不中断", "打断并发送"]) {
     expect(within(list).getByRole("option", { name })).toHaveAttribute("aria-disabled", "true");
   }
-  expect(list).toHaveTextContent("尚需服务支持");
   fireEvent.keyDown(list, { key: "Escape" });
   expect(trigger).toHaveTextContent("添加到队列");
   expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
+  expect(localStorage.getItem(prefsKey)).toBe(stored);
+});
+
+it("an unreadable delivery preference falls back to queue and cannot clobber its stored value", async () => {
+  const prefsKey = "kokoro.web.chat-prefs.v2";
+  const stored = JSON.stringify({ model: "prior:stable", taskDelivery: "interrupt" });
+  localStorage.setItem(prefsKey, stored);
+  const { readChatDelivery, writeChatDelivery } = await import("@/ui/settings/chat-prefs");
+  expect(readChatDelivery()).toBe("interrupt");
+  const getItem = Storage.prototype.getItem;
+  const denied = vi.spyOn(Storage.prototype, "getItem").mockImplementation(function(this: Storage, key) {
+    if (this === localStorage && key === prefsKey) throw new DOMException("unavailable", "SecurityError");
+    return getItem.call(this, key);
+  });
+  try {
+    expect(readChatDelivery()).toBe("queue");
+    expect(writeChatDelivery("queue")).toBe(false);
+  } finally { denied.mockRestore(); }
+  expect(localStorage.getItem(prefsKey)).toBe(stored);
 });
 
 it("shared file management shows unreadable authority rather than an invented empty file list", () => {

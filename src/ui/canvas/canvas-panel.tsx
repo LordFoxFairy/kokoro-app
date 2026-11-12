@@ -6,37 +6,27 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Empty, EmptyDescription } from "@/components/ui/empty"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Spinner } from "@/components/ui/spinner"
-import { Download, FileCheck2, Maximize2, Minimize2, Play, SkipBack, X } from "lucide-react"
+import { Download, Eye, FileCheck2, FolderOpen, Maximize2, Minimize2, Play, SkipBack, X } from "lucide-react"
 
 // 右侧 canvas 工作区面板：会话在左、内容在右（三栏第三栏）。
-// 内容体按来源分派：file=可变直读（重开即最新）、delivery=BFF 二元元数据、
+// 内容体按来源分派：file=Run 精确版本、delivery=BFF 二元元数据、
 // node=通用 ReactNode 插槽；文本预览复用格式矩阵。
 
-import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 
-import { filePath } from "@/contract/http"
-import { sessionBaseUrl } from "@/engine/config"
 import { downloadFetchedFile, fileFetch } from "@/engine/file-fetch"
-import { ARTIFACT_TEXT_PREVIEW_MAX_BYTES, beginLibraryArtifactDownload, readLibraryArtifactTextPreview } from "@/features/app/kokoro-library-artifact-client"
-import type { SessionDelivery, SessionTodo, WorkspaceFileEntry } from "@/core/state"
+import { beginLibraryArtifactDownload, readLibraryArtifactTextPreview } from "@/features/app/kokoro-library-artifact-client"
+import { isLibraryTextPreviewSupported } from "@/features/app/kokoro-library-preview-content"
+import { LibraryTextPreview } from "@/features/app/kokoro-library-text-preview"
+import type { SessionDelivery, SessionTodo } from "@/core/state"
 import { useLocale } from "@/i18n/context"
-import { PreviewBody, formatBytes } from "@/ui/thread/artifact-card"
+import { formatBytes } from "@/ui/thread/artifact-card"
 import { cn } from "@/lib/utils"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
-import { AUTH_INDEX_SUBJECT_KEY, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
 
-import type { ResolvedCanvasContent } from "./canvas-store"
+import type { ResolvedCanvasContent, WorkspaceOutputFile } from "./canvas-store"
+import { canPreviewWorkspaceOutput, downloadWorkspaceOutput, readWorkspaceOutputPreview } from "./workspace-output-content"
 import styles from "./canvas-panel.module.css"
-
-export function fileUrl(sessionId: string, path: string): string {
-  const encoded = path.split("/").map(encodeURIComponent).join("/")
-  return `${sessionBaseUrl()}${filePath(sessionId, "__P__")}`.replace("__P__", encoded)
-}
-
-// Workspace File is a distinct small-object flow; Delivery uses native BFF attachment.
-async function downloadFile(url: string, name: string): Promise<boolean> {
-  return downloadFetchedFile(await fileFetch(url), name)
-}
 
 export function formatDeliveryTime(iso: string, locale: string): string {
   const date = new Date(iso)
@@ -70,10 +60,10 @@ export type CanvasPanelProps = {
   preview?: boolean
   deliveriesHasMore?: boolean
   content: ResolvedCanvasContent
-  files: WorkspaceFileEntry[]
+  files: readonly WorkspaceOutputFile[]
   deliveries: SessionDelivery[]
   fullscreen: boolean
-  onSelectFile: (file: WorkspaceFileEntry) => void
+  onSelectFile: (file: WorkspaceOutputFile) => void
   onSelectDelivery: (delivery: SessionDelivery) => void
   onToggleFullscreen: () => void
   onClose: () => void
@@ -116,7 +106,7 @@ export function CanvasPanel({
   const title = content.kind === "activity" ? t("thread.activityDetails") : contentTitle(content)
   const contentKey =
     content.kind === "file"
-      ? `file:${content.file.path}`
+      ? `file:${JSON.stringify([content.file.runId, content.file.versionId])}`
       : content.kind === "delivery"
         ? `delivery:${JSON.stringify([content.delivery.conversationId, content.delivery.artifactId])}`
         : content.kind === "activity" ? `activity:${content.runId}:${content.activityId}` : `node:${content.title}`
@@ -149,8 +139,7 @@ export function CanvasPanel({
     content.kind === "file"
       ? {
           kind: "file" as const,
-          url: fileUrl(sessionId, content.file.path),
-          name: content.file.path.split("/").at(-1) ?? content.file.path,
+          file: content.file,
         }
       : content.kind === "delivery"
         ? {
@@ -191,11 +180,13 @@ export function CanvasPanel({
           className={styles.viewToggle}
           aria-label={t("canvas.viewAria")}
         >
-          <ToggleGroupItem value="preview" size="sm">
-            {t("canvas.previewTab")}
+          <ToggleGroupItem value="preview" size="sm" className={styles.viewItem} aria-label={t("canvas.previewTab")} title={t("canvas.previewTab")}>
+            <Eye className={styles.viewIcon} aria-hidden="true" />
+            <span className={styles.viewLabel}>{t("canvas.previewTab")}</span>
           </ToggleGroupItem>
-          <ToggleGroupItem value="list" size="sm">
-            {t("canvas.filesTab")}
+          <ToggleGroupItem value="list" size="sm" className={styles.viewItem} aria-label={t("canvas.filesTab")} title={t("canvas.filesTab")}>
+            <FolderOpen className={styles.viewIcon} aria-hidden="true" />
+            <span className={styles.viewLabel}>{t("canvas.filesTab")}</span>
           </ToggleGroupItem>
         </ToggleGroup> : null}
         <span className={styles.actions}>
@@ -233,10 +224,13 @@ export function CanvasPanel({
                 }
                 activeDownloadRef.current = contentKey
                 setDownloadState({ key: contentKey, status: "loading" })
-                const controller = download.kind === "delivery" && !preview ? new AbortController() : null
+                const controller = download.kind === "file" || !preview ? new AbortController() : null
                 downloadControllerRef.current = controller
+                const epoch = answerActionBoundary?.readEpoch
                 const action = download.kind === "file"
-                  ? downloadFile(download.url, download.name)
+                  ? downloadWorkspaceOutput(sessionId, download.file, controller!.signal, () => Boolean(
+                    answerActionBoundary?.sessionId === sessionId && answerActionBoundary.readEpoch === epoch && answerActionBoundary.isCurrent(),
+                  ))
                   : preview
                     ? fileFetch(`/api/dev/preview-files/${encodeURIComponent(download.delivery.artifactId)}`)
                         .then((response) => downloadFetchedFile(response, download.delivery.title))
@@ -343,6 +337,34 @@ export function CanvasPanel({
   )
 }
 
+type DeliveryListEntry =
+  | { kind: "delivery"; delivery: SessionDelivery }
+  | { kind: "directory"; path: string; deliveries: SessionDelivery[] }
+
+function groupDeliveries(deliveries: readonly SessionDelivery[]): DeliveryListEntry[] {
+  const entries: DeliveryListEntry[] = []
+  const directories = new Map<string, SessionDelivery[]>()
+  for (const delivery of deliveries) {
+    const path = delivery.displayPath
+    const separator = path?.lastIndexOf("/") ?? -1
+    // This is only display grouping, not a path lookup or a fallback for old metadata.
+    const directory = path?.startsWith("/") && !path.startsWith("//") && separator > 0 && separator < path.length - 1
+      ? path.slice(1, separator) : null
+    if (directory === null) {
+      entries.push({ kind: "delivery", delivery })
+      continue
+    }
+    const existing = directories.get(directory)
+    if (existing) existing.push(delivery)
+    else {
+      const group = [delivery]
+      directories.set(directory, group)
+      entries.push({ kind: "directory", path: directory, deliveries: group })
+    }
+  }
+  return entries
+}
+
 function WorkspaceList({
   selected,
   files,
@@ -353,14 +375,33 @@ function WorkspaceList({
   onSelectDelivery,
 }: {
   selected: ResolvedCanvasContent
-  files: WorkspaceFileEntry[]
+  files: readonly WorkspaceOutputFile[]
   deliveries: SessionDelivery[]
   deliveriesHasMore: boolean
   locale: string
-  onSelectFile: (file: WorkspaceFileEntry) => void
+  onSelectFile: (file: WorkspaceOutputFile) => void
   onSelectDelivery: (delivery: SessionDelivery) => void
 }) {
   const { t } = useLocale()
+  const isSelected = (delivery: SessionDelivery) => selected.kind === "delivery" &&
+    selected.delivery.conversationId === delivery.conversationId && selected.delivery.artifactId === delivery.artifactId
+  const deliveryRow = (delivery: SessionDelivery) => {
+    const current = isSelected(delivery)
+    return (
+      <li key={JSON.stringify([delivery.conversationId, delivery.artifactId])}>
+        <Button variant="ghost" type="button"
+          className={cn(styles.treeItem, current && styles.treeItemSelected)}
+          data-selected={current ? "true" : undefined} aria-pressed={current}
+          onClick={() => onSelectDelivery(delivery)}>
+          <span className={styles.treeName}>
+            <FileCheck2 className={styles.treeIcon} aria-hidden="true" />
+            {delivery.title}
+          </span>
+          <span className={styles.meta}>{formatBytes(delivery.size)} · {formatDeliveryTime(delivery.createdAt, locale)}</span>
+        </Button>
+      </li>
+    )
+  }
   return (
     <div className={styles.listing}>
       {/* 成果分组：冻结结论置顶——「拿走什么」优先于「过程文件」。 */}
@@ -371,29 +412,14 @@ function WorkspaceList({
         </Empty>
       ) : (
         <ul className={styles.tree}>
-          {deliveries.map((delivery) => {
-            const selectedDelivery = selected.kind === "delivery" && selected.delivery.conversationId === delivery.conversationId && selected.delivery.artifactId === delivery.artifactId
-            return (
-              <li key={JSON.stringify([delivery.conversationId, delivery.artifactId])}>
-                <Button
-                  variant="ghost"
-                  type="button"
-                  className={cn(styles.treeItem, selectedDelivery && styles.treeItemSelected)}
-                  data-selected={selectedDelivery ? "true" : undefined}
-                  aria-pressed={selectedDelivery}
-                  onClick={() => onSelectDelivery(delivery)}
-                >
-                  <span className={styles.treeName}>
-                    <FileCheck2 className={styles.treeIcon} />
-                    {delivery.title}
-                  </span>
-                  <span className={styles.meta}>
-                    {formatBytes(delivery.size)} · {formatDeliveryTime(delivery.createdAt, locale)}
-                  </span>
-                </Button>
-              </li>
-            )
-          })}
+          {groupDeliveries(deliveries).map(entry => entry.kind === "delivery" ? deliveryRow(entry.delivery) : (
+            <li key={`directory:${entry.path}`}>
+              <details open={entry.deliveries.some(isSelected)}>
+                <summary className={styles.directorySummary}><span>{entry.path}</span></summary>
+                <ul className={cn(styles.tree, styles.directoryEntries)}>{entry.deliveries.map(deliveryRow)}</ul>
+              </details>
+            </li>
+          ))}
         </ul>
       )}
       {deliveriesHasMore ? <Button variant="link" asChild><a href="/app/library?tab=artifacts">{t("delivery.viewAll")}</a></Button> : null}
@@ -405,19 +431,20 @@ function WorkspaceList({
       ) : (
         <ul className={styles.tree}>
           {files.map((entry) => {
-            const selectedFile = selected.kind === "file" && selected.file.path === entry.path
+            const selectedFile = selected.kind === "file" && selected.file.runId === entry.runId && selected.file.versionId === entry.versionId
             return (
-              <li key={entry.path}>
+              <li key={JSON.stringify([entry.runId, entry.versionId])}>
                 <Button
                   variant="ghost"
                   type="button"
                   className={cn(styles.treeItem, selectedFile && styles.treeItemSelected)}
                   data-selected={selectedFile ? "true" : undefined}
+                  data-workspace-version={entry.versionId}
                   aria-pressed={selectedFile}
                   onClick={() => onSelectFile(entry)}
                 >
                   <span className={styles.treeName}>{entry.path}</span>
-                  <span className={styles.meta}>{formatBytes(entry.bytes)}</span>
+                  <span className={styles.meta}>{entry.versionId.slice(4, 12)} · {formatBytes(entry.bytes)}</span>
                 </Button>
               </li>
             )
@@ -430,62 +457,13 @@ function WorkspaceList({
 
 function DeliveryTextPreview({ delivery, sessionId, boundary }: { delivery: SessionDelivery; sessionId: string; boundary: ProjectReadBoundary | undefined }) {
   const { t } = useLocale()
-  const subject = boundary?.subject ?? null
-  const admitted = boundary?.admitted === true
-  const generation = boundary?.generation
-  const eligible = sessionId === delivery.conversationId && Number.isSafeInteger(delivery.size) && delivery.size >= 0 && delivery.size <= ARTIFACT_TEXT_PREVIEW_MAX_BYTES && (delivery.mime === "text/plain" || delivery.mime === "text/markdown")
-  const scope = useMemo(() => ({ subject, admitted, generation, conversationId: delivery.conversationId, artifactId: delivery.artifactId, mime: delivery.mime, size: delivery.size, eligible }), [subject, admitted, generation, delivery.conversationId, delivery.artifactId, delivery.mime, delivery.size, eligible])
-  const [result, setResult] = useState<{ scope: typeof scope; kind: "text"; text: string } | { scope: typeof scope; kind: "failed" | "unsupported" } | null>(null)
-  const live = useRef<typeof scope | null>(null)
-  const retiredActor = useRef<string | null>(null)
-  const actor = JSON.stringify([subject, generation])
-  useLayoutEffect(() => {
-    live.current = scope
-    return () => { if (live.current === scope) live.current = null }
-  }, [scope])
-  useEffect(() => {
-    if (!eligible || !admitted || subject === null) return
-    const controller = new AbortController()
-    const current = () => live.current === scope && !controller.signal.aborted
-    const markerMatches = () => {
-      try { return readBrowserAuthIndexSubject() === subject }
-      catch { return false }
-    }
-    const retire = () => {
-      retiredActor.current = actor
-      controller.abort()
-      if (live.current === scope) setResult({ scope, kind: "failed" })
-    }
-    const storage = (event: StorageEvent) => {
-      if (event.key !== null && event.key !== AUTH_INDEX_SUBJECT_KEY) return
-      // Events are queued: A→B→A must retire A even when storage is already A.
-      if (event.key === null || event.oldValue !== event.newValue || !markerMatches()) retire()
-    }
-    window.addEventListener("storage", storage)
-    window.addEventListener("pagehide", retire)
-    void Promise.resolve().then(async () => {
-      if (!current()) return
-      if (retiredActor.current === actor || !markerMatches()) { retire(); return }
-      const preview = await readLibraryArtifactTextPreview(scope, controller.signal)
-      if (!current()) return
-      if (!markerMatches()) { retire(); return }
-      if (preview.kind === "text") {
-        if (preview.mimeType !== scope.mime || Number(preview.sizeBytes) !== scope.size) throw new Error("library_artifact_preview_metadata_changed")
-        setResult({ scope, kind: "text", text: preview.text })
-      } else setResult({ scope, kind: "unsupported" })
-    }).catch(() => { if (current()) setResult({ scope, kind: "failed" }) })
-    return () => {
-      controller.abort()
-      window.removeEventListener("storage", storage)
-      window.removeEventListener("pagehide", retire)
-    }
-  }, [scope, eligible, admitted, subject, actor])
-  const visible = result?.scope === scope ? result : null
-  if (!admitted || subject === null || sessionId !== delivery.conversationId) return <p className="sr-only" role="status">{t("artifact.cannotPreview")}</p>
-  if (!eligible || visible?.kind === "unsupported") return <p>{t("artifact.cannotPreview")}</p>
-  if (visible?.kind === "text") return <pre className="whitespace-pre-wrap break-words" aria-label={t("canvas.previewTab")}>{visible.text}</pre>
-  if (visible?.kind === "failed") return <p className="sr-only" role="alert">{t("artifact.cannotPreview")}</p>
-  return <div aria-busy="true"><p className="sr-only" role="status">{t("artifact.loadingPreview")}</p></div>
+  const { conversationId, artifactId, assetId, runId, mime, size } = delivery
+  const read = useCallback((signal: AbortSignal) => readLibraryArtifactTextPreview({ conversationId, artifactId }, signal, {
+    assetId, sourceRunId: runId, mimeType: mime, sizeBytes: String(size),
+  }), [conversationId, artifactId, assetId, runId, mime, size])
+  if (sessionId !== conversationId) return <p className="sr-only" role="status">{t("artifact.cannotPreview")}</p>
+  if (!isLibraryTextPreviewSupported(mime, size)) return <p>{t("artifact.cannotPreview")}</p>
+  return <LibraryTextPreview boundary={boundary} read={read} quietFailure />
 }
 
 function ContentBody({
@@ -498,16 +476,8 @@ function ContentBody({
   readBoundary?: ProjectReadBoundary
 }) {
   switch (content.kind) {
-    case "file": {
-      const name = content.file.path.split("/").at(-1) ?? content.file.path
-      return (
-        <PreviewBody
-          url={fileUrl(sessionId, content.file.path)}
-          mime={content.file.mime}
-          name={name}
-        />
-      )
-    }
+    case "file":
+      return <WorkspaceOutputPreview key={JSON.stringify([content.file.runId, content.file.versionId])} sessionId={sessionId} file={content.file} boundary={readBoundary} />
     case "delivery": {
       const { delivery } = content
       // Small text is separately verified; native 1 GiB downloads remain unbuffered.
@@ -524,4 +494,14 @@ function ContentBody({
     case "node":
       return <>{content.node}</>
   }
+}
+
+
+function WorkspaceOutputPreview({ sessionId, file, boundary }: { sessionId: string; file: WorkspaceOutputFile; boundary: ProjectReadBoundary | undefined }) {
+  const { t } = useLocale()
+  const { runId, versionId, path, mime, bytes, contentSha256 } = file
+  const read = useCallback((signal: AbortSignal) => readWorkspaceOutputPreview(sessionId, { runId, versionId, path, mime, bytes, contentSha256 }, signal),
+    [sessionId, runId, versionId, path, mime, bytes, contentSha256])
+  if (!canPreviewWorkspaceOutput(mime, bytes)) return <p>{t("artifact.cannotPreview")}</p>
+  return <LibraryTextPreview boundary={boundary} read={read} quietFailure />
 }

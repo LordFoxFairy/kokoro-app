@@ -1,15 +1,9 @@
 import { useEffect, useRef, type RefObject } from "react"
 
 import { scheduledDateKey } from "../model/calendar"
-import type { ScheduledTaskInitial, ScheduledTaskFrequency, ScheduledTaskConditions } from "../model/scheduled-task"
+import type { ScheduledTaskInitial, ScheduledTaskFrequency } from "../model/scheduled-task"
 
 export type ScheduledTaskEditorState = {
-  triggerKind: "calendar" | "rss"
-  feedUrl: string
-  conditions: ScheduledTaskConditions
-  expiryTimezone: string
-  initialExpiryDate: string
-  initialExpiryInstant: string | undefined
   title: string
   frequency: ScheduledTaskFrequency
   weekdays: number[]
@@ -34,25 +28,18 @@ export function browserTimezone(): string {
 export function initialScheduledTaskEditorState(
   initialTask: ScheduledTaskInitial | null,
   initialPrompt: string,
-  defaultTime = "08:00",
 ): ScheduledTaskEditorState {
-  const expiryTimezone = browserTimezone()
-  const timezone = initialTask?.timezone || expiryTimezone
-  const expiryDate = scheduledDateKey(initialTask?.expiresAt, initialTask?.triggerKind === "rss" ? expiryTimezone : timezone) ?? ""
+  const timezone = initialTask?.timezone || browserTimezone()
   return {
-    triggerKind: initialTask?.triggerKind ?? "calendar",
-    feedUrl: initialTask?.feedUrl ?? "",
-    conditions: initialTask?.conditions?.map(group => group.map(clause => ({ ...clause }))) ?? [],
-    expiryTimezone, initialExpiryDate: expiryDate, initialExpiryInstant: initialTask?.expiresAt,
     title: initialTask?.title ?? "",
     frequency: initialTask?.frequency ?? "daily",
     weekdays: [...(initialTask?.weekdays ?? [])],
     monthDays: [...(initialTask?.monthDays ?? [])],
     localDate: initialTask?.localDate ?? "",
-    time: initialTask?.time ?? defaultTime,
+    time: initialTask?.time ?? "08:00",
     timezone,
     expires: initialTask?.expiresAt !== undefined,
-    expiryDate,
+    expiryDate: scheduledDateKey(initialTask?.expiresAt, timezone) ?? "",
     prompt: initialTask?.prompt ?? initialPrompt,
     autoApprove: initialTask?.autoApprove ?? false,
   }

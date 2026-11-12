@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { canonicalProjectIdSchema } from "./conversation-move"
 
 const artifactKind = z.enum(["document", "code", "image", "audio", "video", "data", "archive", "other"])
 const decimalBytes = z.string().regex(/^(0|[1-9][0-9]*)$/u).refine((value) => Number.isSafeInteger(Number(value)) && Number(value) <= 1_073_741_824)
@@ -16,6 +17,7 @@ export const libraryArtifactItemSchema = z.object({
   content_sha256: z.string().regex(/^[0-9a-f]{64}$/u),
   source_run_id: z.string().min(1).max(191),
   delivered_at: z.string().datetime({ offset: true }),
+  favorited: z.boolean(),
 }).strict()
 
 const cursor = z.string().min(1).max(4096).nullable()
@@ -24,6 +26,10 @@ const artifactPage = z.object({ items: z.array(libraryArtifactItemSchema).min(1)
 const meta = z.object({ request_id: z.string().min(1) }).strict()
 
 export const libraryArtifactListResponseSchema = z.object({ data: z.union([emptyPage, artifactPage]), meta }).strict()
-export const libraryArtifactDetailResponseSchema = z.object({ data: libraryArtifactItemSchema, meta }).strict()
+const libraryArtifactDetailSchema = libraryArtifactItemSchema.extend({
+  project_ref: canonicalProjectIdSchema.nullable().optional(),
+})
+export const libraryArtifactDetailResponseSchema = z.object({ data: libraryArtifactDetailSchema, meta }).strict()
 
 export type LibraryArtifactWire = z.infer<typeof libraryArtifactItemSchema>
+export type LibraryArtifactDetailWire = z.infer<typeof libraryArtifactDetailSchema>

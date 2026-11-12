@@ -1,7 +1,7 @@
 import { proxyAdminBilling } from "@/lib/server/admin-billing-proxy"
 import {emptyModelPublishBody} from "@/lib/server/model-publish-body"
 import { requestIdForRequest } from "@/lib/server/bff-response"
-import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
+import { InvalidBrowserCookieError, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { fetchWithDomain, requestWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -33,7 +33,7 @@ async function readBody(request: Request): Promise<ArrayBuffer | null> {
   return body !== null && body.byteLength === Number(length) ? body : null
 }
 
-/** Only the discovery read uses a single bounded budget including session admission. */
+/** The discovery read uses one bounded BFF request/body budget. */
 async function discoverModels(request: Request, config: NonNullable<ReturnType<typeof productBffConfig>>, path: string[], requestId: string, deadline: number): Promise<Response> {
   if (new URL(request.url).search !== "" || request.body !== null ||
       ["content-length", "transfer-encoding", "content-type", "if-match", "if-none-match", "idempotency-key"].some(name => request.headers.has(name)))
@@ -52,10 +52,10 @@ async function discoverModels(request: Request, config: NonNullable<ReturnType<t
   })
   const work = async (): Promise<Response> => {
     if (controller.signal.aborted) return unavailable()
-    const claims = await admittedProductSession(new Request(request, { signal: controller.signal }), config)
+
     if (controller.signal.aborted || Date.now() >= deadline) return unavailable()
-    if (claims === null) return failure(401, "session_authentication_required", requestId)
-    const headers = productBffHeaders(config, claims, requestId)
+
+    const headers = productBffHeaders(config, request, requestId)
     headers.set("accept", "application/json")
     const upstream = await requestWithDomain(
       `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/admin/${path.map(encodeURIComponent).join("/")}`,
@@ -73,7 +73,7 @@ async function discoverModels(request: Request, config: NonNullable<ReturnType<t
     return new Response(body, { status: upstream.status, headers: { "content-type": contentType!, "cache-control": "no-store", "x-request-id": requestId } })
   }
   try {
-    return await Promise.race([work().catch(unavailable), cancelled])
+    return await Promise.race([work().catch(error => error instanceof InvalidBrowserCookieError ? failure(400, "invalid_admin_request", requestId) : unavailable()), cancelled])
   } finally {
     clearTimeout(timer)
     request.signal.removeEventListener("abort", abort)
@@ -84,8 +84,8 @@ async function discoverModels(request: Request, config: NonNullable<ReturnType<t
 /**
  * The product Web owns the browser session. Admin is an independent console
  * surface, not a second OAuth relying party: it forwards its same-origin
- * browser request here and this adapter alone presents the product access
- * credential to the BFF.
+ * browser request here and this adapter only transports allowlisted native cookies
+ * to the BFF authentication edge.
  */
 async function handle(request: Request, context: Context): Promise<Response> {
   // Admin uses this response correlation ID to prove that its same-origin
@@ -123,14 +123,6 @@ async function handle(request: Request, context: Context): Promise<Response> {
   if (modelRead && ["if-match", "if-none-match", "idempotency-key", "content-type"].some((name) => request.headers.has(name)))
     return failure(400, "invalid_admin_request", requestId)
 
-  let claims
-  try {
-    claims = await admittedProductSession(request, config)
-  } catch {
-    return failure(503, "admin_gateway_unavailable", requestId)
-  }
-  if (claims === null) return failure(401, "session_authentication_required", requestId)
-
   const mutation = request.method !== "GET"
   let body: ArrayBuffer | null = null
   if (mutation) {
@@ -146,29 +138,30 @@ async function handle(request: Request, context: Context): Promise<Response> {
     return failure(400, "invalid_admin_request", requestId)
   }
 
-  const headers = productBffHeaders(config, claims, requestId)
-  headers.set("accept", "application/json")
-  if (body !== null) headers.set("content-type", "application/json")
-  if (mutation) {
-    const idempotency = request.headers.get("idempotency-key")
-    if (idempotency !== null) headers.set("idempotency-key", idempotency)
-    if (modelWrite) {
-      // Keep the exact owner's precondition, including invalid/combined values:
-      // only the BFF decides whether this is create, update or a 400/428 failure.
-      for (const name of ["if-match", "if-none-match"]) {
-        const value = request.headers.get(name)
-        if (value !== null) headers.set(name, value)
-      }
-    }
-  }
   let upstream: Response
   try {
+    const headers = productBffHeaders(config, request, requestId)
+    headers.set("accept", "application/json")
+    if (body !== null) headers.set("content-type", "application/json")
+    if (mutation) {
+      const idempotency = request.headers.get("idempotency-key")
+      if (idempotency !== null) headers.set("idempotency-key", idempotency)
+      if (modelWrite) {
+        // Keep the exact owner's precondition, including invalid/combined values:
+        // only the BFF decides whether this is create, update or a 400/428 failure.
+        for (const name of ["if-match", "if-none-match"]) {
+          const value = request.headers.get(name)
+          if (value !== null) headers.set(name, value)
+        }
+      }
+    }
     upstream = await fetchWithDomain(
       `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/admin/${path.map(encodeURIComponent).join("/")}${new URL(request.url).search}`,
       config.domain,
       { method: request.method, headers, ...(body === null ? {} : { body }), cache: "no-store", signal: request.signal },
     )
-  } catch {
+  } catch (error) {
+    if (error instanceof InvalidBrowserCookieError) return failure(400, "invalid_admin_request", requestId)
     return failure(503, "admin_gateway_unavailable", requestId)
   }
   const upstreamId = upstream.headers.get("x-request-id")

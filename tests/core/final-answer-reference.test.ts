@@ -15,7 +15,7 @@ describe("final answer identity, not last visible text", () => {
     stage: { id: "stage", role: "assistant", runId: "run", content: "Checking the repository", textState: "completed" },
     answer: { id: "answer", role: "assistant", runId: "run", content: "The result", textState: "completed" },
   }
-  const segments = groupSegments([{ kind: "text", seq: "1", segmentId: "stage" }, { kind: "text", seq: "5", segmentId: "answer" }], [], messages)
+  const segments = groupSegments([{ kind: "text", seq: "1", segmentId: "stage" }, { kind: "text", seq: "5", segmentId: "answer" }], messages)
   const args = { runId: "run", succeeded: true, partsComplete: true, finalSegmentId: "answer", segments, messagesById: messages }
   it("separates only explicit complete final text and keeps process order", () => {
     expect(completedTurnSections(args)).toEqual({ process: [segments[0]], final: segments[1] })
@@ -40,7 +40,7 @@ const history = (revision: string, final?: string) => stateFromSnapshot(parseSes
 it("keeps live final identity through unrelated frames and an older snapshot/page", () => {
   let state = history("4")
   state = applyChatProjectionEvents(state, [makeEvent("run.completed", { status: "completed", final_segment_id: "answer" }, { run_id: "run", publicSequence: "9" })])
-  state = applyChatProjectionEvents(state, [makeEvent("message.delta", { segment_id: "other", delta: "later unrelated turn" }, { run_id: "other", publicSequence: "10" })])
+  state = applyChatProjectionEvents(state, [makeEvent("message.text_snapshot", { segment_id: "other", content: "later unrelated turn" }, { run_id: "other", publicSequence: "10" })])
   expect(state.finalAnswersByRun?.run).toEqual({ segmentId: "answer", revision: "9" })
   state = mergeMessageParts(state, { message_id: "owner", run_id: "run", revision: "4", items: [] }, [], true)
   expect(state.finalAnswersByRun?.run).toEqual({ segmentId: "answer", revision: "9" })

@@ -1,14 +1,6 @@
-## 目录读取失败的可见恢复
+## 操作区按内容排版
 
-设置目录的 `SkillCatalogDialog` 与独立 `/app/skills` 的 `KokoroSkillsSurface` 是两个展示入口，共用原 Manus owner 读取适配。两处首读、搜索/分类失败均显示现有本地化 Alert，显式重试仅重读当前目录条件；分页失败保留原卡片和 cursor，经原“加载更多”恢复。沿各自现有读取主体/代际及迟到围栏，不重放安装、启停或发布命令。
-
-## 技能历史的读取换代
-
-`personal-skill-management` 将现有可信 generation 传入历史组件。历史列表、当前选择的包正文和分页请求绑定窗口/准入/代际/目标的读取实例；关闭重开或重新准入先退休旧事实，再等待原 GET，迟到结果不复活旧 publication 或恢复按钮。原未知 Restore 保留在父组件，显式重试仍复用原包、body/key/CAS，不靠重建组件丢弃意图。历史行直接显示真实修订号和本地化完整创建日期时间，读取不发布或升级安装。
-
-## Skill 分享链接撤销
-
-详情仅管理当前主体的显式 Create ACK，不以技能作者推断链接创建者。再次复制缓存链接前 Resolve；明确确认才 DELETE；同源适配读取Next空流至EOF核零字节，content-length只允许缺省或0，拒TE／实际字节，正式owner保持无body／framing；取消零写；精确 revoked ACK 才显示停止成功。未知结果只 GET 原 share_id，404 仅显示不可用；关闭、换资源／主体／准入退休命令及迟到结果。同主体重开可读取 RAM 原意图，硬刷新后须显式分享取得本人权威 ACK，不伪造分享列表。项目详情与 preview 不发分享命令，原匿名边界及发布范围不变。
+Skills池的Browse／Create共享动作类不再锁72／84／116px，嵌入设置也不锁两行32px；搜索保可用宽度，动作自然增高／换行，范围筛选独立占一行并按文案宽度分配。窄屏不再改变toolbar主轴或强制等宽拆单词；长文案超过单行容器才自然折行。不改共享Button／业务hook／创建或导入协议。正常英文测量与代表语言的浏览器范围见CURRENT，不冒全部翻译完整或全站视觉验收。
 
 ## Project Skill 精确内容消费者
 
@@ -190,8 +182,6 @@ Settings 的正式入口是 `src/ui/settings/sections/skills-settings-section.ts
   返回 `skill_id` 与 `revision_skill_id` 时读取真实 package tree 和正文。缺少 binding 的旧投影保持详情入口禁用，
   不再由浏览器合成 YAML、文件树或示例正文。目录／安装 metadata 读取失败保稳定概览／reader 结构，
   以正常进入／重新准入恢复精确 locator，保同目标的文件／滚动意图，不重放安装、分享或发布命令。
-  文件读取失败且没有已确认正文时，显示可见提示；精确版本仍有效时可显式重试原 GET。
-  权限拒绝仍退休正文与安装事实，不通过重试按钮恢复旧权限或自动重放写入。
 - `@/lib/query` 与 `skills-resource-cache`：安装池使用 client-scoped `skillResourceKey(SKILLS_KEY, client)`；目录使用同样隔离的 `SKILLS_CATALOG_KEY`。正式 adapter 的 `skillQuota` 返回明确缺省，不请求旧 quota API；不存在可由旧 name-based cache 冒充的正式系列历史。
 
 ## 陷阱

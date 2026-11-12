@@ -76,7 +76,7 @@ export function MemoryImportDialog({ triggerLabel, card = false }: { triggerLabe
           <ArrowRight aria-hidden="true" className={styles.personalizationImportArrow} />
         </Button>
       ) : <Button type="button" variant="outline">{triggerLabel}</Button>}</DialogTrigger>
-      <DialogContent className={`${styles.personalizationDialog} ${styles.memoryDialog}`} closeLabel={t("shell.closeDialog")}>
+      <DialogContent className={styles.personalizationDialog} closeLabel={t("shell.closeDialog")}>
         <DialogHeader>
           <DialogTitle>{t("settings.importMemory")}</DialogTitle>
           <DialogDescription>{t("settings.importMemoryDescription")}</DialogDescription>

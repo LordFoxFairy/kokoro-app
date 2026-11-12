@@ -2,7 +2,6 @@ const BASE_SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), browsing-topics=()",
   "X-DNS-Prefetch-Control": "off",
 } as const
 
@@ -56,9 +55,10 @@ export function contentSecurityPolicy(nonce: string, development = false, localU
   ].join("; ")
 }
 
-export function securityHeaders(nonce: string, development = false, localUpload?: LocalUploadPolicyContext): Record<string, string> {
+export function securityHeaders(nonce: string, development = false, localUpload?: LocalUploadPolicyContext, workbenchDocument = false) {
   return {
     ...BASE_SECURITY_HEADERS,
+    "Permissions-Policy": `camera=(), microphone=(${workbenchDocument ? "self" : ""}), geolocation=(), browsing-topics=()`,
     "Content-Security-Policy": contentSecurityPolicy(nonce, development, localUpload),
   }
 }

@@ -2,7 +2,8 @@
 // Authentication/owner are fixtures; this is not a production BFF/PG acceptance claim.
 import { createServer, type Server } from "node:http"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession: vi.fn(async () => ({ access: "fixture-product-access", accessExpiresAt: Date.now() + 60_000 })) }))
+
+
 import { GET } from "@/app/api/session/[...path]/route"
 import { createSessionClient } from "@/engine/client"
 import { fetchCompleteSnapshot } from "@/engine/hydrate-process"
@@ -59,7 +60,7 @@ describe("exact private snapshot/parts scope over HTTP", () => {
     expect(observed.at(-2)).toContain(expected); expect(observed.at(-1)).toContain(expected)
   })
   it("rejects a cursor issued to all rather than silently downgrading an explicit direct read", async () => {
-    const response = await GET(new Request("http://app.test/api/session/sessions/session-direct"), { params: Promise.resolve({ path: ["sessions", "session-direct"] }) })
+    const response = await GET(new Request("http://app.test/api/session/sessions/session-direct", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), { params: Promise.resolve({ path: ["sessions", "session-direct"] }) })
     const raw = await response.json() as { messages: { rendering: { parts_cursor: string } }[] }
     const client = createSessionClient({ baseUrl: "/api/session" })
     await expect(client.fetchMessageParts({ sessionId: "session-direct", messageId: "message", cursor: raw.messages[0]!.rendering.parts_cursor, scope: { kind: "direct" }, signal: new AbortController().signal })).rejects.toMatchObject({ status: 400, code: "invalid_cursor" })

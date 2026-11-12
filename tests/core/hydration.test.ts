@@ -6,9 +6,26 @@ import { parseSessionSnapshot, type SessionSnapshot } from "@/contract/http"
 import { stateFromSnapshot } from "@/core/hydration"
 import { applyChatProjectionEvents } from "@/core/reducer"
 import { buildThreadItems, groupSegments } from "@/core/projections"
-import { AgUiEventMapper } from "@/engine/agui-event-mapper"
+import { AgUiEventMapper, type AgUiMappedFrame } from "@/engine/agui-event-mapper"
+import { createSdkTextProjector } from "@/engine/message-parts-reader"
+import type { ReducerProjectionEvent } from "@/core/chat-projection-event"
 
 import { AGENT_FAILURE_PROFILES, makeFailedSnapshot, makePendingPause, makeSnapshot, makeSnapshotDelivery } from "./fixtures"
+
+async function sdkSnapshots(frames: readonly AgUiMappedFrame[], prefix: string) {
+  const reader = createSdkTextProjector(() => {})
+  const events: ReducerProjectionEvent[] = []
+  try {
+    for (const frame of frames) {
+      const input = frame.projectionEvent
+      if (input?.kind !== "message.delta") throw Error("Expected text input")
+      const snapshot = await reader.project(input, frame.uiMessageChunks, prefix)
+      prefix = snapshot.payload.content
+      events.push(snapshot)
+    }
+    return events
+  } finally { reader.close() }
+}
 
 describe("stateFromSnapshot", () => {
   it("R135 restores selected process independently from a queued successor head", () => {
@@ -230,7 +247,7 @@ describe("stateFromSnapshot", () => {
 
 
 describe("snapshot text continuation", () => {
-  it("keeps a partial durable message before and joined to same-run CONTENT/END after its watermark", () => {
+  it("keeps a partial durable message before and joined to same-run CONTENT/END after its watermark", async () => {
     const watermark = "agui_0000000000000000000000000000000a"
     const hydrated = stateFromSnapshot(makeSnapshot({
       activeRun: { run_id: "run_1", status: "running" }, eventWatermark: watermark,
@@ -247,7 +264,7 @@ describe("snapshot text continuation", () => {
         timestamp: "2026-07-02T00:00:01Z",
       } },
     }))
-    const events = frames.flatMap((frame) => frame.projectionEvent ? [frame.projectionEvent] : [])
+    const events = await sdkSnapshots(frames, "Hello! How can ")
     const resumed = applyChatProjectionEvents(hydrated, events)
     const rendered = buildThreadItems(resumed).flatMap((item) => item.kind === "assistant-turn"
       ? groupSegments(item.steps).map((segment) => item.messagesById[segment.segmentId]?.content) : [])
@@ -272,7 +289,7 @@ it("does not mark a completed snapshot message claimable even if its run is stil
 })
 
 
-it.each([1, 3])("continues the unique streaming prefix after %i completed same-run messages", (completedCount) => {
+it.each([1, 3])("continues the unique streaming prefix after %i completed same-run messages", async (completedCount) => {
   const history = Array.from({ length: completedCount }, (_, index) => ({
     message_id: `completed_${index}`, role: "assistant" as const, run_id: "run_1",
     content: `history ${index}`, status: "completed" as const, created_at: "2026-07-02T00:00:00Z",
@@ -283,18 +300,19 @@ it.each([1, 3])("continues the unique streaming prefix after %i completed same-r
       content: "Hello ", status: "streaming", created_at: "2026-07-02T00:00:01Z" }],
   }))
   const mapper = new AgUiEventMapper()
-  const events = [
+  const frames = [
     { type: "TEXT_MESSAGE_CONTENT", delta: "world" },
     { type: "TEXT_MESSAGE_END" },
-  ].flatMap((frame, index) => {
+  ].map((frame, index) => {
     const mapped = mapper.map(`agui_${(11 + index).toString(16).padStart(32, "0")}`, {
       ...frame, timestamp: 1, messageId: "live_segment", metadata: { kokoro: { public_sequence: String(++publicLedgerFixtureSequence),
         event_id: `continuation_${index}`, seq: 11 + index, session_id: "conv_1", run_id: "run_1",
         timestamp: "2026-07-02T00:00:02Z",
       } },
     })
-    return mapped.projectionEvent ? [mapped.projectionEvent] : []
+    return mapped
   })
+  const events = await sdkSnapshots(frames, "Hello ")
   const resumed = applyChatProjectionEvents(hydrated, events)
   const rendered = buildThreadItems(resumed).flatMap((item) => item.kind === "assistant-turn"
     ? groupSegments(item.steps).map((segment) => item.messagesById[segment.segmentId]?.content) : [])

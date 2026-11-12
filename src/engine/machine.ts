@@ -1,15 +1,16 @@
 import { freezeCustomApiSelection, type CustomApiSelection, type CustomApiSelectionRestore } from "./custom-api-selection"
 import type { McpSelectionRestore } from "./engine-types"
-import { readMessageParts, type MessagePartsRead } from "./message-parts-reader"
+import { createSdkTextProjector, projectMessagePartsReplay, readMessageParts, type MessagePartsRead } from "./message-parts-reader"
 import { mergeMessageParts, preserveMessageParts } from "@/core/reducer"
-import { selectedMcpConnectionIdsSchema } from "@/contract/chat"
+import { selectedMcpConnectionIdsSchema, selectedResourceRefsSchema, type SelectedResourceRef } from "@/contract/chat"
 // 显式会话状态机 + 引擎：snapshot-first 水合 / 流句柄 / in-flight 守卫 / runId 锚定收束单点持有。
 
-import type { ChatProjectionEvent } from "@/core/chat-projection-event"
+import type { ChatProjectionEvent, ReducerProjectionEvent, TextProjectionInput } from "@/core/chat-projection-event"
+import type { AgUiTransportFrame } from "./agui-chat-transport"
 import type { EventCursor } from "@/contract/agui-events"
 import { resumeDecisionSchema } from "@/contract/control"
 import type { ResumeRunArgs } from "./execution-adapter"
-import type { PendingSubmission } from "./submission-recovery"
+import type { CreateSubmission, PendingSubmission, SteerReceipt, SteerSubmission, SubmissionReceipt } from "./submission-recovery"
 
 import type { MessageCreateReceipt, SessionSnapshot } from "@/contract/http"
 
@@ -29,9 +30,10 @@ import {
 import { deliveryFromSnapshot, stateFromSnapshot } from "@/core/hydration"
 import {
   appendUserMessage,
+  applyChatProjectionEvents,
   markRunCancelled,
 } from "@/core/reducer"
-import { sameInteractionState, createSessionStreamState, normalizeRunTerminals, type SessionStreamState, type SessionMessage } from "@/core/state"
+import { sameInteractionState, createSessionStreamState, type SessionStreamState, type SessionMessage } from "@/core/state"
 
 import { SessionClientError } from "./client"
 import { reconcileUserMessageId, reduceProjectionEvents } from "./event-reducer"
@@ -41,12 +43,14 @@ import {
   type MessageExecutionOptions,
 } from "./execution-adapter"
 import {
+  interruptibleRunId,
   type EngineDeps,
   type EngineSnapshot,
   type ConnectionAvailability,
   type MessagePartsReadTarget,
   type NoticeSpec,
   type SessionEngine,
+  type SubmitDelivery,
 } from "./engine-types"
 import { IDLE_MACHINE, transition, type MachineState } from "./machine-state"
 import { DIRECT_SESSION_SCOPE, sessionScopeKey } from "./session-scope"
@@ -84,6 +88,7 @@ function defaultCreateId(prefix: string): string {
 const SAFE_CONTROL_FAILURES = new Set(["interaction_conflict", "run_control_conflict", "run_not_active", "no_pending_pause", "invalid_run_control"])
 
 const STALE_CONTROL_ERRORS = new Set(["run_not_active", "no_pending_pause", "session_deleted"])
+const STEER_STATUS_BUDGET_MS = 45_000
 
 // session 越权码（403）：activeId 指向的会话不属于当前用户——跨用户切换后 localStorage 残留了
 // 他人会话 id，或本地缓存陈旧。与 404/410（无此会话→空态即真）语义不同：这是「坏 id」，
@@ -112,7 +117,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const scope = deps.scope ?? DIRECT_SESSION_SCOPE
   const execution = createExecutionAdapter({ client: deps.client, scope })
   const taskNotifications = createTaskNotifications()
-  const notificationAdmissions = new WeakMap<PendingSubmission, number>()
+  const notificationAdmissions = new WeakMap<CreateSubmission, number>()
 
   function canRestoreDraft(candidate: ConversationStore | null): boolean {
     if (!candidate || !activeIsLocalDraft(candidate)) return false
@@ -145,22 +150,21 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let preparedSubmission: PendingSubmission | null = null
   let submissionRecoveryUnavailable = false
   // Exact receipts whose local retirement could not be saved. Retry only the local write, never POST.
-  const unsavedReceipts = new Map<string, { submission: PendingSubmission; receipt: MessageCreateReceipt }>()
+  const unsavedReceipts = new Map<string, { submission: PendingSubmission; receipt: SubmissionReceipt }>()
   // create 回执可能与 expired-cursor snapshot recovery 并发；recovery 期间先暂存，
   // 由 owner snapshot 建立新真态后再按 exact run identity 吸收，绝不抢开 stale stream。
-  let recoveredSubmission: PendingSubmission | null = null
-  let recoveredSubmissionError: string | null = null
-  let deferredCreateReceipt: { submission: PendingSubmission; receipt: MessageCreateReceipt } | null = null
+  let pendingSubmissionFailureCode: string | null = null
+  let deferredCreateReceipt: { submission: CreateSubmission; receipt: MessageCreateReceipt } | null = null
   // Stop can arrive after POST has started but before its receipt. Remember
   // those keys so an accepted late run is cancelled instead of being
   // resurrected by the delayed response.
   const cancelledSubmissions = new Map<string, string>()
-  const createInFlight = new Map<string, number>()
+  const submissionInFlight = new Set<string>()
   const observedTerminalRuns = new Set<string>()
-  const pendingSteerReceipts = new Map<symbol, PendingSubmission>()
   // Exact acknowledged local rows not yet observed in the durable projection.
   // Snapshot/live canonical identity confirms and removes these bounded intents.
-  const unprojectedAdmissions = new Map<string, SessionMessage>()
+  const unprojectedAdmissions = new Map<string, { message: SessionMessage; kind: "create" | "steer" }>()
+  let steerStatusRead: { controller: AbortController; timer: ReturnType<typeof setTimeout> | null } | null = null
   let notice: NoticeSpec | null = null
   // 当前会话 exact source refs：只在内存中保存，不从 browser store 恢复。
   let selectedSkillSourceRefs: string[] | undefined = scope.kind === "project" ? undefined : []
@@ -184,6 +188,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let locallyCreatedSessionId: string | undefined = restoringInitialDraft ? store?.activeId : undefined
   let ownerConfirmedSessionId: string | undefined
   let missingSessionId: string | undefined
+  // Keep the originally routed ID if an automatic fallback is also removed.
+  let removedConversationId: string | undefined
   let disposed = false
   let deleteIntentGeneration = 0
   let deleteIntent: { targetId: string; generation: number; promise: Promise<boolean> } | null = null
@@ -195,6 +201,15 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const partsReads = new Map<string, { controller: AbortController; fresh: boolean }>()
   const queuedPartsReads = new Map<string, { fresh: boolean; sessionId: string; generation: number; retainJournal?: boolean }>()
   const partsJournals = new Map<string, { events: ChatProjectionEvent[]; bytes: number; overflow: boolean }>()
+  // Live SDK reads and owner-baseline adoption share one ordered local projection queue.
+  let projectionQueue: Promise<void> = Promise.resolve()
+  let textGeneration = 0
+  let closeTextReader = () => {}
+  function enqueueProjection(work: () => void | Promise<void>): Promise<void> {
+    const next = projectionQueue.then(work)
+    projectionQueue = next.catch(() => {})
+    return next
+  }
   const endedPartsRuns = new Set<string>()
   const cancelledPartsRuns = new Set<string>()
   let cancelIntent: { sessionId: string; runId: string; generation: number; commandId: string; inFlight: boolean } | null = null
@@ -279,11 +294,20 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const recoverUnauthorized = deps.captureMessagePartsReadRecheck?.()
     const current = () => !disposed && messagePartsReadable(sessionId) && !controller.signal.aborted && partsReads.get(messageId)?.controller === controller && hydrateGeneration === generation && store?.activeId === sessionId && thread.messageParts?.[messageId]?.runId === known.runId
     setPartsStatus(messageId, "loading")
-    const merge = (read: MessagePartsRead, complete: boolean) => {
+    const merge = (read: MessagePartsRead, complete: boolean) => enqueueProjection(async () => {
       if (!current()) return
       if (journal.overflow) { controller.abort(); partsReads.delete(messageId); setPartsStatus(messageId, "partial"); drainPartsQueue(); readSnapshotParts(); notify(); return }
-      thread = mergeMessageParts(thread, read, journal.events, complete)
+      const replay = await projectMessagePartsReplay(read, journal.events, () => {
+        if (!current()) throw new SessionClientError("network", "Message parts projection retired")
+      })
+      if (!current()) return
+      thread = mergeMessageParts(thread, read, replay, complete)
       if (!complete) setPartsStatus(messageId, "loading")
+      notify()
+    })
+    const readFailed = (error: unknown) => {
+      if (!current()) return
+      setPartsStatus(messageId, error instanceof SessionClientError && error.status === 409 && error.code === "message_parts_changed" ? "changed" : "failed")
       notify()
     }
     void readMessageParts({ client: deps.client, sessionId, messageId, runId: known.runId, scope,
@@ -291,12 +315,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       minimumRevision: known.revision,
       ...(known.partIds === undefined ? {} : { retainedPartIds: known.partIds }),
       ...(fresh || known.cursor === undefined ? {} : { cursor: known.cursor, ...(known.watermark === undefined ? {} : { expected: { revision: known.revision, event_watermark: known.watermark, ...(known.finalSegmentId === undefined ? {} : { final_segment_id: known.finalSegmentId }) } }) }), signal: controller.signal,
-      onProgress: (read) => merge(read, false),
-    }).then((read) => merge(read, true)).catch((error: unknown) => {
-      if (!current()) return
-      setPartsStatus(messageId, error instanceof SessionClientError && error.status === 409 && error.code === "message_parts_changed" ? "changed" : "failed")
-      notify()
-    }).finally(() => {
+      onProgress: read => { void merge(read, false).catch(readFailed) },
+    }).then(read => merge(read, true)).catch(readFailed).finally(() => {
       if (partsReads.get(messageId)?.controller === controller) { partsReads.delete(messageId); drainPartsQueue(); readSnapshotParts() }
     })
   }
@@ -339,8 +359,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       submissionRecoveryUnavailable = false
       if (!restored) return false
       pendingSubmission = restored.submission
-      thread = appendUserMessage(thread, { id: restored.submission.optimisticUserId, content: restored.submission.content })
-      machine = transition(machine, { type: "FAIL", error: restored.failureCode ?? "submission_outcome_unknown" })
+      pendingSubmissionFailureCode = restored.failureCode ?? "submission_outcome_unknown"
+      if (restored.submission.kind !== "steer") {
+        thread = appendUserMessage(thread, { id: restored.submission.optimisticUserId, content: restored.submission.content })
+        machine = transition(machine, { type: "FAIL", error: pendingSubmissionFailureCode })
+      }
       return true
     } catch {
       // An unreadable record is not absence or proof that the request never left.
@@ -359,8 +382,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let snapshot: EngineSnapshot = buildSnapshot()
 
   function canSubmitMessage(): boolean {
-    if (disposed || recoveringExpiredCursor || submissionRecoveryUnavailable || connection.status !== "connected") return false
-    if (machine.phase === "idle" || machine.phase === "error") return !deps.submissionRecovery || pendingSubmission === null
+    if (disposed || recoveringExpiredCursor || submissionRecoveryUnavailable || connection.status !== "connected" || pendingSubmission !== null) return false
+    if (machine.phase === "idle" || machine.phase === "error") return true
     return store !== null && (
       machine.phase === "streaming" || machine.phase === "queued" ||
       machine.phase === "resuming" || machine.phase === "waiting"
@@ -369,8 +392,31 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   function canRetryPendingSubmission(): boolean {
     return !hydrating && !submissionRecoveryUnavailable && connection.status === "connected" &&
-      machine.phase === "error" && machine.error !== null && pendingSubmission !== null &&
-      store?.activeId === pendingSubmission.sessionId
+      pendingSubmissionFailureCode !== null && pendingSubmission !== null &&
+      !hasRejectedDelivery() && store?.activeId === pendingSubmission.sessionId && !submissionInFlight.has(pendingSubmission.idempotencyKey)
+  }
+
+  function hasRejectedDelivery(): boolean {
+    return pendingSubmission?.kind === "steer"
+      ? pendingSubmissionFailureCode === "run_control_conflict"
+      : pendingSubmissionFailureCode === "run_delivery_conflict" && pendingSubmission?.options.interruptRunId !== undefined
+  }
+
+  function canRestoreRejectedDelivery(): boolean {
+    return !disposed && !hydrating && !submissionRecoveryUnavailable && hasRejectedDelivery() && pendingSubmission !== null &&
+      store?.activeId === pendingSubmission.sessionId && !submissionInFlight.has(pendingSubmission.idempotencyKey)
+  }
+
+  function restoreRejectedDelivery(saveDraft: (content: string, refs?: readonly SelectedResourceRef[]) => boolean): boolean {
+    const intent = pendingSubmission
+    if (intent === null || !canRestoreRejectedDelivery() ||
+      !(intent.kind === "steer" ? saveDraft(intent.content) : saveDraft(intent.content, intent.options.selectedResourceRefs ?? [])) ||
+      pendingSubmission !== intent || store?.activeId !== intent.sessionId || !abandonPendingSubmission()) return false
+    if (intent.kind !== "steer") thread = { ...thread, messages: thread.messages.filter(message => message.id !== intent.optimisticUserId) }
+    if (machine.phase === "error" && machine.error === "run_delivery_conflict") machine = transition(machine, { type: "RESET" })
+    notice = null
+    notify()
+    return true
   }
 
   function buildSnapshot(): EngineSnapshot {
@@ -383,6 +429,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       ...(ownerConfirmedSessionId !== undefined && ownerConfirmedSessionId === store?.activeId ? { ownerConfirmedSessionId } : {}),
       ...(locallyCreatedSessionId !== undefined && locallyCreatedSessionId === store?.activeId ? {locallyCreatedSessionId} : {}),
       ...(missingSessionId !== undefined && missingSessionId === store?.activeId ? { missingSessionId } : {}),
+      ...(removedConversationId === undefined ? {} : { removedConversationId }),
       notice,
       store,
       thread,
@@ -396,6 +443,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       connection,
       canSubmitMessage: canSubmitMessage(),
       canRetryPendingSubmission: canRetryPendingSubmission(),
+      ...(pendingSubmissionFailureCode === null ? {} : { pendingSubmissionFailureCode }),
+      ...(canRestoreRejectedDelivery() ? { canRestoreRejectedDelivery: true } : {}),
       hasPendingSubmission: pendingSubmission !== null || preparedSubmission !== null,
       canRetryResume: retryableResume() !== null,
     }
@@ -403,6 +452,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   function reconcileConversationCache(sessionId: string): void {
     if (!store?.conversations.some((entry) => entry.id === sessionId)) return
+    if (store.activeId === sessionId) {
+      removedConversationId ??= sessionId
+      retireSteerStatusRead()
+      unprojectedAdmissions.clear()
+    }
     const next = removeConversation(store, sessionId, createId("conv"), now())
     store = next
     deps.storage.write(next)
@@ -438,32 +492,29 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function closeStream(): void {
+    textGeneration++
+    closeTextReader()
+    // A retired/non-cooperative SDK read must not hold the next scope's queue.
+    projectionQueue = Promise.resolve()
     execution.closeStream()
   }
 
-  function handleStreamEvents(events: readonly ChatProjectionEvent[]): void {
+  function handleStreamEvents(events: readonly ReducerProjectionEvent[], cursor: EventCursor): void {
     if (disposed) {
       return
     }
     const completedTextRuns = new Set<string>()
     for (const event of events) {
-      if (event.kind === "message.delta" && event.payload.text_boundary === "end") { completedTextRuns.add(event.run_id); endedPartsRuns.add(event.run_id) }
-      if (event.kind !== "message.delta" && event.kind !== "message.completed" && event.kind !== "activity.updated") continue
-      const journal = partsJournals.get(event.run_id)
-      if (!journal) continue
-      if (event.publicSequence === undefined) { journal.overflow = true; continue }
-      const bytes = new TextEncoder().encode(JSON.stringify(event)).byteLength
-      if (journal.bytes + bytes > 1_048_576) journal.overflow = true
-      else { journal.events.push(event); journal.bytes += bytes }
+      if (event.kind === "message.text_snapshot" && event.payload.text_boundary === "end") { completedTextRuns.add(event.run_id); endedPartsRuns.add(event.run_id) }
     }
-    const optimisticUserIds = new Set([...pendingSteerReceipts.values()].map((intent) => intent.optimisticUserId))
-    if (pendingSubmission) optimisticUserIds.add(pendingSubmission.optimisticUserId)
+    const optimisticUserIds = new Set<string>()
+    if (pendingSubmission && pendingSubmission.kind !== "steer") optimisticUserIds.add(pendingSubmission.optimisticUserId)
     const reduction = reduceProjectionEvents({ thread, machine, events, optimisticUserIds })
     for (const event of events) {
       if (event.kind === "message.user") unprojectedAdmissions.delete(event.payload.message_id)
       if (event.kind === "run.completed" || event.kind === "run.failed" || event.kind === "run.dispatch_failed") {
         pendingTerminalRead?.runs.add(event.run_id)
-        if (store && (pendingSteerReceipts.size > 0 || pendingSubmission !== null)) observedTerminalRuns.add(JSON.stringify([store.activeId, event.run_id]))
+        if (store && pendingSubmission !== null && pendingSubmission.kind !== "steer") observedTerminalRuns.add(JSON.stringify([store.activeId, event.run_id]))
       }
       if (event.kind !== "interaction.state") continue
       const previous = thread.interactionsByRun[event.run_id]
@@ -480,7 +531,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         resumeAttempts.delete(event.run_id)
       }
     }
-    thread = reduction.thread
+    // Commit the adopted frame's cursor with its projection, before terminal RR reads
+    // capture their baseline. Network receipt alone never advances this cursor.
+    thread = { ...reduction.thread, resumeCursor: cursor }
+    cursorResetAttempts = 0
     machine = reduction.machine
     for (const event of events) {
       if (event.kind !== "run.completed" || event.payload.status !== "cancelled") continue
@@ -523,18 +577,71 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function openStream(sessionId: string, resumeCursor: EventCursor | null): void {
+    // Every replacement, including same-session receipt/hydrate recovery, retires
+    // the previous SDK queue rather than waiting for a non-cooperative reader.
+    closeStream()
+    const generation = textGeneration
+    const current = () => !disposed && generation === textGeneration && store?.activeId === sessionId
+    const requireCurrent = () => { if (!current()) throw new SessionClientError("network", "SDK text projection retired") }
+    const text = createSdkTextProjector(requireCurrent)
+    closeTextReader = text.close
+    const textPrefix = (state: SessionStreamState, event: TextProjectionInput): string => {
+      if (event.payload.text_boundary === "start") return ""
+      const exact = state.messages.find(message => message.role === "assistant" && message.runId === event.run_id && !message.orderedContainer && message.id === event.payload.segment_id)
+      if (exact) return exact.content
+      const prefixes = state.activeRunId === event.run_id ? state.messages.filter(message => message.role === "assistant" && message.runId === event.run_id && message.awaitingTextSegment) : []
+      return prefixes.length === 1 ? prefixes[0]!.content : ""
+    }
+    const consume = async (frames: readonly AgUiTransportFrame[]) => {
+      const events: ReducerProjectionEvent[] = []
+      let staged = thread
+      for (const frame of frames) {
+        if (!current()) return
+        const event = frame.projectionEvent
+        if (event === null) continue // Private tool/reasoning chunks are not answer text.
+        if (event.kind === "message.delta" || event.kind === "message.completed" || event.kind === "activity.updated") {
+          const journal = partsJournals.get(event.run_id)
+          if (journal) {
+            if (event.publicSequence === undefined) journal.overflow = true
+            else {
+              const bytes = new TextEncoder().encode(JSON.stringify(event)).byteLength
+              if (journal.bytes + bytes > 1_048_576) journal.overflow = true
+              else { journal.events.push(event); journal.bytes += bytes }
+            }
+          }
+        }
+        const projected = event.kind === "message.delta" ? await text.project(event, frame.uiMessageChunks, textPrefix(staged, event)) : event
+        if (!current()) return
+        events.push(projected)
+        staged = applyChatProjectionEvents(staged, [projected])
+        if (frame.terminal) text.close()
+      }
+      const last = frames.at(-1)
+      if (last && current()) {
+        if (events.length) handleStreamEvents(events, last.cursor)
+        else thread = { ...thread, resumeCursor: last.cursor }
+      }
+    }
+    const streamError = (error: SessionClientError) => {
+      if (!current()) return
+      clearReattachTimer()
+      if (error.code === "event_cursor_expired" && cursorResetAttempts < 2 && store?.activeId === sessionId) {
+        cursorResetAttempts++
+        recoveringExpiredCursor = true
+        connection = { status: "reconnecting" }
+        notify()
+        hydrate(sessionId, true)
+        return
+      }
+      closeStream()
+      connection = connectionFailure(error)
+      notify()
+    }
     execution.openStream(sessionId, resumeCursor, {
       interactionBaselines: thread.interactionsByRun,
-      onCursor: (cursor) => {
-        if (disposed) {
-          return
-        }
-        // Cursor belongs to the durable AG-UI ledger, not to the reducer seq.
-        // Preserve it even when a partial tool-args frame has no projection.
-        thread = { ...thread, resumeCursor: cursor }
-        cursorResetAttempts = 0
-      },
-      onEvents: handleStreamEvents,
+      onEvents: frames => enqueueProjection(() => consume(frames)).catch(error => {
+        throw error instanceof SessionClientError ? error : new SessionClientError("parse", "Invalid SDK text projection")
+      }),
       onReconnecting: () => {
         if (disposed || store?.activeId !== sessionId) {
           return
@@ -547,28 +654,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           return
         }
         connection = { status: "connected" }
+        if (!hydrating && !recoveringExpiredCursor) {
+          // The same stream has reconnected; absorb the receipt without replacing it.
+          mergeDeferredReceipt(sessionId)
+          followSteerStatus()
+        }
         notify()
       },
-      onStreamError: (error) => {
-        if (disposed) {
-          return
-        }
-        clearReattachTimer()
-        if (error.code === "event_cursor_expired" && cursorResetAttempts < 2 && store?.activeId === sessionId) {
-          cursorResetAttempts += 1
-          recoveringExpiredCursor = true
-          if (machine.phase === "submitting" && pendingSubmission !== null) {
-            recoveredSubmission = pendingSubmission
-            recoveredSubmissionError = null
-          }
-          connection = { status: "reconnecting" }
-          notify()
-          hydrate(sessionId, true)
-          return
-        }
-        connection = connectionFailure(error)
-        notify()
-      },
+      onStreamError: streamError,
     })
   }
 
@@ -582,6 +675,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     partsReads.clear()
     queuedPartsReads.clear()
     const previous = thread
+    const samePreviousOwner = ownerConfirmedSessionId === sessionId
     const hydrated = preserveMessageParts(previous, stateFromSnapshot(sessionSnapshot))
     missingSessionId = undefined
     ownerConfirmedSessionId = sessionId
@@ -594,13 +688,12 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         (next.interaction_revision === before.interaction_revision && !sameInteractionState(before, next)))) return
     }
     if (liveDeliveries) Object.assign(hydrated, liveDeliveries)
-    for (const [id, message] of unprojectedAdmissions) {
-      if (hydrated.messages.some((row) => row.id === id)) unprojectedAdmissions.delete(id)
-      else hydrated.messages.push(message)
+    if (store?.activeId === sessionId && sessionSnapshot.session.session_id === sessionId) {
+      mergeUserAdmissions(samePreviousOwner ? previous : null, hydrated)
     }
-    const pending = [...pendingSteerReceipts.values(), ...(pendingSubmission ? [pendingSubmission] : [])]
-    for (const intent of pending) {
-      const echo = previous.messages.find((message) => message.id === intent.optimisticUserId)
+    if (pendingSubmission !== null && pendingSubmission.kind !== "steer") {
+      const optimisticId = pendingSubmission.optimisticUserId
+      const echo = previous.messages.find((message) => message.id === optimisticId)
       if (echo && !hydrated.messages.some((message) => message.id === echo.id)) hydrated.messages.push(echo)
     }
     for (const [runId] of frozenResumes) {
@@ -638,6 +731,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     } else connection = { status: "connected" }
     exposeUnconfirmedSubmission()
     syncActiveEntry()
+    followSteerStatus()
   }
 
   // After terminal, files/deliveries may merge into a newer live generation.
@@ -650,13 +744,17 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const sessionGeneration = hydrateGeneration
     const notificationGeneration = taskNotifications.generation()
     const cursorAtStart = thread.resumeCursor
+    const current = () => !disposed && generation === filesSyncGeneration && sessionGeneration === hydrateGeneration && store?.activeId === sessionId
     execution.fetchSnapshot(sessionId).then((sessionSnapshot) => {
-      if (disposed || generation !== filesSyncGeneration || sessionGeneration !== hydrateGeneration || store?.activeId !== sessionId) return
+      if (!current()) return
       if (sessionSnapshot === null) {
         if (machine.phase === "idle" && thread.resumeCursor === cursorAtStart) closeStream()
         return
       }
       observeSnapshotTerminals(sessionId, sessionSnapshot)
+      if (sessionSnapshot.session.session_id === sessionId) {
+        mergeSteerSettlements(sessionSnapshot, pendingSteerTargets(terminalRead.runs))
+      }
       const snapshotDeliveries = sessionSnapshot.deliveries.map(deliveryFromSnapshot)
       const liveAdvanced = thread.resumeCursor !== cursorAtStart
       thread = {
@@ -687,6 +785,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       // A failed read leaves confirmed owner events intact; refresh can reconcile.
     }).finally(() => {
       if (pendingTerminalRead === terminalRead) pendingTerminalRead = null
+      if (!current() || pendingSteerTargets(terminalRead.runs).size === 0) return
+      // The owner can settle the steer after the Run's terminal and quiet EOF.
+      // Replace the old read window only for an exact still-pending delivery.
+      retireSteerStatusRead()
+      followSteerStatus()
     })
   }
 
@@ -733,18 +836,18 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       notify()
       return false
     }
-    const deferred = deferredCreateReceipt
-    if (deferred !== null && deferred.submission === submission) {
-      cancelledSubmissions.delete(submission.idempotencyKey)
-      cancelAcceptedSubmission(submission.sessionId, deferred.receipt.run_id)
-    } else if (createInFlight.has(submission.idempotencyKey)) {
-      // The create outcome is still unknown. Its promise callback consumes
-      // this exact key/session marker and cancels an accepted late receipt.
-      cancelledSubmissions.set(submission.idempotencyKey, submission.sessionId)
+    if (submission.kind !== "steer") {
+      const deferred = deferredCreateReceipt
+      if (deferred !== null && deferred.submission === submission) {
+        cancelledSubmissions.delete(submission.idempotencyKey)
+        cancelAcceptedSubmission(submission.sessionId, deferred.receipt.run_id)
+      } else if (submissionInFlight.has(submission.idempotencyKey)) {
+        // Only a new Run can be cancelled by a late create receipt.
+        cancelledSubmissions.set(submission.idempotencyKey, submission.sessionId)
+      }
     }
     pendingSubmission = null
-    recoveredSubmission = null
-    recoveredSubmissionError = null
+    pendingSubmissionFailureCode = null
     deferredCreateReceipt = null
     preparedSubmission = null
     return true
@@ -759,14 +862,17 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   // snapshot-first 水合：GET /sessions/:sid → 当前读模型 + opaque AG-UI watermark 续流。
   function hydrate(sessionId: string, afterExpiredCursor = false, receiptConfirmedBeforeRead = false): void {
+    closeStream()
     missingSessionId = undefined
     taskNotifications.select(sessionId)
     const notificationGeneration = taskNotifications.generation()
     retireMessageParts()
+    retireSteerStatusRead()
     hydrateGeneration += 1
     observedTerminalRuns.clear()
-    pendingSteerReceipts.clear()
-    unprojectedAdmissions.clear()
+    for (const [id, admission] of unprojectedAdmissions) {
+      if (admission.kind === "create") unprojectedAdmissions.delete(id)
+    }
     const generation = hydrateGeneration
     const selectionVersion = mcpSelectionVersion
     const apiSelectionVersion = customApiSelectionVersion
@@ -797,12 +903,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
             missingSessionId = sessionId
           }
           hydrating = false
-          const deferred = deferredCreateReceipt
-          if (deferred !== null && deferred.submission === pendingSubmission) {
-            // The read may have preceded the accepted POST. Its absence must
-            // not strand the exact receipt or trigger another create command.
-            machine = transition(machine, { type: "RESET" })
-            applyRecoveredReceipt(deferred.submission, deferred.receipt)
+          const hadRun = machine.runId !== null
+          // The read may have preceded the accepted POST. Its absence must
+          // not strand the exact receipt or trigger another create command.
+          if (mergeDeferredReceipt(sessionId) && !hadRun && machine.runId !== null) {
             openStream(sessionId, thread.resumeCursor)
           }
           notify()
@@ -817,6 +921,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           customApiSelectionRestore = selection === undefined ? undefined : Object.freeze({ sessionId, sourceMessageId: selection.source_message_id,
             profiles: freezeCustomApiSelection((selection.selected_custom_api_profiles ?? []).map(value => ({ profileId: value.profile_id, expectedStateVersion: String(value.expected_state_version) }))) })
         }
+        const samePreviousOwner = ownerConfirmedSessionId === sessionId
         ownerConfirmedSessionId = sessionId
         locallyCreatedSessionId = undefined
         if (afterExpiredCursor) {
@@ -840,20 +945,21 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
             (message.status === "completed" || message.status === "failed"),
         )
         taskNotifications.anchorSnapshot(sessionId, sessionSnapshot, notificationGeneration)
-        thread = preserveMessageParts(thread, stateFromSnapshot(sessionSnapshot))
+        const hydrated = preserveMessageParts(thread, stateFromSnapshot(sessionSnapshot))
+        if (sessionSnapshot.session.session_id === sessionId) mergeUserAdmissions(samePreviousOwner ? thread : null, hydrated)
+        thread = hydrated
         readSnapshotParts()
         observeSnapshotTerminals(sessionId, sessionSnapshot)
-        const submissionToRestore = afterExpiredCursor ? recoveredSubmission : pendingSubmission
+        const submissionToRestore = pendingSubmission
         if (
-          submissionToRestore !== null &&
-          submissionToRestore === pendingSubmission &&
+          submissionToRestore !== null && submissionToRestore.kind !== "steer" &&
           !thread.messages.some((message) => message.id === submissionToRestore.optimisticUserId) &&
           (deferred === null || !thread.messages.some((message) => message.id === deferred.receipt.user_message_id))
         ) {
           thread = appendUserMessage(thread, {
             id: submissionToRestore.optimisticUserId,
             content: submissionToRestore.content,
-          })
+          }, true)
         }
         // A different owner watermark proves this was a new GC window. Keep
         // the retry cap only when the owner repeats the same expired cursor.
@@ -896,16 +1002,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           recoveringExpiredCursor = false
         }
         if (deferred !== null) {
-          applyRecoveredReceipt(deferred.submission, deferred.receipt, deferredRunSettled)
-        } else if (afterExpiredCursor) {
-          if (
-            recoveredSubmission !== null &&
-            recoveredSubmission === pendingSubmission &&
-            recoveredSubmissionError !== null &&
-            machine.phase === "idle"
-          ) {
-            machine = transition(machine, { type: "FAIL", error: recoveredSubmissionError })
-          }
+          applyCreateReceipt(deferred.submission, deferred.receipt, deferredRunSettled)
         }
         exposeUnconfirmedSubmission()
         // Snapshot 与 event_watermark 同事务视图。只有 owner active identity
@@ -919,6 +1016,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           connection = { status: "connected" }
         }
         hydrating = false
+        followSteerStatus()
         notify()
       })
       .catch((error: unknown) => {
@@ -939,8 +1037,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           notify()
           return
         }
-        // 首次水合失败仍 fail-loud：尚无可信线程，不渲染半真半假的本地内容。
         hydrating = false
+        const hadRun = machine.runId !== null
+        if (mergeDeferredReceipt(sessionId)) {
+          if (!hadRun && machine.runId !== null) openStream(sessionId, thread.resumeCursor)
+          notify()
+          return
+        }
+        // 首次水合失败仍 fail-loud：尚无可信线程，不渲染半真半假的本地内容。
         machine = transition(machine, { type: "FAIL", error: describeUnknown(error) })
         notify()
       })
@@ -966,10 +1070,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       return
     }
     recoveringExpiredCursor = true
-    if (pendingSubmission !== null) {
-      recoveredSubmission = pendingSubmission
-      recoveredSubmissionError = machine.phase === "error" ? machine.error : null
-    }
     connection = { status: "reconnecting" }
     closeStream()
     clearReattachTimer()
@@ -978,7 +1078,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     hydrate(store.activeId, true)
   }
 
-  function messageExecutionOptions(mode: AgentMode): MessageExecutionOptions {
+  function messageExecutionOptions(mode: AgentMode, resourceRefs: readonly SelectedResourceRef[]): MessageExecutionOptions {
     // The new request freezes current intent; a late catalog must not restore
     // the previous message's choices after this request is acknowledged.
     mcpSelectionRestore = undefined
@@ -988,13 +1088,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       mode,
       model: selectedModel,
       selectedMcpConnectionIds: [...selectedMcpConnectionIds],
+      selectedResourceRefs: resourceRefs,
       selectedCustomApiProfiles: freezeCustomApiSelection(selectedCustomApiProfiles),
       selectedSkillSourceRefs: selectedSkillSourceRefs === undefined ? undefined : [...selectedSkillSourceRefs],
     }
   }
 
   function observeSnapshotTerminals(sessionId: string, owner: SessionSnapshot): void {
-    if (!deps.submissionRecovery || pendingSubmission === null) return
+    if (pendingSubmission === null || pendingSubmission.kind === "steer") return
     for (const row of owner.messages ?? []) {
       if (row.role === "assistant" && (row.status === "completed" || row.status === "failed")) {
         if (row.run_id) observedTerminalRuns.add(JSON.stringify([sessionId, row.run_id]))
@@ -1004,12 +1105,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function exposeUnconfirmedSubmission(): void {
-    if (deps.submissionRecovery && pendingSubmission !== null && machine.phase === "idle") {
-      machine = transition(machine, { type: "FAIL", error: "submission_outcome_unknown" })
+    if (pendingSubmission !== null && !submissionInFlight.has(pendingSubmission.idempotencyKey)) {
+      pendingSubmissionFailureCode ??= "submission_outcome_unknown"
+      if (machine.phase === "idle" && pendingSubmission.kind !== "steer") machine = transition(machine, { type: "FAIL", error: pendingSubmissionFailureCode })
     }
   }
 
-  function persistReceipt(submission: PendingSubmission, receipt: MessageCreateReceipt): boolean {
+  function persistReceipt(submission: PendingSubmission, receipt: SubmissionReceipt): boolean {
     if (!deps.submissionRecovery) return true
     let saved = false
     try { saved = deps.submissionRecovery.acknowledge(submission, receipt) } catch { /* Keep exact ACK for a local-only retry. */ }
@@ -1029,21 +1131,37 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     return true
   }
 
-  function receiptAlreadySettled(submission: PendingSubmission, receipt: MessageCreateReceipt): boolean {
+  function receiptAlreadySettled(submission: CreateSubmission, receipt: MessageCreateReceipt): boolean {
     return observedTerminalRuns.has(JSON.stringify([submission.sessionId, receipt.run_id])) ||
-      observedTerminalRuns.has(JSON.stringify(["message", submission.sessionId, receipt.assistant_message_id]))
+      observedTerminalRuns.has(JSON.stringify(["message", submission.sessionId, receipt.assistant_message_id])) ||
+      thread.runTerminalsById[receipt.run_id] !== undefined
+  }
+
+  function mergeDeferredReceipt(sessionId: string): boolean {
+    const deferred = deferredCreateReceipt
+    if (deferred === null || deferred.submission !== pendingSubmission || deferred.submission.sessionId !== sessionId) return false
+    if (machine.phase === "error") machine = transition(machine, { type: "RESET" })
+    applyCreateReceipt(deferred.submission, deferred.receipt, receiptAlreadySettled(deferred.submission, deferred.receipt))
+    return true
   }
 
   function sameSubmission(left: PendingSubmission | null, right: PendingSubmission): boolean {
-    return left !== null && left.sessionId === right.sessionId && left.optimisticUserId === right.optimisticUserId &&
+    if (left === null || left.sessionId !== right.sessionId || left.kind !== right.kind) return false
+    if (right.kind === "steer") return left.kind === "steer" && left.runId === right.runId &&
+      left.idempotencyKey === right.idempotencyKey && left.clientMessageId === right.clientMessageId && left.content === right.content
+    return left.kind !== "steer" && left.optimisticUserId === right.optimisticUserId &&
       JSON.stringify(buildMessageCreateParams({ ...left, scope })) === JSON.stringify(buildMessageCreateParams({ ...right, scope }))
   }
 
-  function reconcileKnownReceipt(submission: PendingSubmission, receipt: MessageCreateReceipt): void {
+  function reconcileKnownReceipt(submission: CreateSubmission, receipt: MessageCreateReceipt): void {
+    if (machine.runId !== null) {
+      applyCreateReceipt(submission, receipt, receiptAlreadySettled(submission, receipt))
+      notify()
+      return
+    }
     pendingSubmission = null
     preparedSubmission = null
-    recoveredSubmission = null
-    recoveredSubmissionError = null
+    pendingSubmissionFailureCode = null
     deferredCreateReceipt = null
     ownerConfirmedSessionId = submission.sessionId
     locallyCreatedSessionId = undefined
@@ -1055,8 +1173,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     hydrate(submission.sessionId, false, true)
   }
 
-  function applyRecoveredReceipt(
-    submission: PendingSubmission,
+  function applyCreateReceipt(
+    submission: CreateSubmission,
     receipt: MessageCreateReceipt,
     ownerAlreadySettled = false,
   ): void {
@@ -1068,18 +1186,22 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (!ownerAlreadySettled) taskNotifications.anchorReceipt(submission.sessionId, receipt, notificationAdmissions.get(submission) ?? -1)
     missingSessionId = undefined
     pendingSubmission = null
-    recoveredSubmission = null
-    recoveredSubmissionError = null
+    pendingSubmissionFailureCode = null
     deferredCreateReceipt = null
     if (ownerAlreadySettled && machine.runId === null) machine = transition(machine, { type: "RESET" })
+    const projected = thread.messages.some(message => message.id === receipt.user_message_id)
     thread = reconcileUserMessageId(thread, receipt.user_message_id, submission.optimisticUserId)
+    const admitted = thread.messages.find(message => message.id === receipt.user_message_id)
+    if (!projected && admitted) unprojectedAdmissions.set(receipt.user_message_id, { kind: "create", message: { ...admitted, runId: receipt.run_id } })
+    observedTerminalRuns.clear()
     // Snapshot is authoritative when it already contains an active or settled
     // assistant run. An otherwise idle snapshot may precede the accepted POST;
     // anchor that exact receipt before hydrate decides whether to open a stream.
     if (
-      machine.phase === "idle" &&
+      (machine.phase === "idle" || machine.phase === "submitting") &&
       !ownerAlreadySettled
     ) {
+      filesSyncGeneration += 1
       machine = transition(machine, { type: "SUBMIT" })
       machine = transition(machine, { type: "RECEIPT", runId: receipt.run_id })
     }
@@ -1100,23 +1222,27 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   // POST messages 并处理回执/失败（submit 与 retry 共用的开跑尾段）。
-  function beginRun(args: PendingSubmission): void {
+  function beginRun(args: CreateSubmission): void {
     missingSessionId = undefined
     const submission = {
       ...args,
-      options: { ...args.options, selectedCustomApiProfiles: freezeCustomApiSelection(args.options.selectedCustomApiProfiles ?? []), selectedMcpConnectionIds: [...(args.options.selectedMcpConnectionIds ?? [])], selectedSkillSourceRefs: args.options.selectedSkillSourceRefs === undefined ? undefined : [...args.options.selectedSkillSourceRefs] },
+      options: { ...args.options, selectedCustomApiProfiles: freezeCustomApiSelection(args.options.selectedCustomApiProfiles ?? []), selectedMcpConnectionIds: [...(args.options.selectedMcpConnectionIds ?? [])], selectedSkillSourceRefs: args.options.selectedSkillSourceRefs === undefined ? undefined : [...args.options.selectedSkillSourceRefs], ...(args.options.selectedResourceRefs === undefined ? {} : { selectedResourceRefs: [...args.options.selectedResourceRefs] }) },
     }
     pendingSubmission = submission
-    recoveredSubmission = null
-    recoveredSubmissionError = null
+    pendingSubmissionFailureCode = null
     deferredCreateReceipt = null
     const { sessionId, idempotencyKey } = submission
     taskNotifications.select(sessionId)
     notificationAdmissions.set(submission, taskNotifications.generation())
+    submissionInFlight.add(idempotencyKey)
     notify()
     // A synchronous subscriber can retire this view before the transport starts.
-    if (disposed || pendingSubmission !== submission || store?.activeId !== sessionId) return
-    createInFlight.set(idempotencyKey, (createInFlight.get(idempotencyKey) ?? 0) + 1)
+    if (disposed || pendingSubmission !== submission || store?.activeId !== sessionId) {
+      submissionInFlight.delete(idempotencyKey)
+      cancelledSubmissions.delete(idempotencyKey)
+      if (!disposed && store?.activeId === sessionId && sameSubmission(pendingSubmission, submission)) notify()
+      return
+    }
     execution
       .createMessage(submission)
       .then((receipt) => {
@@ -1130,7 +1256,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         // 回执落地前用户已重置/切换：丢弃迟到回执，不复活旧轮。
         const activeSubmission = pendingSubmission
         if (
-          disposed || activeSubmission === null ||
+          disposed || activeSubmission === null || activeSubmission.kind === "steer" ||
           (activeSubmission !== submission && (!deps.submissionRecovery || !sameSubmission(activeSubmission, submission))) ||
           store?.activeId !== sessionId
         ) {
@@ -1142,136 +1268,197 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           deferredCreateReceipt = { submission: activeSubmission, receipt }
           return
         }
-        const ownerAlreadySettled = deps.submissionRecovery !== undefined && receiptAlreadySettled(activeSubmission, receipt)
-        if (ownerAlreadySettled) {
-          applyRecoveredReceipt(activeSubmission, receipt, true)
-          notify()
-          return
-        }
-        if (machine.phase !== "submitting") {
-          if (recoveredSubmission === activeSubmission || deps.submissionRecovery !== undefined) {
-            const needsStream = machine.runId === null
-            if (deps.submissionRecovery && machine.phase === "error") machine = transition(machine, { type: "RESET" })
-            applyRecoveredReceipt(activeSubmission, receipt)
-            if (needsStream && machine.runId !== null) openStream(sessionId, thread.resumeCursor)
-            notify()
-          }
-          return
-        }
-        registerMessagePartsReceipt(sessionId, receipt)
-        pendingSubmission = null
-        recoveredSubmission = null
-        recoveredSubmissionError = null
-        deferredCreateReceipt = null
-        thread = reconcileUserMessageId(thread, receipt.user_message_id, submission.optimisticUserId)
-        taskNotifications.anchorReceipt(sessionId, receipt, notificationAdmissions.get(submission) ?? -1)
-        machine = transition(machine, { type: "RECEIPT", runId: receipt.run_id })
-        openStream(sessionId, thread.resumeCursor)
+        const needsStream = machine.runId === null
+        if (machine.phase === "error") machine = transition(machine, { type: "RESET" })
+        applyCreateReceipt(activeSubmission, receipt, receiptAlreadySettled(activeSubmission, receipt))
+        if (needsStream && machine.runId !== null) openStream(sessionId, thread.resumeCursor)
         notify()
       })
       .catch((error: unknown) => {
-        if (
-          disposed ||
-          pendingSubmission !== submission ||
-          machine.phase !== "submitting" ||
-          store?.activeId !== sessionId
-        ) {
-          return
+        if (disposed) return
+        const clientError = error instanceof SessionClientError ? error : null
+        const errorCode = clientError?.code ?? null
+        const code = errorCode === "run_delivery_conflict" && (clientError?.reason !== "http" || clientError.status !== 409 ||
+          submission.options.interruptRunId === undefined) ? null : errorCode
+        const failureCode = code ?? "submission_outcome_unknown"
+        try { deps.submissionRecovery?.failure(submission, failureCode) } catch { /* Keep the frozen intent. */ }
+        if (store?.activeId !== sessionId || !sameSubmission(pendingSubmission, submission)) return
+        pendingSubmissionFailureCode = failureCode
+        if (machine.phase === "submitting") {
+          machine = transition(machine, { type: "FAIL", error: code ?? describeUnknown(error) })
         }
-        // HTTP owner failures expose a reviewed public code. Preserve that
-        // code for recovery UX (credit checks already rely on this), while
-        // keeping unknown/network errors as their local diagnostic detail.
-        const detail = error instanceof SessionClientError && error.code !== null
-          ? error.code
-          : describeUnknown(error)
-        const recoveryCode = error instanceof SessionClientError && error.code !== null ? error.code : "submission_outcome_unknown"
-        try { deps.submissionRecovery?.failure(submission, recoveryCode) } catch { /* The frozen intent remains unknown. */ }
-        if (recoveringExpiredCursor || connection.status !== "connected") {
-          recoveredSubmission = submission
-          recoveredSubmissionError = detail
-        }
-        machine = transition(machine, { type: "FAIL", error: detail })
-        notify()
       })
       .finally(() => {
-        const remaining = (createInFlight.get(idempotencyKey) ?? 1) - 1
-        if (remaining > 0) createInFlight.set(idempotencyKey, remaining)
-        else { createInFlight.delete(idempotencyKey); cancelledSubmissions.delete(idempotencyKey) }
+        submissionInFlight.delete(idempotencyKey)
+        cancelledSubmissions.delete(idempotencyKey)
+        if (!disposed && store?.activeId === sessionId && pendingSubmissionFailureCode !== null &&
+          sameSubmission(pendingSubmission, submission)) notify()
       })
   }
 
-  function submit(content: string): boolean {
+  function retireSteerStatusRead(): void {
+    const read = steerStatusRead
+    steerStatusRead = null
+    if (!read) return
+    if (read.timer !== null) clearTimeout(read.timer)
+    read.controller.abort()
+  }
+
+  function mergeUserAdmissions(previous: SessionStreamState | null, hydrated: SessionStreamState): void {
+    const previousUsers = new Map((previous?.messages ?? []).filter(row => row.role === "user").map(row => [row.id, row]))
+    for (let index = 0; index < hydrated.messages.length; index++) {
+      const row = hydrated.messages[index]
+      if (row?.role !== "user") continue
+      unprojectedAdmissions.delete(row.id)
+      const before = previousUsers.get(row.id)
+      if (row.deliveryStatus !== "pending" || before?.runId !== row.runId || before.deliveryStatus === "pending") continue
+      // A snapshot taken before settlement must not revive an exact known
+      // terminal delivery while an independent status read races hydration.
+      const updated = { ...row }
+      if (before.deliveryStatus === "failed") updated.deliveryStatus = "failed"
+      else delete updated.deliveryStatus
+      hydrated.messages[index] = updated
+    }
+    for (const { message } of unprojectedAdmissions.values()) hydrated.messages.push(message)
+  }
+
+  function pendingSteerTargets(runIds?: ReadonlySet<string>): Map<string, string> {
+    return new Map(thread.messages.flatMap(message =>
+      message.role === "user" && message.deliveryStatus === "pending" && (runIds === undefined || runIds.has(message.runId))
+        ? [[message.id, message.runId] as const] : []))
+  }
+
+  function mergeSteerSettlements(owner: SessionSnapshot, targets: ReadonlyMap<string, string>): boolean {
+    if (targets.size === 0) return false
+    const settled = new Map((owner.messages ?? []).flatMap(message =>
+      message.role === "user" && targets.has(message.message_id) && targets.get(message.message_id) === message.run_id &&
+      (message.status === "completed" || message.status === "failed") ? [[message.message_id, message.status] as const] : []))
+    if (settled.size === 0) return false
+    let changed = false
+    const messages = thread.messages.map(message => {
+      const status = settled.get(message.id)
+      if (status === undefined || message.role !== "user" || message.deliveryStatus !== "pending" || targets.get(message.id) !== message.runId) return message
+      const next = { ...message }
+      if (status === "completed") delete next.deliveryStatus
+      else next.deliveryStatus = "failed"
+      unprojectedAdmissions.delete(message.id)
+      changed = true
+      return next
+    })
+    if (changed) thread = { ...thread, messages }
+    return changed
+  }
+
+  function followSteerStatus(): void {
+    const sessionId = store?.activeId
+    const generation = hydrateGeneration
+    if (disposed || hydrating || steerStatusRead || !sessionId || pendingSteerTargets().size === 0) return
+    const read = { controller: new AbortController(), timer: null as ReturnType<typeof setTimeout> | null }
+    steerStatusRead = read
+    const current = () => !disposed && steerStatusRead === read && store?.activeId === sessionId && hydrateGeneration === generation
+    const deadline = performance.now() + STEER_STATUS_BUDGET_MS
+    let failures = 0
+    const check = async (): Promise<void> => {
+      read.timer = null
+      if (!current()) return
+      const targets = pendingSteerTargets()
+      const remaining = deadline - performance.now()
+      if (targets.size === 0 || remaining <= 0) { retireSteerStatusRead(); return }
+      try {
+        const owner = await execution.readSteerStatus(sessionId, AbortSignal.any([read.controller.signal, AbortSignal.timeout(Math.ceil(Math.min(10_000, remaining)))]))
+        if (!current() || performance.now() >= deadline) { if (current()) retireSteerStatusRead(); return }
+        if (owner?.session.session_id !== sessionId) { retireSteerStatusRead(); return }
+        failures = 0
+        if (mergeSteerSettlements(owner, targets)) notify()
+      } catch { failures++ }
+      if (!current()) return
+      const delay = Math.min(2_000, deadline - performance.now())
+      if (pendingSteerTargets().size === 0 || failures >= 3 || delay <= 0) retireSteerStatusRead()
+      else read.timer = setTimeout(() => { void check() }, delay)
+    }
+    read.timer = setTimeout(() => { void check() }, 750)
+  }
+
+  function applySteerReceipt(submission: SteerSubmission, receipt: SteerReceipt): void {
+    if (!sameSubmission(pendingSubmission, submission) || store?.activeId !== submission.sessionId) return
+    pendingSubmission = null
+    pendingSubmissionFailureCode = null
+    const existing = thread.messages.find(message => message.id === receipt.message_id)
+    if (existing && (existing.role !== "user" || existing.runId !== submission.runId)) return
+    if (!existing || (existing.deliveryStatus === "pending" && receipt.status !== "pending")) {
+      const message: SessionMessage = {
+        id: receipt.message_id, runId: submission.runId, role: "user", content: existing?.content ?? submission.content,
+        ...(receipt.status === "succeeded" ? {} : { deliveryStatus: receipt.status }),
+      }
+      if (!existing) unprojectedAdmissions.set(message.id, { kind: "steer", message })
+      thread = { ...thread, messages: existing
+        ? thread.messages.map(row => row === existing ? message : row)
+        : [...thread.messages, message] }
+    }
+    followSteerStatus()
+  }
+
+  function beginSteer(submission: SteerSubmission): void {
+    pendingSubmission = submission
+    pendingSubmissionFailureCode = null
+    submissionInFlight.add(submission.idempotencyKey)
+    notify()
+    const current = () => !disposed && store?.activeId === submission.sessionId && sameSubmission(pendingSubmission, submission)
+    if (!current()) { submissionInFlight.delete(submission.idempotencyKey); return }
+    void execution.steerRun(submission).then(receipt => {
+      persistReceipt(submission, receipt)
+      if (current()) { applySteerReceipt(submission, receipt); notify() }
+    }).catch((error: unknown) => {
+      const code = error instanceof SessionClientError && error.reason === "http" &&
+        error.status === 409 && error.code === "run_control_conflict"
+        ? "run_control_conflict" : "submission_outcome_unknown"
+      try { deps.submissionRecovery?.failure(submission, code) } catch { /* Preserve the original request. */ }
+      if (current()) pendingSubmissionFailureCode = code
+    }).finally(() => {
+      submissionInFlight.delete(submission.idempotencyKey)
+      if (current() && pendingSubmissionFailureCode !== null) notify()
+    })
+  }
+
+  function submit(content: string, delivery?: SubmitDelivery, resourceRefs?: readonly SelectedResourceRef[]): boolean {
     const trimmed = content.trim()
     if (!trimmed || !canSubmitMessage()) {
       return false
     }
-    notice = null
-    if (!flushReceipts()) return false
-    if (
-      store !== null &&
-      (machine.phase === "streaming" || machine.phase === "queued" || machine.phase === "resuming" ||
-        machine.phase === "waiting")
-    ) {
-      if (!retireDraftBeforePost()) return false
-      // 运行中再次提交：沿现有 create-message 路径，不动状态机、不重开事件流。
-      // 新 admission 不覆盖当前 execution head；FIFO 由 owner durable events/snapshot 接管。
-      const optimisticUserId = createId("usr")
-      thread = appendUserMessage(thread, { id: optimisticUserId, content: trimmed })
-      notify()
-      // 回执/失败必须锚回发起时的会话：POST 在途时切走 → 迟到回调不得落在别的会话线程上
-      // （否则 adopt 会改/删 T 的乐观气泡、notice 串到 T）。与 beginRun 回执守卫对齐。
-      const steerSessionId = store.activeId
-      const steerGeneration = hydrateGeneration
-      const receiptToken = Symbol("pending-steer-receipt")
-      const submission: PendingSubmission = {
-        sessionId: steerSessionId, content: trimmed, idempotencyKey: createId("idem"),
-        options: messageExecutionOptions(activeMode(store)), optimisticUserId,
-      }
-      notificationAdmissions.set(submission, taskNotifications.generation())
-      pendingSteerReceipts.set(receiptToken, submission)
-      execution.createMessage(submission)
-        .then((receipt) => {
-          if (disposed || store?.activeId !== steerSessionId || hydrateGeneration !== steerGeneration) {
-            return
-          }
-          registerMessagePartsReceipt(steerSessionId, receipt)
-          taskNotifications.anchorReceipt(steerSessionId, receipt, notificationAdmissions.get(submission) ?? -1)
-          const alreadyProjected = thread.messages.some((message) => message.id === receipt.user_message_id)
-          thread = reconcileUserMessageId(thread, receipt.user_message_id, submission.optimisticUserId)
-          const admitted = thread.messages.find((message) => message.id === receipt.user_message_id)
-          if (!alreadyProjected && admitted) unprojectedAdmissions.set(receipt.user_message_id, { ...admitted, runId: receipt.run_id })
-          if (machine.phase === "idle" && !observedTerminalRuns.has(JSON.stringify([steerSessionId, receipt.run_id]))) {
-            // This POST may be admitted after the prior run settled. Its receipt
-            // admits a queued successor, not START, and reuses the durable cursor.
-            filesSyncGeneration += 1
-            machine = transition(transition(machine, { type: "SUBMIT" }), { type: "RECEIPT", runId: receipt.run_id })
-            openStream(steerSessionId, thread.resumeCursor)
-          }
-          notify()
-        })
-        .catch((error: unknown) => {
-          if (disposed || store?.activeId !== steerSessionId || hydrateGeneration !== steerGeneration) {
-            return
-          }
-          // 插话投递失败必须可见：瞬态通知（不打断相位），下次提交自动清。
-          notice = { key: "steer.sendFailed", vars: { detail: describeUnknown(error) } }
-          notify()
-        })
-        .finally(() => {
-          // Terminal evidence exists only while an outstanding receipt can
-          // still name it; settled long-lived sessions retain no run-ID cache.
-          pendingSteerReceipts.delete(receiptToken)
-          if (pendingSteerReceipts.size === 0 && pendingSubmission === null) observedTerminalRuns.clear()
-        })
+    if (delivery?.steerRunId !== undefined) {
+      const runId = delivery.steerRunId
+      if (resourceRefs?.length || !store || hydrating || ownerConfirmedSessionId !== store.activeId || delivery.interruptRunId !== undefined ||
+          interruptibleRunId({ machine, thread }) !== runId || !flushReceipts()) return false
+      if (preparedSubmission && (preparedSubmission.kind !== "steer" || preparedSubmission.runId !== runId ||
+          preparedSubmission.sessionId !== store.activeId || preparedSubmission.content !== trimmed)) return false
+      const submission = preparedSubmission ?? Object.freeze({
+        kind: "steer", sessionId: store.activeId, runId, idempotencyKey: createId("command"), clientMessageId: createId("message"), content: trimmed,
+      } satisfies SteerSubmission)
+      preparedSubmission = submission
+      let saved = false
+      try { saved = deps.submissionRecovery?.save(submission) ?? true } catch { /* No POST on I/O failure. */ }
+      if (!saved) { notice = { key: "chat.localDraftPersistenceFailed" }; notify(); return false }
+      preparedSubmission = null
+      notice = null
+      beginSteer(submission)
       return true
     }
+    if (preparedSubmission?.kind === "steer") return false
+    const selectedResources = selectedResourceRefsSchema.safeParse(resourceRefs ?? [])
+    if (!selectedResources.success) return false
+    const interruptRunId = delivery?.interruptRunId
+    if (interruptRunId !== undefined && interruptibleRunId({ machine, thread }) !== interruptRunId) return false
+    const executionOptions = (mode: AgentMode) => ({ ...messageExecutionOptions(mode, selectedResources.data), ...(interruptRunId === undefined ? {} : { interruptRunId }) })
+    notice = null
+    if (!flushReceipts()) return false
+    const fifo = machine.runId !== null
     if (deps.submissionRecovery) {
       if (!store) {
         store = addConversation(null, createId("conv"), now(), pendingMode, deps.draftLifecycle !== undefined)
         locallyCreatedSessionId = store.activeId
         commitStore(store)
       }
-      const options = messageExecutionOptions(activeMode(store))
+      const options = executionOptions(activeMode(store))
       if (preparedSubmission && (preparedSubmission.content !== trimmed || JSON.stringify(preparedSubmission.options) !== JSON.stringify(options))) {
         notice = { key: "chat.localDraftPersistenceFailed" }
         notify()
@@ -1287,28 +1474,24 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       }
     }
     if (!retireDraftBeforePost()) return false
-    const before = machine
-    machine = transition(machine, { type: "SUBMIT" })
-    if (machine === before) {
-      // 同步双发守卫：submitting 相位（回执未归）的提交直接拒绝。
-      return false
-    }
+    if (!fifo) machine = transition(machine, { type: "SUBMIT" })
     if (!store) {
       store = addConversation(null, createId("conv"), now(), pendingMode)
       locallyCreatedSessionId = store.activeId
     }
     const optimisticUserId = preparedSubmission?.optimisticUserId ?? createId("usr")
-    thread = appendUserMessage(thread, { id: optimisticUserId, content: trimmed })
+    thread = appendUserMessage(thread, { id: optimisticUserId, content: trimmed }, fifo)
     syncActiveEntry()
     // 模式意图上 wire：thinking 档=true，fast=false 显式关。
-    beginRun(preparedSubmission ?? {
+    const submission = preparedSubmission ?? {
       sessionId: store.activeId,
       content: trimmed,
       idempotencyKey: createId("idem"),
-      options: messageExecutionOptions(activeMode(store)),
+      options: executionOptions(activeMode(store)),
       optimisticUserId,
-    })
+    }
     preparedSubmission = null
+    beginRun(submission)
     return true
   }
 
@@ -1322,22 +1505,21 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (disposed || !sessionId || ownerConfirmedSessionId !== sessionId || !deps.answerActions || sourceIds.size !== 1 ||
       !sourceIds.has(input.sourceMessageId) || !input.key) throw Error("regeneration_source_not_current")
     const beforeThread = thread, beforeMachine = machine
-    const beforePending = pendingSubmission, beforeSteers = [...pendingSteerReceipts.keys()]
+    const beforePending = pendingSubmission
     const current = () => !disposed && !input.signal.aborted && hydrateGeneration === generation && store?.activeId === sessionId
     const receipt = await deps.answerActions.regenerate({ sessionId, messageId: input.sourceMessageId }, input.key, input.signal)
     if (!current()) throw Error("regeneration_retired")
     if (receipt.regenerated_from_message_id !== input.sourceMessageId || receipt.run_id === input.sourceRunId ||
       receipt.assistant_message_id === input.sourceMessageId) throw Error("regeneration_binding_mismatch")
-    const unchanged = thread === beforeThread && machine === beforeMachine && pendingSubmission === beforePending &&
-      beforeSteers.length === pendingSteerReceipts.size && beforeSteers.every(token => pendingSteerReceipts.has(token))
+    const unchanged = thread === beforeThread && machine === beforeMachine && pendingSubmission === beforePending
     // This ACK owns only its new assistant/Run. The returned user ID is the
     // original human association, never a new input echo or rename instruction.
     registerMessagePartsReceipt(sessionId, receipt)
-    const terminal = normalizeRunTerminals(thread).runTerminalsById[receipt.run_id]
-    if (!terminal && unchanged && machine.phase === "idle" && pendingSubmission === null && pendingSteerReceipts.size === 0 && thread.activeRunId === null) {
+    const terminal = thread.runTerminalsById[receipt.run_id]
+    if (!terminal && unchanged && machine.phase === "idle" && pendingSubmission === null && thread.activeRunId === null) {
       machine = transition(transition(machine, { type: "SUBMIT" }), { type: "RECEIPT", runId: receipt.run_id })
       openStream(sessionId, thread.resumeCursor)
-    } else if (!terminal && machine.phase === "idle" && thread.activeRunId === null && pendingSubmission === null && pendingSteerReceipts.size === 0) {
+    } else if (!terminal && machine.phase === "idle" && thread.activeRunId === null && pendingSubmission === null) {
       // A non-head read may have changed the thread while this command was
       // accepted. Discover it once through the existing bounded owner read,
       // not by replaying POST or reopening a stream at an unflushed cursor.
@@ -1346,7 +1528,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       void execution.fetchSnapshot(sessionId).then(owner => {
         const currentUsers = thread.messages.filter(message => message.role === "user")
         if (!current() || thread.resumeCursor !== readCursor || thread.executionHead !== readHead || thread.activeRunId !== readActive ||
-          currentUsers.length !== readUsers.length || currentUsers.some((message, index) => message !== readUsers[index]) || machine !== readMachine || pendingSubmission !== null || pendingSteerReceipts.size !== 0 ||
+          currentUsers.length !== readUsers.length || currentUsers.some((message, index) => message !== readUsers[index]) || machine !== readMachine || pendingSubmission !== null ||
           owner?.session.session_id !== sessionId || !(owner.messages ?? []).some(message =>
             message.role === "assistant" && message.message_id === receipt.assistant_message_id && message.run_id === receipt.run_id)) return
         adoptOwnerSnapshot(sessionId, owner)
@@ -1371,12 +1553,17 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (pending === null) return
     if (deps.submissionRecovery) {
       const inMemory = unsavedReceipts.get(pending.idempotencyKey)
-      let knownReceipt: MessageCreateReceipt | null = inMemory && sameSubmission(inMemory.submission, pending) ? inMemory.receipt : null
+      let knownReceipt: SubmissionReceipt | null = inMemory && sameSubmission(inMemory.submission, pending) ? inMemory.receipt : null
       try { knownReceipt ??= deps.submissionRecovery.acknowledged(pending) }
       catch { notice = { key: "chat.submissionRecoveryFailed" }; notify(); return }
       if (knownReceipt) {
         if (!persistReceipt(pending, knownReceipt)) { notice = { key: "chat.submissionRecoveryFailed" }; notify(); return }
-        reconcileKnownReceipt(pending, knownReceipt)
+        if (pending.kind === "steer" && "message_id" in knownReceipt) {
+          applySteerReceipt(pending, knownReceipt)
+          notify()
+        } else if (pending.kind !== "steer" && "assistant_message_id" in knownReceipt) {
+          reconcileKnownReceipt(pending, knownReceipt)
+        }
         return
       }
     }
@@ -1387,13 +1574,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       notify()
       return
     }
-    if (!retireDraftBeforePost()) return
-    notice = null
-    const before = machine
-    machine = transition(machine, { type: "SUBMIT" })
-    if (machine === before) {
+    if (pending.kind === "steer") {
+      notice = null
+      beginSteer(pending)
       return
     }
+    if (!retireDraftBeforePost()) return
+    notice = null
+    if (machine.runId === null) machine = transition(machine, { type: "SUBMIT" })
     // 未获回执的恢复只复用原始冻结意图；不根据消息历史合成新 key/body。
     beginRun(pending)
   }
@@ -1495,6 +1683,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     missingSessionId = undefined
     taskNotifications.select(next.activeId)
     retireMessageParts()
+    retireSteerStatusRead()
     const previousSessionId = store?.activeId ?? null
     recoveringExpiredCursor = false
     connection = { status: "connected" }
@@ -1507,8 +1696,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     frozenResumes.clear(); resumeAttempts.clear()
     pendingSubmission = null
     preparedSubmission = null
-    recoveredSubmission = null
-    recoveredSubmissionError = null
+    pendingSubmissionFailureCode = null
     deferredCreateReceipt = null
     if (previousSessionId !== next.activeId) {
       selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
@@ -1518,7 +1706,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     }
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
-    pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
     hydrating = shouldHydrate && !restoringDraft
     commitStore(next)
@@ -1539,15 +1726,23 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (!store) {
       return
     }
+    removedConversationId ??= store.activeId
     const fallbackId = createId("conv")
     const next = removeConversation(store, store.activeId, fallbackId, now())
     activateConversation(next, next.activeId !== fallbackId)
+  }
+
+  function acknowledgeConversationRemoval(id: string): void {
+    if (disposed || removedConversationId !== id) return
+    removedConversationId = undefined
+    notify()
   }
 
   function selectConversation(id: string): void {
     if (disposed || !store || id === store.activeId) {
       return
     }
+    removedConversationId = undefined
     // 切换不取消在途 run：服务端 run 照跑，切回时 snapshot 精确续传。
     activateConversation(selectConversationOp(store, id))
   }
@@ -1559,6 +1754,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       return
     }
     if (store?.activeId === id && (hydrating || pendingSubmission !== null || thread.messages.length > 0 || machine.runId !== null)) return
+    removedConversationId = undefined
     if (store?.conversations.some(entry => entry.id === id && entry.localDraft === true)) {
       let retired = false
       try { retired = deps.draftLifecycle?.retire(id) === true } catch { /* Explicit owner reads remain available. */ }
@@ -1580,6 +1776,16 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     activateConversation(next)
   }
 
+  function returnToLocalHome(): void {
+    if (disposed || scope.kind !== "direct") return
+    const id = createId("conv")
+    if (store?.conversations.some(entry => entry.id === id)) return
+    removedConversationId = undefined
+    // Browser history changes only the active view. Keep the previous
+    // submission journal and owner run for an exact Forward/reopen.
+    activateConversation(addConversation(store, id, now(), store ? "fast" : pendingMode, deps.draftLifecycle !== undefined), false)
+  }
+
   function newConversation(): void {
     if (disposed) {
       return
@@ -1587,10 +1793,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (submissionRecoveryUnavailable) { notice = { key: "chat.submissionRecoveryFailed" }; notify(); return }
     notice = null
     missingSessionId = undefined
-    // Starting a fresh chat abandons a POST whose receipt has not arrived yet.
-    // Preserve the idempotency key so a late receipt can cancel the server run.
-    if (deps.submissionRecovery ? !abandonPendingSubmission() : !cancelPendingSubmission()) return
-    abandonActiveRun()
+    // Leaving a supplement neither retires its recoverable command nor
+    // cancels its existing Run. Only create has late-new-Run cancellation.
+    const leavingSteer = (pendingSubmission ?? preparedSubmission)?.kind === "steer"
+    if (!leavingSteer && (deps.submissionRecovery ? !abandonPendingSubmission() : !cancelPendingSubmission())) return
+    removedConversationId = undefined
+    if (!leavingSteer) abandonActiveRun()
+    retireSteerStatusRead()
     retireMessageParts()
     hydrateGeneration += 1
     const next = addConversation(store, createId("conv"), now(), store ? "fast" : pendingMode, deps.draftLifecycle !== undefined)
@@ -1603,8 +1812,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     resumeInFlight.clear()
     frozenResumes.clear(); resumeAttempts.clear()
     pendingSubmission = null
-    recoveredSubmission = null
-    recoveredSubmissionError = null
+    preparedSubmission = null
+    pendingSubmissionFailureCode = null
     deferredCreateReceipt = null
     connection = { status: "connected" }
     selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
@@ -1613,7 +1822,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       selectedCustomApiProfiles = Object.freeze([]); customApiSelectionRestore = undefined; customApiSelectionVersion++
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
-    pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
     hydrating = false
     taskNotifications.select(next.activeId)
@@ -1641,6 +1849,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         const wasActive = store.activeId === id
         const next = removeConversation(store, id, createId("conv"), now())
         if (wasActive) {
+          removedConversationId ??= id
           activateConversation(next)
         } else {
           // The user may have moved to another thread while DELETE was in
@@ -1795,6 +2004,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     locallyCreatedSessionId = undefined
     taskNotifications.dispose()
     retireMessageParts()
+    retireSteerStatusRead()
     disposed = true
     deleteIntentGeneration += 1
     deleteIntent = null
@@ -1830,11 +2040,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       return
     }
     // 本 tab 无激活或激活会话被别处删了：跟随外部激活并重水合（无激活则回空线程）。
+    // 只报告当前视图已丢失的索引项；这不是服务端删除回执。
+    if (external !== null && myActive !== null) removedConversationId ??= myActive
     // 必须先收束在途 run（与 activateConversation 一致）：否则本 tab 正流式时被删，
     // machine 卡在旧 streaming 相位、runId 指向已删 run，hydrate 的 REATTACH 被守卫拒、不自愈。
     // 清空 storage 没有新的 session 可供 hydrate；递增代际使旧 snapshot 的 then/catch
     // 都失效，且必须同步结束 loading，否则旧请求永远悬挂在 hydrating=true。
     retireMessageParts()
+    retireSteerStatusRead()
     hydrateGeneration += 1
     hydrating = false
     recoveringExpiredCursor = false
@@ -1847,8 +2060,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     resumeInFlight.clear()
     frozenResumes.clear(); resumeAttempts.clear()
     pendingSubmission = null
-    recoveredSubmission = null
-    recoveredSubmissionError = null
+    pendingSubmissionFailureCode = null
     deferredCreateReceipt = null
     selectedSkillSourceRefs = scope.kind === "project" ? undefined : []
     mcpSelectionRestore = undefined; mcpSelectionVersion += 1
@@ -1856,7 +2068,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       selectedCustomApiProfiles = Object.freeze([]); customApiSelectionRestore = undefined; customApiSelectionVersion++
     thread = createSessionStreamState()
     observedTerminalRuns.clear()
-    pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
     store = external
     notice = null
@@ -1888,6 +2099,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       }
     },
     submit,
+    restoreRejectedDelivery,
     retry,
     retryMessageParts,
     setMessagePartsReadTarget,
@@ -1898,7 +2110,9 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     stageToolDecision,
     selectConversation,
     openConversation,
+    acknowledgeConversationRemoval,
     retireLocalCreationProvenance,
+    returnToLocalHome,
     newConversation,
     deleteConversation,
     reconcileConversationCache,

@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useSyncExternalStore } from "react"
-import { parseProductReturnTarget } from "@/lib/product-return-target"
 
 export const EDITOR_HASH = "#scheduled-tasks/new"
 export const SCHEDULED_LOCATION_EVENT = "kokoro:scheduled-location"
@@ -14,11 +13,11 @@ export type ScheduledTaskCreationContext =
 export type ScheduledLocationState = {
   view: ScheduledView
   editorOpen: boolean
-  automationWorkflow: boolean
   creationContext: ScheduledTaskCreationContext
+  filterContext: ScheduledTaskCreationContext
 }
 
-const DEFAULT_SCHEDULED_LOCATION_SNAPSHOT = JSON.stringify(["calendar", false, "personal", null, false])
+const DEFAULT_SCHEDULED_LOCATION_SNAPSHOT = JSON.stringify(["calendar", false, "personal", null, "personal", null])
 const EDITOR_HISTORY_KEY = "scheduledTaskEditor"
 
 function readScheduledView(): ScheduledView {
@@ -29,26 +28,26 @@ function readScheduledView(): ScheduledView {
 
 function readScheduledLocationSnapshot(): string {
   if (typeof window === "undefined") return DEFAULT_SCHEDULED_LOCATION_SNAPSHOT
-  const creationContext = readScheduledTaskCreationContext()
+  const creationContext = readScheduledProjectContext("project_id")
+  const filterContext = readScheduledProjectContext("filter_project_id")
   return JSON.stringify([
     readScheduledView(),
     window.location.hash === EDITOR_HASH,
     creationContext.kind,
     creationContext.kind === "project" ? creationContext.projectId : null,
-    /^\/app\/?$/u.test(window.location.pathname) &&
-      new URLSearchParams(window.location.search).getAll("workflow").length === 1 &&
-      new URLSearchParams(window.location.search).get("workflow") === "automation",
+    filterContext.kind,
+    filterContext.kind === "project" ? filterContext.projectId : null,
   ])
 }
 
-function readScheduledTaskCreationContext(): ScheduledTaskCreationContext {
+function readScheduledProjectContext(parameterName: string): ScheduledTaskCreationContext {
   const references: string[] = []
   for (const parameter of window.location.search.slice(1).split("&")) {
     if (parameter.length === 0) continue
     const separator = parameter.indexOf("=")
     const encodedName = separator === -1 ? parameter : parameter.slice(0, separator)
     const name = decodeSearchComponent(encodedName)
-    if (name !== "project_id") continue
+    if (name !== parameterName) continue
     const projectId = decodeSearchComponent(separator === -1 ? "" : parameter.slice(separator + 1))
     if (projectId === null) return { kind: "invalid" }
     references.push(projectId)
@@ -85,40 +84,21 @@ export function useScheduledLocation(): ScheduledLocationState {
     () => DEFAULT_SCHEDULED_LOCATION_SNAPSHOT,
   )
   return useMemo(() => {
-    const [view, editorOpen, kind, projectId, automationWorkflow] = JSON.parse(snapshot) as [ScheduledView, boolean, ScheduledTaskCreationContext["kind"], string | null, boolean]
+    const [view, editorOpen, kind, projectId, filterKind, filterId] = JSON.parse(snapshot) as [ScheduledView, boolean, ScheduledTaskCreationContext["kind"], string | null, ScheduledTaskCreationContext["kind"], string | null]
     const creationContext: ScheduledTaskCreationContext = kind === "project" && projectId !== null
       ? { kind, projectId }
       : kind === "invalid"
         ? { kind }
         : { kind: "personal" }
-    return { view, editorOpen, creationContext, automationWorkflow }
+    const filterContext: ScheduledTaskCreationContext = filterKind === "project" && filterId !== null
+      ? { kind: "project", projectId: filterId }
+      : filterKind === "invalid" ? { kind: "invalid" } : { kind: "personal" }
+    return { view, editorOpen, creationContext, filterContext }
   }, [snapshot])
 }
 
 export function scheduledTaskCreationContextKey(context: ScheduledTaskCreationContext): string {
   return JSON.stringify([context.kind, context.kind === "project" ? context.projectId : null])
-}
-
-export function scheduledProjectReturnHref(context: ScheduledTaskCreationContext): string | null {
-  return context.kind === "project"
-    ? parseProductReturnTarget(`/app/project/${encodeURIComponent(context.projectId)}`)
-    : null
-}
-
-/** Preserve raw scope input, including invalid/duplicate values, across these two views. */
-function scheduledScopeParameters(): string[] {
-  if (typeof window === "undefined") return []
-  return window.location.search.slice(1).split("&").filter((parameter) =>
-    decodeSearchComponent(parameter.split("=", 1)[0] ?? "") === "project_id",
-  )
-}
-
-export function scheduledAutomationHref(): string {
-  return `/app?${["workflow=automation", ...scheduledScopeParameters()].join("&")}`
-}
-
-export function scheduledManagementHref(): string {
-  return `/app/scheduled?${[...scheduledScopeParameters(), "tab=list"].join("&")}`
 }
 
 export function scheduledTaskEditorInstanceKey(
@@ -132,6 +112,15 @@ export function writeScheduledView(view: ScheduledView): void {
   if (typeof window === "undefined") return
   const url = new URL(window.location.href)
   url.searchParams.set("tab", view)
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
+  window.dispatchEvent(new Event(SCHEDULED_LOCATION_EVENT))
+}
+
+export function writeScheduledProjectFilter(projectId: string | null): void {
+  if (typeof window === "undefined") return
+  const url = new URL(window.location.href)
+  if (projectId === null) url.searchParams.delete("filter_project_id")
+  else url.searchParams.set("filter_project_id", projectId)
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
   window.dispatchEvent(new Event(SCHEDULED_LOCATION_EVENT))
 }

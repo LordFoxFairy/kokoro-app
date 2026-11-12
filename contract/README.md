@@ -1,16 +1,84 @@
-## Public29.3 个人材料容量失败消费者
+## A‑13 — Public 28.32 external connection lifecycle
 
-唯一完整原件固定 BFF1e6765b3230d55fa17d0f6aa989278b97d00f338，Public29.3.0，SHA256 4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333。原十二条 fullsource recipe 与原分享 browser projection 正规再生；新增的唯一 tuple 是 context_window_exceeded / retryable=false，原两个 retryable=true 保持。原 runtime schema 继续只消费生成 tuple，不手填第二套枚举。
+The current snapshot is the exact BFF `3000256cf6c8d2b481b93253631f623f4d38a134`
+Git blob, SHA-256 `e12a8078f5ecaa741c255a3bcec032d398d35309d845d3cf736dc764a0287d33`.
+The Agents generator projects only the browser setup GET/POST schemas; the provider
+webhook remains BFF-only. The independent Scheduled executions pin is unchanged.
 
-test-only bff-public293-personal-context-parent.ts 只接受精确正式全文，移除两个具名 enum 行和版本后必须恢复原29.2全文摘要，再进入未改29.1/29.0与双父历史 oracle。201项有序操作及原200项清单不变；分享投影与其余生成变化均通过精确 provenance 反投影逐字比较，policy3和旧 fixtures 不变。下方保留历史记录。
+## A‑06 — Public 28.31 Project website references
 
-## Public29.2 团队角色权限消费者
+The current complete snapshot is the exact BFF `7f109384651741ee9df2e4931ef7a566053cea81`
+Git blob, SHA-256 `9fea8041e3eac479e5ea008e120729fb37637636bb6bf3ad8b94ac161ac8a88c`.
+The existing Project resource generation command emits the website GET/PUT
+validators from the same snapshot. The independent Scheduled executions pin is unchanged.
 
-固定 BFF8ae73fde765ba55a77679c36199dcc9c1553fa11 的完整原件，SHA256 df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c。原12条 public recipe 正规生成，分享 projection 同步 provenance；其余独立 profile/policy保持。test-only `bff-public292-team-permissions-parent.ts` 先恢复完整29.1/29.0，再接原双父 proof，旧200操作与旧oracle不变。
+## A‑10 — Public 28.30 private Artifact display paths
 
-## Public29 正式配对（候选）
+The current full BFF snapshot is Public 28.30 at BFF `0c6be20abbf34a2d5b9bdf9db9d582f6cea064b1`,
+SHA-256 `2e459bd39f73686ac6d458011b777f08ea17b79a1467e563cdbb299e044a3cf9`.
+Only the private snapshot and existing AG-UI delivery value carry the optional display path.
+The independent Scheduled executions and anonymous Share inputs remain unchanged.
 
-固定BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb，29.0.0，完整SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7。12public生成、五独立private/profile与policy3保持；新增scheduled runs及RSS/日历分支只按owner原件消费。`tests/contract/bff-public29-integration-parent.ts`的有限逆差先还原两份完整原父字节和有序inventory，再进入旧证明链；正式proof只抽public字段，旧oracle不重签，不依赖sibling源或SQL。
+## A‑09 — Public 28.29 Artifact favorite and retirement
+
+The generated snapshot is the byte-exact BFF `9a0c45c` Git blob (SHA-256
+`be6473bfa58332dee9f0417a10f6b21c8320efa79802151fe5b13f93753d4504`).
+The existing resource generator emits the Artifact mutation validators from that
+snapshot. The Public 28.28 parent and separate scheduled-execution pin remain exact.
+
+## A‑09 — Public 28.28 Artifact source
+
+The current snapshot is byte-exact BFF `c9c0782` (SHA-256
+`495afa65989a1308194910b0b5ece62b4f9db0c84f8dc34e7e0f3b00f7c5294f`).
+Only Artifact detail may establish its source Project or an explicitly direct scope.
+The prior Public 28.27 inverse and independent pins remain fixed.
+
+## A‑09 — Public 28.27 personal file filters
+
+The generated current snapshot is the byte-exact BFF `e52952d` artifact, SHA-256
+`52b59b49be42bc3c1126b6fc94b1d88c440b7ac911c2631e8a0305f43f96bd08`.
+It adds file q/type to existing listLibrary without a second route or response.
+Historical inverses and the independent Public 28.23 scheduled pin remain fixed.
+
+## A‑09 · Public 28.26 个人文件删除
+
+唯一公开 snapshot 按 BFF `697cece8c913349c9424a024bd6d8003bb3adeae` canonical Git blob 固定，SHA‑256 `c80d5aaba1732eca0fb7bc8f32f500adef99e7d884f579cfb7944b8b11e8901a`。现资源生成器从同一来源生成个人文件删除的 Asset/key、闭合回执及 status/code/retryable 校验，不新增可编辑契约副本。旧 A‑12 28.23 与其它独立来源保持；test-only 完整逆变换仍核原父字节，运行时只消费当前协议。
+
+## A‑08：唯一当前 Public28.25 消费者
+
+`src/generated/bff-public-openapi.yaml` 为 BFF `8d7892c82378b44ef1cbbdf0658f8d0da2be9968` / Public28.25.0 完整 Git blob，SHA‑256 `008667f501044dc186e615b83370f96a7401de8027f25e7635248724fb165759`。原13条公共生成入口与 current pins 同步；从 owner `MessageCreateRequest.selected_resource_refs` 正规生成 `final_answer`，仍仅接受 opaque Message ID 和 kind，复用原 Chat submit/recovery。test-only 精确逆回 Public28.24 再接原28.23、28.22和历史父链，不在运行中降级。下方 A‑12 独立窄发行物与其它 private/policy 来源保持。
+
+## A‑12：固定 Public 28.23 执行记录窄消费者
+
+`bff-scheduled-executions-source.json` 固定 BFF `a889f695d8cc936d2fd3ce3bdb1ff5e8db70446f` / Public 28.23.0，完整原件位于 `vendor/kokoro-bff/<commit>/openapi.yaml`，SHA-256 `0abd300ffc5d50d3aefa19832a32feb53ea358933bcc4df655202517554a7504`。`pnpm contract:generate:bff-scheduled-executions` 从该原件只提取 `listScheduledTaskExecutions` 和传递引用，生成响应 Zod、类型及 provenance；`pnpm contract:check:bff-scheduled-executions` 重生成并逐字节检查，已接入 `pnpm contract`。生成器对 owner 的 `additionalProperties:false` 生成 strict 对象，不手改生成物。无 SDK runtime 或第二网络层。`src/contract/scheduled.ts` 消费生成项与解壳后的 `data`，只补浏览器结果关联和非空 cursor 约束；cursor 不解析。
+
+其余能力的完整 Public 28.22 快照和原固定生成来源保持，下方各能力记录按发行保留。本窄消费者不代表真实浏览器与到点链路已验收。
+
+## A‑03：Public 28.22 原 Run 补充回执
+
+唯一当前快照固定 BFF `99f946e67bec19d0bead1d29d7f3fd32ce4e95bf`／28.22.0／SHA-256 `a3d71aa845265084f7965c06dc903e2a5bf24c47d23bceb9a19bcd5d991c08b4` 的 Git blob；原十三个 Public 生成入口消费同一来源。现 `ControlReceipt` 仅 `run.steer` 可携带 BFF 所属 `message_id`；pending 不证明注入。打断、独立认证和 MCP policy 契约不变。
+
+测试专用 `tests/contract/bff-interrupt-submit-parent.ts` 逆回精确 28.21 原字节后继续原历史完整哈希链，不是运行兼容。
+
+## A‑03：Public 28.21 打断并发送
+
+该阶段快照为已推 BFF `2cf1c14d5007c0c89d24e5461e9d01d24f8a4656`／28.21.0／SHA-256 `a5ea4bb0ef1458a536e3b54e01049267aec2913d147f2ad7bb99a481197d0525` 的 Git blob。原十三个 Public 生成入口消费同一来源；独立认证和 MCP policy 不变。现 Message POST 增可选 `interrupt_run_id`；只有「打断并发送」才指定同会话当前已开始的 Run，`202` 仅表示后继已接纳，`409 run_delivery_conflict` 不接纳新消息。
+
+测试专用 `tests/contract/bff-interrupt-submit-parent.ts` 仅逆字段和版本，核对完整 28.20 原字节后进入 A‑07 及原历史证明链，不作为运行兼容。
+
+## A‑07：Public 28.20 Project Todo
+
+该阶段快照固定已推 BFF `846821ae1b46f66663669d20fd5340bb7fa58b87`／28.20.0／SHA-256 `c5fc7225901fa5b815cdb7ee5286354d7c4cabed9919676e6e86651fb9910783` 的 Git blob。十二个既有 Public 生成入口重钉同一来源，新增 Project Tasks 具名生成器只投影集合 GET／POST 和成员 PATCH／DELETE，保留路径级参数与引用闭包；独立认证／MCP policy 输入不变，不手改生成物。
+
+测试专用 `tests/contract/bff-project-tasks-parent.ts` 严格逆回完整 28.19 原字节，再进入原超窗终态及账户资料历史父链；旧版本摘要与既有行为断言保持。下方各旧版本段落只记录历史来源，不构成第二个运行时契约。
+
+## T‑09：Public 28.19 非重试超窗终态
+
+唯一 Public OpenAPI 快照来自 BFF `d166a514d672d100c49b71491deb8fd62cacd658`／28.19.0／SHA-256 `27032917fb272601b6da8ba9227bab5324ac305682a72c94adca72e4f9e25577`，原样消费。沿用十二个生成入口；failure tuples 只增 `context_window_exceeded / false`。其余原件、private 状态及 IAM relay policy 不动。
+
+## T-07 历史 Public28.18 provenance（2026-11-01）
+
+唯一完整snapshot固定BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9`／28.18.0／SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082`，本轮不改其原字节。12个既有public生成器通过原 `--write` 重出，current pins原子同步；独立private与policy3不变。新 test-only `tests/contract/bff-account-profile-read-parent.ts` 验完整child hash后仅逆账户资料GET/schema/version，并验完整28.17 parent hash，再进入原Custom API及后续父链。以下28.17段为历史，不是第二当前snapshot；实际验证见 `docs/CURRENT.md`。
 
 ## Public28.17 Custom API safe refs（正式输入候选消费）
 

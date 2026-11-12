@@ -67,6 +67,30 @@ describe("R135 snapshot-first process page client", () => {
 
 })
 
+describe("A03 same-Run control owner receipt", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("sends the frozen steer to the exact scoped Run and requires its canonical Message", async () => {
+    const body = { kind: "run.steer", message_id: "client-intent", content: "Add to this Run" } as const
+    const scope = { kind: "project", projectRef: "project a" } as const
+    const accepted = { run_id: "run/a", command_id: "idem-a", request_digest: "sha256:owner", status: "pending", replayed: false }
+    const receipt = { ...accepted, message_id: "owner-message" }
+    const fetchMock = vi.fn().mockImplementationOnce(async () => Response.json(receipt, { status: 202 }))
+      .mockImplementationOnce(async () => Response.json({ ...receipt, run_id: "other-run" }, { status: 202 }))
+      .mockImplementationOnce(async () => Response.json(accepted, { status: 202 }))
+    vi.stubGlobal("fetch", fetchMock)
+    const client = createSessionClient({ baseUrl: "/api/session" })
+    const send = () => client.sendControl("conv/a", "run/a", body, "idem-a", scope)
+    await expect(send()).resolves.toEqual(receipt)
+    expect(fetchMock.mock.calls[0]).toEqual(["/api/session/sessions/conv%2Fa/runs/run%2Fa/control?project_ref=project+a", {
+      method: "POST", headers: { "content-type": "application/json", "idempotency-key": "idem-a" },
+      body: JSON.stringify(body),
+    }])
+    await expect(send()).rejects.toMatchObject({ reason: "parse" })
+    await expect(send()).rejects.toMatchObject({ reason: "parse" })
+  })
+})
+
 describe("listSessions：owner required nullable cursor", () => {
   afterEach(() => vi.unstubAllGlobals())
 
@@ -1213,4 +1237,25 @@ it.each([
     })
     expect(fetchMock).toHaveBeenCalledOnce()
   } finally { vi.unstubAllGlobals() }
+})
+it("adopts a valid frame before confirming its cursor and reporting a later parse error in the same SSE chunk", async () => {
+  const cursor = "agui_00000000000000000000000000000001"
+  const event = { type: "TEXT_MESSAGE_CONTENT", messageId: "segment", delta: "kept", timestamp: 1,
+    metadata: { kokoro: { public_sequence: "1", event_id: "e1", seq: 1, session_id: "s", run_id: "r", timestamp: "2026-11-12T00:00:00Z" } } }
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(`id: ${cursor}\ndata: ${JSON.stringify(event)}\n\nid: agui_00000000000000000000000000000002\ndata: {bad\n\n`, { headers: { "content-type": "text/event-stream" } })))
+  let release!: () => void, enter!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const entered = new Promise<void>(resolve => { enter = resolve })
+  const order: string[] = []
+  const handle = createSessionClient({ baseUrl: "/api/session" }).openEvents({ sessionId: "s", resumeCursor: null,
+    onFrame: async frame => { enter(); await gate; expect(frame.uiMessageChunks).toEqual([{ type: "text-delta", id: "segment", delta: "kept" }]); order.push("body") },
+    onCursor: value => { expect(value).toBe(cursor); order.push("cursor") },
+    onStreamError: error => { expect(error.reason).toBe("parse"); order.push("error") },
+  })
+  try {
+    await entered
+    expect(order).toEqual([])
+    release()
+    await vi.waitFor(() => expect(order).toEqual(["body", "cursor", "error"]))
+  } finally { release(); handle.close() }
 })

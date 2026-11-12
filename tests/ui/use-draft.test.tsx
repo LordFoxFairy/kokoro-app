@@ -1,8 +1,11 @@
 import { act, cleanup, renderHook } from "@testing-library/react"
+import { useState } from "react"
+import { flushSync } from "react-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { admitBrowserAuthSessionIndexes } from "@/ui/shell/page-clients"
 import { consumeLandingPrompt, stashLandingPrompt, stashPendingDraft, useDraft } from "@/ui/shell/use-draft"
+import type { SelectedResourceRef } from "@/contract/chat"
 
 const DRAFTS_KEY = "kokoro.web.drafts"
 
@@ -18,6 +21,167 @@ afterEach(() => {
 })
 
 describe("useDraft persistence", () => {
+  const owner = { admitted: true, subject: "draft-owner", tenant: "tenant-a", generation: 1 }
+  const refs: SelectedResourceRef[] = [{ kind: "asset", resource_id: "selected-asset" }]
+
+  it("stores attachment selection, subsequent typing and removal before any timer or pagehide", () => {
+    vi.useFakeTimers()
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    const { result } = renderHook(() => useDraft(null, true, undefined, owner))
+    const persisted = () => JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}").__pending__
+    act(() => result.current.updateDraft("draft before choosing"))
+    expect(persisted()).toBeUndefined()
+    act(() => result.current.updateResourceRefs(refs))
+    expect(persisted()).toMatchObject({ text: "draft before choosing", refs })
+    act(() => result.current.updateDraft("last keystroke before hard reload"))
+    expect(persisted()).toMatchObject({ text: "last keystroke before hard reload", refs })
+    act(() => result.current.updateResourceRefs([]))
+    expect(persisted()).toMatchObject({ text: "last keystroke before hard reload", refs: [] })
+    act(() => result.current.updateDraft("ordinary typing without attachments"))
+    expect(persisted()).toMatchObject({ text: "last keystroke before hard reload", refs: [] })
+    act(() => vi.advanceTimersByTime(200))
+    expect(persisted()).toMatchObject({ text: "ordinary typing without attachments", refs: [] })
+  })
+
+  it("recovers a pending edit only after the same owner is readmitted", () => {
+    vi.useFakeTimers()
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    const { result, rerender } = renderHook(({ boundary }) => useDraft("conversation-a", true, "project-a", boundary), {
+      initialProps: { boundary: owner },
+    })
+    const old = result.current
+    act(() => old.updateDraft("last keystroke before recovery"))
+    expect(window.localStorage.getItem(DRAFTS_KEY)).toBeNull()
+    rerender({ boundary: { ...owner, admitted: false, generation: 2 } })
+    expect(result.current.draft).toBe("")
+    expect(result.current.readCurrentDraft()).toBeNull()
+    act(() => {
+      old.updateDraft("retired callback")
+      vi.advanceTimersByTime(200)
+    })
+    expect(window.localStorage.getItem(DRAFTS_KEY)).toBeNull()
+    rerender({ boundary: { ...owner, generation: 3 } })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "last keystroke before recovery", refs: [] })
+    const remount = renderHook(() => useDraft("conversation-a", true, "project-a", { ...owner, generation: 3 }))
+    expect(remount.result.current.draft).toBe("last keystroke before recovery")
+  })
+
+  it.each(["route", "tenant"] as const)("does not recover a retired unpersisted edit after a %s change", change => {
+    vi.useFakeTimers()
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    const { result, rerender } = renderHook(({ id, boundary }) => useDraft(id, true, "project-a", boundary), {
+      initialProps: { id: "conversation-a", boundary: owner },
+    })
+    act(() => result.current.updateDraft("old context only"))
+    rerender({ id: "conversation-a", boundary: { ...owner, admitted: false, generation: 2 } })
+    if (change === "tenant") expect(admitBrowserAuthSessionIndexes(owner.subject, owner.subject, "tenant-b")).toBe(true)
+    rerender({ id: change === "route" ? "conversation-b" : "conversation-a",
+      boundary: { ...owner, tenant: change === "tenant" ? "tenant-b" : owner.tenant, generation: 3 } })
+    expect(result.current.draft).toBe("")
+    if (change === "tenant") expect(admitBrowserAuthSessionIndexes(owner.subject, owner.subject, owner.tenant)).toBe(true)
+    rerender({ id: "conversation-a", boundary: { ...owner, generation: 4 } })
+    act(() => vi.advanceTimersByTime(200))
+    expect(result.current.draft).toBe("")
+    expect(window.localStorage.getItem(DRAFTS_KEY)).toBeNull()
+  })
+
+  it("flushes a pending draft before an earlier pagehide auth listener commits retirement", () => {
+    vi.useFakeTimers()
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    let retire = () => {}
+    const authPageHide = () => flushSync(retire)
+    window.addEventListener("pagehide", authPageHide)
+    try {
+      const { result } = renderHook(() => {
+        const [boundary, setBoundary] = useState(owner)
+        const draft = useDraft(null, true, undefined, boundary)
+        return { draft, retire: () => setBoundary({ ...owner, admitted: false, generation: 2 }) }
+      })
+      retire = result.current.retire
+      act(() => result.current.draft.updateDraft("typed immediately before reload"))
+      expect(window.localStorage.getItem(DRAFTS_KEY)).toBeNull()
+      const old = result.current.draft
+      act(() => window.dispatchEvent(new PageTransitionEvent("pagehide")))
+      expect(old.readCurrentDraft()).toBeNull()
+      expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}").__pending__)
+        .toBe("typed immediately before reload")
+    } finally { window.removeEventListener("pagehide", authPageHide) }
+  })
+
+  it("flushes text and opaque refs together on navigation or pagehide and fences the retired tenant", () => {
+    vi.useFakeTimers()
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    const { result, rerender } = renderHook(({ activeId, boundary }) => useDraft(activeId, true, undefined, boundary), {
+      initialProps: { activeId: "a", boundary: owner },
+    })
+    act(() => {
+      result.current.updateDraft("text and refs in the same edit")
+      result.current.updateResourceRefs(refs)
+    })
+    rerender({ activeId: "b", boundary: owner })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "", refs: [] })
+    rerender({ activeId: "a", boundary: owner })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "text and refs in the same edit", refs })
+    const old = result.current
+    act(() => result.current.updateDraft("flush this on pagehide"))
+    act(() => window.dispatchEvent(new PageTransitionEvent("pagehide")))
+    act(() => old.updateResourceRefs([]))
+    expect(old.readCurrentDraft()).toBeNull()
+    rerender({ activeId: "a", boundary: { ...owner, generation: 2 } })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "flush this on pagehide", refs })
+    const afterPageShow = result.current
+    expect(admitBrowserAuthSessionIndexes(owner.subject, owner.subject, "tenant-b")).toBe(true)
+    act(() => afterPageShow.updateDraft("late old-tenant edit"))
+    rerender({ activeId: "a", boundary: { ...owner, tenant: "tenant-b", generation: 3 } })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "", refs: [] })
+    expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}").a).toMatchObject({ text: "flush this on pagehide", refs })
+    act(() => {
+      result.current.updateDraft("new tenant text")
+      result.current.updateResourceRefs([{ kind: "artifact", resource_id: "tenant-b-ref" }])
+      afterPageShow.clearDraft()
+      vi.advanceTimersByTime(200)
+    })
+    expect(result.current.readCurrentDraft()).toEqual({ text: "new tenant text", refs: [{ kind: "artifact", resource_id: "tenant-b-ref" }] })
+    const otherTab = { subject: owner.subject, tenant: owner.tenant, text: "newer other-tenant edit", refs }
+    act(() => {
+      result.current.updateResourceRefs([])
+      result.current.updateDraft("waiting on debounce")
+      window.localStorage.setItem(DRAFTS_KEY, JSON.stringify({ a: otherTab }))
+      vi.advanceTimersByTime(200)
+    })
+    expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}").a).toEqual(otherTab)
+  })
+
+  it("will not replace a newer refs-only draft when restoring a rejected message", () => {
+    expect(admitBrowserAuthSessionIndexes(owner.subject, null, owner.tenant)).toBe(true)
+    const { result, unmount } = renderHook(() => useDraft("rejected", true, undefined, owner))
+    const newer: SelectedResourceRef[] = [{ kind: "artifact", resource_id: "newer-artifact" }]
+    act(() => result.current.updateResourceRefs(newer))
+    act(() => expect(result.current.restoreDraft("rejected message", refs)).toBe(false))
+    expect(result.current.readCurrentDraft()).toEqual({ text: "", refs: newer })
+    act(() => result.current.clearDraft())
+    act(() => expect(result.current.restoreDraft("rejected message", refs)).toBe(true))
+    unmount()
+    const restored = renderHook(() => useDraft("rejected", true, undefined, owner))
+    expect(restored.result.current.readCurrentDraft()).toEqual({ text: "rejected message", refs })
+  })
+
+  it("restores a rejected message synchronously without overwriting a newer draft", () => {
+    const { result } = renderHook(() => useDraft("conversation-restore", true))
+    act(() => result.current.updateDraft("newer text"))
+    act(() => expect(result.current.restoreDraft("rejected text")).toBe(false))
+    expect(result.current.draft).toBe("newer text")
+    act(() => result.current.clearDraft())
+    const before = window.localStorage.getItem(DRAFTS_KEY)
+    const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("full", "QuotaExceededError") })
+    act(() => expect(result.current.restoreDraft("rejected text")).toBe(false))
+    expect(window.localStorage.getItem(DRAFTS_KEY)).toBe(before)
+    write.mockRestore()
+    act(() => expect(result.current.restoreDraft("rejected text")).toBe(true))
+    expect(result.current.draft).toBe("rejected text")
+    expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}")).toEqual({ "conversation-restore": "rejected text" })
+  })
+
   it("debounces storage writes while keeping the latest draft in React", () => {
     vi.useFakeTimers()
     const { result } = renderHook(() => useDraft("conversation-1", true))
@@ -73,7 +237,7 @@ describe("useDraft persistence", () => {
 
     expect(registration).toBeDefined()
     unmount()
-    expect(remove).toHaveBeenCalledWith("pagehide", registration?.[1])
+    expect(remove).toHaveBeenCalledWith("pagehide", registration?.[1], registration?.[2])
   })
 
   it("keeps an empty project's draft separate from a newer direct-chat draft", () => {

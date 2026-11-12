@@ -134,7 +134,8 @@ test('renders schema regex constraints as literal code, never inferred links', a
   const renderer = await createMarkdownRenderer('/tmp/kokoro-reference-render');
   const environment = {};
   const html = renderer.render(generateReferenceFiles(contract, catalogEntry).get('chat.md'), environment);
-  assert.ok(environment.links.every((link) => /^\.\/schemas(?:\.html)?#/u.test(link)));
+  assert.ok(environment.links.every((link) => /^\.\/schemas(?:\.html)?#/u.test(link)
+    || ['/api/authentication', '#create-message'].includes(link)));
   assert.match(html, /<code>\^https:\/\/github/);
   for (const pattern of ['^(yes|no)$', '^(yes|no`)$']) {
     contract.components.schemas.MessageCreateRequest.properties.content.pattern = pattern;
@@ -239,14 +240,16 @@ test('generates deterministic operation, schema, and manifest files', () => {
   const indexFragment = first.get('index-fragment.md');
   assert.match(
     indexFragment,
-    /\]\(\/reference\/v1\/generated\/chat#create-message\)/,
+    /\]\(\/api\/reference\/v1\/generated\/chat#create-message\)/,
   );
   assert.doesNotMatch(indexFragment, /\]\(\.\//);
+  assert.match(indexFragment, /\| 资源 \| 操作数 \|/u);
+  assert.match(chatPage, /\[POST Submit a message\]\(#create-message\)/u);
 
   const manifest = JSON.parse(first.get('manifest.json'));
   assert.deepEqual(manifest.items, [
-    { text: 'Chat', link: '/reference/v1/generated/chat' },
-    { text: 'Schemas', link: '/reference/v1/generated/schemas' },
+    { text: 'Chat', link: '/api/reference/v1/generated/chat' },
+    { text: 'Schemas', link: '/api/reference/v1/generated/schemas' },
   ]);
 });
 
@@ -428,6 +431,14 @@ test('keeps reference replacement inside managed or temporary directories', () =
   } finally {
     rmSync(escapeDirectory, { force: true, recursive: true });
   }
+});
+
+test('retires the old portal reference destination', () => {
+  const files = generateReferenceFiles(fixtureContract(), catalogEntry);
+  assert.throws(
+    () => writeReferenceFiles(files, join(process.cwd(), 'docs/reference/v1/generated'), { portalRoot: process.cwd() }),
+    /managed generated directory or a temporary directory/,
+  );
 });
 
 test('rejects a temporary output path hidden behind an escaping symlink', () => {
@@ -685,4 +696,86 @@ test('formal answer feedback natural PUT is exact and does not require a command
   assert.doesNotThrow(() => generateReferenceFiles(contract, catalogEntry));
   operation.parameters = [{ $ref: '#/components/parameters/IdempotencyKey' }];
   assert.throws(() => generateReferenceFiles(contract, catalogEntry), /must not declare Idempotency-Key/u);
+});
+
+test('current product annotations publish only reviewed schema locations and exact typed values', () => {
+  const groups = [
+    ['x-kokoro-unique-by', [
+      ['PrivateSessionSnapshotResponse.properties.data.properties.composer_selection.properties.selected_custom_api_profiles', 'profile_id'],
+      ['MessageCreateRequest.properties.selected_custom_api_profiles', 'profile_id'],
+      ['RunDisplay.properties.workspace_outputs', 'version_id'],
+    ]],
+    ['x-kokoro-utf8-byte-limit', [
+      ['ProjectWebsiteUrls.items', 2048],
+      ['DeliveredArtifactDisplayPath', 4096],
+      ['RunWorkspaceOutputVersion.properties.virtual_path', 4096],
+    ]],
+    ['x-kokoro-decimal-maximum', [['ProjectWebsitesStateVersion', '2147483647']]],
+    ['x-kokoro-unicode-domain', [['DeliveredArtifactDisplayPath', 'NFC Unicode scalars; no Cc, Cf or Cs']]],
+    ['x-kokoro-binding', [['DeliveredArtifactDisplayPath', 'Equal to the exact Agent-attested source path; only a proven virtual workspace path, without hidden segments or sensitive names.']]],
+  ];
+  const wrap = (node, key, value) => {
+    const root = {};
+    let current = root;
+    for (const part of `components.schemas.${node}`.split('.')) current = current[part] ??= {};
+    current[key] = value;
+    return root;
+  };
+  for (const [key, nodes] of groups) {
+    for (const [node, value] of nodes) {
+      const annotation = wrap(node, key, value);
+      assert.doesNotThrow(() => assertPublicationSafe(annotation, 'canonical public contract'));
+      // Limits preserve wire types, and binding/identity prose is not an open string slot.
+      for (const bad of [null, true, typeof value === 'number' ? String(value) : 2147483647,
+        typeof value === 'number' ? value + 1 : `${value} changed`]) {
+        assert.throws(() => assertPublicationSafe(wrap(node, key, bad)), /unknown Kokoro extension/u);
+      }
+      for (const relocated of [wrap(`Other.${node}`, key, value), { nested: annotation },
+        { paths: { '/v1/other': { get: { [key]: value } } } }]) {
+        assert.throws(() => assertPublicationSafe(relocated), /unknown Kokoro extension/u);
+      }
+      assert.throws(() => assertPublicationSafe(wrap(node, 'x-kokoro-unreviewed-product', value)), /unknown Kokoro extension/u);
+      assert.throws(() => assertPublicationSafe({ description: `${key}: ${value}` }), /unknown Kokoro header/u);
+    }
+  }
+});
+
+test('reviewed natural operations require their exact method, path and operation ID without a command key', () => {
+  const operations = [
+    ['PUT', '/v1/projects/{projectId}/mcp-recommendations', 'replaceProjectMcpRecommendations'],
+    ['PUT', '/v1/projects/{projectId}/pin', 'setProjectPin'],
+    ['PUT', '/v1/projects/{project_id}/websites', 'replaceProjectWebsites'],
+    ['POST', '/v1/agents/connections/setup', 'changeAgentConnection'],
+    ['POST', '/v1/agents/connections/telegram/webhook', 'acceptTelegramConnectionUpdate'],
+    ['POST', '/v1/agents/connections/line/webhook', 'acceptLineConnectionEvent'],
+    ['POST', '/v1/agents/connections/line/continue', 'continueLineConnection'],
+    ['POST', '/v1/agents/connections/slack/complete', 'completeSlackConnection'],
+    ['PUT', '/v1/library/artifacts/{conversation_id}/{artifact_id}/favorite', 'setLibraryArtifactFavorite'],
+    ['PUT', '/v1/sessions/{id}/messages/{messageId}/feedback', 'setMessageFeedback'],
+  ];
+  for (const [method, path, operationId] of operations) {
+    const contract = fixtureContract();
+    const operation = contract.paths['/v1/sessions/{id}/messages'].post;
+    operation.operationId = operationId;
+    operation['x-kokoro-idempotency'] = 'natural';
+    operation.parameters = [];
+    contract.paths = { [path]: { [method.toLowerCase()]: operation } };
+    const files = generateReferenceFiles(contract, catalogEntry);
+    assert.equal(JSON.parse(files.get('manifest.json')).operations[0].idempotency, 'natural');
+    assert.doesNotMatch(files.get('chat.md'), /Idempotency-Key/u);
+    operation.parameters = [{ $ref: '#/components/parameters/IdempotencyKey' }];
+    assert.throws(() => generateReferenceFiles(contract, catalogEntry), /must not declare Idempotency-Key/u);
+    operation.parameters = [];
+    for (const [candidatePath, candidateMethod, candidateId] of [
+      ['/v1/other', method, operationId],
+      [path, method === 'POST' ? 'PUT' : 'POST', operationId],
+      [path, method, 'unrelatedOperation'],
+      [path.replaceAll('{project_id}', '{projectId}'), method, operationId],
+    ]) {
+      if (candidatePath === path && candidateMethod === method && candidateId === operationId) continue;
+      operation.operationId = candidateId;
+      contract.paths = { [candidatePath]: { [candidateMethod.toLowerCase()]: operation } };
+      assert.throws(() => generateReferenceFiles(contract, catalogEntry), /unsupported x-kokoro-idempotency/u);
+    }
+  }
 });

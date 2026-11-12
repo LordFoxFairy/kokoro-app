@@ -2385,28 +2385,3 @@ it.each([
   const card = skillCatalogSchema.safeParse({ skills: [{ name: "Skill", description: "", content_hash: "revision", scope: "third_party", installed: false, enabled: false, ...facts }] }).success
   expect({ hub, card }).toEqual({ hub: false, card: false })
 })
-
-
-describe("private MCP new authorization client", () => {
-  const body = { source_connector_id: "old-revoked", expected_server_state_version: "7", expected_connector_state_version: "5" };
-  const ack = () => ({ server: { availability: "unavailable", server_id: "authorization-server", display_name: "New authorization", server_url: "https://example.test/mcp", status: "pending", state_version: "8", headers: [], transport: "streamable_http", prepare_status: "pending_prepare", declarations: [], declarations_available: false }, connector: { availability: "unavailable", connector_id: "fresh-connector", server_id: "authorization-server", provider_key: "private", connector_type: "mcp", status: "pending", enabled: false, state_version: "1", approved_scopes: [] }, replayed: true });
-  it("sends one explicit POST with the original key and both CAS, no automatic retry or Prepare", async () => {
-    const fetch=vi.fn().mockResolvedValue(publicResponse({data:ack()})); vi.stubGlobal("fetch",fetch);
-    expect(await createHubClient().reauthorizePrivateMcpServer!("authorization-server",body,"original-authorization-key")).toEqual(ack());
-    expect(fetch).toHaveBeenCalledOnce(); expect(fetch.mock.calls[0]?.[0]).toBe("/api/hub/mcp/servers/authorization-server/reauthorize");
-    const init=fetch.mock.calls[0]?.[1] as RequestInit; expect(init.method).toBe("POST"); expect(JSON.parse(init.body as string)).toEqual(body);
-    expect(new Headers(init.headers).get("idempotency-key")).toBe("original-authorization-key");
-  });
-  it.each(["source","server","version","enabled","extra","duplicate"])("rejects %s acknowledgement without a second POST", async fault => {
-    const value=ack(); if(fault==="source") value.connector.connector_id=body.source_connector_id;
-    if(fault==="server") value.server.server_id="other"; if(fault==="version") value.server.state_version="7"; if(fault==="enabled") value.connector.enabled=true;
-    const raw={data:value,...(fault==="extra"?{extra:true}:{})};
-    const response=fault==="duplicate" ? new Response('{"data":null,'+JSON.stringify(raw).slice(1),{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"request-1"}}) : publicResponse(raw);
-    const fetch=vi.fn().mockResolvedValue(response);vi.stubGlobal("fetch",fetch);
-    await expect(createHubClient().reauthorizePrivateMcpServer!("authorization-server",body,"original-authorization-key")).rejects.toMatchObject({reason:"parse"}); expect(fetch).toHaveBeenCalledOnce();
-  });
-  it.each([[409,"mcp_personal_command_in_progress",true],[412,"mcp_personal_command_replay_expired",false],[503,"mcp_personal_command_outcome_unknown",false]] as const)("preserves the formal %s/%s recovery tuple without retrying",async(status,code,retryable)=>{
-    const fetch=vi.fn().mockResolvedValue(publicResponse({error:{code,message:"Safe failure",retryable}},status));vi.stubGlobal("fetch",fetch);
-    await expect(createHubClient().reauthorizePrivateMcpServer!("authorization-server",body,"original-authorization-key")).rejects.toMatchObject({reason:"http",status,code,retryable});expect(fetch).toHaveBeenCalledOnce();
-  });
-});

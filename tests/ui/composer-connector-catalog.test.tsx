@@ -24,7 +24,8 @@ async function mountCatalog() {
   vi.spyOn(pageClients, "browserListClient").mockReturnValue(local)
   const create = vi.spyOn(client, "createMcpConnector"), authorize = vi.spyOn(client, "beginMcpConnectorAuthorization")
   vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ error: { code: "unavailable" } }, { status: 503 }))
-  let boundary = { admitted: true, subject: "catalog-actor", generation: 1 }
+  expect(pageClients.admitBrowserAuthSessionIndexes("catalog-actor", "catalog-actor", "catalog-tenant")).toBe(true)
+  let boundary = { admitted: true, subject: "catalog-actor", generation: 1, tenant: "catalog-tenant" }
   const frame = () => <ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" projectWorkspace projectRef={projectRef} projectReadBoundary={boundary} /></LocaleProvider></ThemeProvider>
   const view = render(frame())
   await screen.findByRole("textbox", { name: "对话输入" })
@@ -33,7 +34,7 @@ async function mountCatalog() {
   const draft = screen.getByRole("textbox", { name: "对话输入" })
   fireEvent.change(draft, { target: { value: "keep exact draft" } })
   const trigger = screen.getByRole("button", { name: "连接器 (1)" })
-  return { engine, local, client, create, authorize, draft, trigger, url, view, rebind: (next: typeof boundary) => { boundary = next; view.rerender(frame()) } }
+  return { engine, local, client, create, authorize, draft, trigger, url, view, rebind: (next: Omit<typeof boundary, "tenant">) => { boundary = { ...next, tenant: boundary.tenant }; view.rerender(frame()) } }
 }
 
 it("composer Add opens only the existing catalog over the exact Project conversation and returns focus on Escape", async () => {

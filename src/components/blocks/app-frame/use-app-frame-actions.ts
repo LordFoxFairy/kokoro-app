@@ -1,3 +1,4 @@
+import type { SelectedResourceRef } from "@/contract/chat"
 import type { CustomApiSelection } from "@/engine/custom-api-selection"
 import {
   type FormEvent,
@@ -7,9 +8,11 @@ import {
 } from "react"
 
 import type { SessionEngine } from "@/engine/machine"
+import { interruptibleRunId } from "@/engine/engine-types"
 import type { AgentMode } from "@/core/conversations"
 import type { SkillCard } from "@/hub/schemas"
 import { useT } from "@/i18n/context"
+import { readChatDelivery } from "@/ui/settings/chat-prefs"
 import { MAX_INPUT_LENGTH } from "@/ui/composer/composer"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import { stashConversationDraft } from "@/ui/shell/use-draft"
@@ -35,9 +38,9 @@ export type AppFrameActionsOptions = {
   standaloneSurface: boolean
   chatHref: string
   activeId: string | null
-  draft: string
-  clearDraft: () => void
-  updateDraft: (value: string) => void
+  readDraft: () => { text: string; refs: readonly SelectedResourceRef[] } | null
+  clearDraft: (keepResources?: boolean) => void
+  updateDraft: (value: string, explicitCreation?: boolean) => void
   setDeploymentIntent: (intent: CreationIntent | null) => void
   syncConversationUrl: (id: string | null, mode: "push" | "replace") => void
   setConversationRouteId: (id: string | null) => void
@@ -60,7 +63,7 @@ export function useAppFrameActions({
   standaloneSurface,
   chatHref,
   activeId,
-  draft,
+  readDraft,
   clearDraft,
   updateDraft,
   setDeploymentIntent,
@@ -87,6 +90,8 @@ export function useAppFrameActions({
   const { startTrial, selectCurrentDraft: selectSkillForCurrentDraft, submitCurrentDraft, selectedSkill, clearSelectedSkill } = useAppFrameSkillTrial({ engine, preview, boundary: readBoundary })
 
   const directSelectionAtRender = engine?.getSnapshot().store?.activeId ?? null
+  const deliveryTargetAtRender = engine === null ? null : interruptibleRunId(engine.getSnapshot())
+  const deliveryPreference = preview ? "queue" : readChatDelivery()
   const conversationAtRender = conversationIdFromLocation()
   const routeAtRender = typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`
   let actorAtRender: string | null | undefined
@@ -94,7 +99,9 @@ export function useAppFrameActions({
   catch { actorAtRender = undefined }
 
   const submitDraft = useCallback(() => {
-    const content = draft.trim()
+    const intent = readDraft()
+    if (intent === null) return
+    const content = intent.text.trim()
     if (!engine || !content || content.length > MAX_INPUT_LENGTH) {
       return
     }
@@ -140,9 +147,19 @@ export function useAppFrameActions({
           current.machine.phase !== "idle" || current.hasPendingSubmission || current.canRetryPendingSubmission) return
       }
     }
-    // 流式中提交继续沿现有 create-message 路径；queued/steer 的正式
-    // owner 语义尚未发布，本层只消费 engine 的同步接纳结果。
-    const accepted = submitCurrentDraft(content, projectWorkspace && routedConversationId == null, projectComposerDraft)
+    const allocate = projectWorkspace && routedConversationId == null
+    let delivery: Parameters<SessionEngine["submit"]>[1]
+    if (deliveryPreference !== "queue" && !allocate) {
+      const target = interruptibleRunId(engine.getSnapshot())
+      if (target !== deliveryTargetAtRender) { focusComposer(); return }
+      if (target !== null) delivery = deliveryPreference === "interrupt" ? { interruptRunId: target } : { steerRunId: target }
+    }
+    const steer = delivery?.steerRunId !== undefined
+    const accepted = submitCurrentDraft(content, allocate, projectComposerDraft, delivery, steer ? [] : intent.refs,
+      () => {
+        const current = readDraft()
+        return current?.text === intent.text && current.refs === intent.refs
+      })
     if (!accepted) {
       // A synchronous guard (for example, a create receipt still in flight)
       // leaves the user's draft and creation/route intent untouched.
@@ -150,7 +167,8 @@ export function useAppFrameActions({
       return
     }
     if (projectWorkspace && routedConversationId == null) onProjectDraftAccepted?.()
-    clearDraft()
+    if (steer) clearDraft(true)
+    else clearDraft()
     if (projectWorkspace || conversationAtRender === null) {
       // Publish only this synchronously accepted Send, never a restored cache
       // entry. Both first-message surfaces must leave their own overview now.
@@ -165,7 +183,7 @@ export function useAppFrameActions({
     // blank conversation cannot inherit a stale Website/App capsule.
     setDeploymentIntent(null)
     focusComposer()
-  }, [actorAtRender, projectComposerDraft, onProjectDraftAccepted, chatHref, conversationAtRender, directSelectionAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, submitCurrentDraft, syncConversationUrl])
+  }, [actorAtRender, projectComposerDraft, onProjectDraftAccepted, chatHref, conversationAtRender, directSelectionAtRender, deliveryPreference, deliveryTargetAtRender, routeAtRender, clearDraft, readDraft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, submitCurrentDraft, syncConversationUrl])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -182,7 +200,8 @@ export function useAppFrameActions({
 
   const handlePrompt = useCallback((prompt: string, intent?: CreationIntent) => {
     setDeploymentIntent(intent ?? null)
-    updateDraft(prompt)
+    // A starter can choose its scene and edit in one event, before the next render.
+    updateDraft(prompt, intent !== undefined)
     // Radix restores focus to the DropdownMenu trigger after its close
     // commit. One frame is too early in a real browser: the textarea receives
     // focus and is then immediately replaced by the trigger. Hand off after
@@ -343,6 +362,7 @@ export function useAppFrameActions({
 
   return {
     submitDraft,
+    activeDelivery: deliveryPreference !== "queue" && deliveryTargetAtRender !== null && (!projectWorkspace || routedConversationId != null) ? deliveryPreference : undefined,
     handleSubmit,
     handleKeyDown,
     handlePrompt,

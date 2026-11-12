@@ -1,12 +1,13 @@
 "use client"
 
 import { CalendarDays } from "lucide-react"
+import type { ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 import { useT } from "@/i18n/context"
 
 import type { ScheduledTaskRecord } from "../model/scheduled-task"
-import type { ScheduledView, ScheduledTaskCreationContext } from "./scheduled-task-location"
+import type { ScheduledView } from "./scheduled-task-location"
 import { ScheduledTaskCalendarView } from "./scheduled-task-calendar-view"
 import { ScheduledTaskEmptyState } from "./scheduled-task-empty-state"
 import { ScheduledTaskList } from "./scheduled-task-list"
@@ -15,7 +16,9 @@ import calendarStyles from "./scheduled-task-calendar.module.css"
 import styles from "./scheduled-task-surface.module.css"
 
 type ScheduledTaskContentProps = {
-  creationContext: ScheduledTaskCreationContext
+  updates: ReactNode
+  projectFilter: ReactNode
+  invalidFilter: boolean
   brandName: string
   fixtureMode: boolean
   controlledTasks: boolean
@@ -39,6 +42,7 @@ type ScheduledTaskContentProps = {
     target?: HTMLElement | null,
     task?: ScheduledTaskRecord | null,
   ) => void
+  switchView: (next: string) => void
   shiftCalendarMonth: (offset: number) => void
   resetCalendarMonth: () => void
   setDeleteTarget: (task: ScheduledTaskRecord) => void
@@ -47,41 +51,35 @@ type ScheduledTaskContentProps = {
 }
 
 export function ScheduledTaskContent(props: ScheduledTaskContentProps) {
+  if ((props.fixtureMode || props.controlledTasks) && props.displayedTasks.length === 0)
+    return <ScheduledTaskEmptyState brandName={props.brandName} canCreate={props.canCreate} openEditor={props.openEditor} />
+  return <ScheduledTaskList
+    canReadExecutions={!props.fixtureMode && !props.controlledTasks}
+    brandName={props.brandName} tasks={props.view === "updates" ? [] : props.displayedTasks} view={props.view}
+    pendingMutation={props.pendingMutation} mutationError={props.mutationError} mutationBusy={props.mutationBusy}
+    canCreate={props.canCreate} canUpdate={props.canUpdate} canRetry={props.canRetry} canDelete={props.canDelete}
+    openEditor={props.openEditor} switchView={props.switchView} setDeleteTarget={props.setDeleteTarget}
+    retryTask={props.retryTask} setTaskEnabled={props.setTaskEnabled} projectFilter={props.projectFilter}>
+    <ScheduledTaskBody {...props} />
+  </ScheduledTaskList>
+}
+
+function ScheduledTaskBody(props: ScheduledTaskContentProps) {
   const t = useT()
-  if (props.creationContext.kind === "invalid") return (
-    <section className={styles.content}>
-      <p role="alert">{t("scheduled.invalidScope")}</p>
-      <Button type="button" disabled>{t("scheduled.create")}</Button>
-    </section>
-  )
-  if (
-    !props.fixtureMode &&
-    !props.controlledTasks &&
-    props.loading &&
-    props.displayedTasks.length === 0
-  )
+  if (props.invalidFilter) return <p role="alert">{t("scheduled.invalidFilter")}</p>
+  if (props.view === "updates") return props.updates
+  if (!props.fixtureMode && !props.controlledTasks && props.loading && props.displayedTasks.length === 0)
     return <ScheduledTaskLoadingState />
-  if (
-    !props.fixtureMode &&
-    !props.controlledTasks &&
-    props.loadError &&
-    props.displayedTasks.length === 0
-  )
-    return (
-      <ScheduledTaskLoadError
-        loading={props.loading}
-        loadTasks={props.loadTasks}
-      />
-    )
-  if (props.displayedTasks.length === 0)
-    return (
-      <ScheduledTaskEmptyState
-        brandName={props.brandName}
-        canCreate={props.canCreate}
-        openEditor={props.openEditor}
-      />
-    )
-  return <ScheduledTaskWorkspace {...props} />
+  if (!props.fixtureMode && !props.controlledTasks && props.loadError && props.displayedTasks.length === 0)
+    return <ScheduledTaskLoadError loading={props.loading} loadTasks={props.loadTasks} />
+  if (props.displayedTasks.length === 0) return <ScheduledTaskEmptyState embedded brandName={props.brandName}
+    canCreate={props.canCreate} openEditor={props.openEditor} />
+  return <>
+    {props.loadError ? <ScheduledTaskInlineLoadError loading={props.loading} loadTasks={props.loadTasks} /> : null}
+    {props.view === "calendar" ? <ScheduledTaskCalendarView calendarMonth={props.calendarMonth}
+      calendarTasks={props.calendarTasks} displayTimezone={props.displayTimezone} openEditor={props.openEditor}
+      shiftCalendarMonth={props.shiftCalendarMonth} resetCalendarMonth={props.resetCalendarMonth} /> : null}
+  </>
 }
 
 function ScheduledTaskLoadingState() {
@@ -136,45 +134,6 @@ function ScheduledTaskLoadError({
         </Button>
       </div>
     </section>
-  )
-}
-
-function ScheduledTaskWorkspace(props: ScheduledTaskContentProps) {
-  return (
-    <>
-      {props.loadError ? (
-        <ScheduledTaskInlineLoadError
-          loading={props.loading}
-          loadTasks={props.loadTasks}
-        />
-      ) : null}
-      <ScheduledTaskList
-        brandName={props.brandName}
-        tasks={props.displayedTasks}
-        view={props.view}
-        pendingMutation={props.pendingMutation}
-        mutationError={props.mutationError}
-        mutationBusy={props.mutationBusy}
-        canCreate={props.canCreate}
-        canUpdate={props.canUpdate}
-        canRetry={props.canRetry}
-        canDelete={props.canDelete}
-        openEditor={props.openEditor}
-        setDeleteTarget={props.setDeleteTarget}
-        retryTask={props.retryTask}
-        setTaskEnabled={props.setTaskEnabled}
-      />
-      {props.view === "calendar" ? (
-        <ScheduledTaskCalendarView
-          calendarMonth={props.calendarMonth}
-          calendarTasks={props.calendarTasks}
-          displayTimezone={props.displayTimezone}
-          openEditor={props.openEditor}
-          shiftCalendarMonth={props.shiftCalendarMonth}
-          resetCalendarMonth={props.resetCalendarMonth}
-        />
-      ) : null}
-    </>
   )
 }
 

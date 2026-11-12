@@ -1,0 +1,125 @@
+{
+  "version": "3.0.0",
+  "iamOwnerCommit": "896405d146c4ff96f5f39d5c2ce1bc788d46c2c7",
+  "iamAllowlistSha256": "f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead",
+  "iamSnapshotSha256": "823d36d5dae8e667e1b92d486e03a21348a86b7e2a4dadb07787a485b7cbcdd2",
+  "iamOpenapiPath": "contract/openapi/iam.internal.v1.json",
+  "iamOpenapiVersion": "0.20.0",
+  "iamOpenapiSha256": "61cf99b4fe836deafedb9f59d9fa2ea3446ce172f4069944f7facb14e816c7ca",
+  "routes": {
+    "/sign-up/email": [
+      "POST"
+    ],
+    "/sign-in/email": [
+      "POST"
+    ],
+    "/verify-email": [
+      "GET"
+    ],
+    "/sign-out": [
+      "POST"
+    ],
+    "/organization/set-active": [
+      "POST"
+    ]
+  },
+  "invitationRoutes": [
+    {
+      "template": "/v1/tenants/{tenant_id}/invitations/{invitation_id}/context",
+      "methods": [
+        "GET"
+      ],
+      "operationId": "getTenantInvitationContext",
+      "owner": "kokoro-iam",
+      "visibility": "browser-private",
+      "stability": "stable",
+      "idempotency": "none"
+    },
+    {
+      "template": "/v1/tenants/{tenant_id}/invitations/{invitation_id}/accept",
+      "methods": [
+        "POST"
+      ],
+      "operationId": "acceptTenantInvitation",
+      "owner": "kokoro-iam",
+      "visibility": "browser-private",
+      "stability": "stable",
+      "idempotency": "none"
+    },
+    {
+      "template": "/v1/tenants/{tenant_id}/invitations/{invitation_id}/reject",
+      "methods": [
+        "POST"
+      ],
+      "operationId": "rejectTenantInvitation",
+      "owner": "kokoro-iam",
+      "visibility": "browser-private",
+      "stability": "stable",
+      "idempotency": "none"
+    }
+  ],
+  "invitationSignUp": {
+    "route": "/sign-up/email",
+    "method": "POST",
+    "bodyFields": [
+      "callbackURL",
+      "email",
+      "name",
+      "password"
+    ],
+    "callbackPath": "/iam/interactions/invitation",
+    "callbackQueryParameter": "id"
+  },
+  "invitationLocation": {
+    "sourceRoute": "/verify-email",
+    "path": "/iam/interactions/invitation",
+    "queryParameter": "id",
+    "valueFormat": "canonical-lowercase-uuid",
+    "errorQueryParameter": "error",
+    "allowedErrorCodes": [
+      "TOKEN_EXPIRED",
+      "INVALID_TOKEN",
+      "USER_NOT_FOUND",
+      "INVALID_USER"
+    ]
+  },
+  "requestHeaders": [
+    "accept",
+    "content-type",
+    "origin",
+    "cookie",
+    "x-request-id"
+  ],
+  "responseHeaders": [
+    "content-type",
+    "cache-control",
+    "location",
+    "retry-after",
+    "content-security-policy",
+    "x-content-type-options",
+    "pragma",
+    "x-request-id"
+  ],
+  "cookieNames": [
+    "session_token",
+    "session_data",
+    "dont_remember"
+  ],
+  "cookieNamePrefixes": [
+    "kokoro-issuer.",
+    "__Secure-kokoro-issuer."
+  ],
+  "cookiePaths": {
+    "default": "/"
+  },
+  "webInteractionPaths": [
+    "/auth/sign-in",
+    "/auth/select-tenant",
+    "/iam/interactions/invitation"
+  ],
+  "maxQueryBytes": 8192,
+  "maxRequestBodyBytes": 65536,
+  "maxHeaderBytes": 16384,
+  "maxResponseBytes": 1048576,
+  "maxDurationMs": 5000
+}

@@ -7,7 +7,7 @@ export default [
       'node_modules/**',
       'docs/.vitepress/cache/**',
       'docs/.vitepress/dist/**',
-      'docs/reference/v1/generated/**',
+      'docs/api/reference/v1/generated/**',
     ],
   },
   eslint.configs.recommended,

@@ -47,8 +47,8 @@ export function parseProductReturnTarget(raw: string): ProductReturnTarget | nul
     if (pathname === "/app" || project) {
       if (key !== "conversation" || !CONVERSATION.test(value)) return null
     } else if (pathname === "/app/scheduled") {
-      if (key === "tab") { if (value !== "calendar" && value !== "list") return null; if (value === "calendar") continue }
-      else if (key !== "project_id" || !PROJECT.test(value)) return null
+      if (key === "tab") { if (value !== "calendar" && value !== "list" && value !== "updates") return null; if (value === "calendar") continue }
+      else if ((key !== "project_id" && key !== "filter_project_id") || !PROJECT.test(value)) return null
     } else if (pathname === "/app/library") {
       if (key === "tab") { if (value !== "artifacts" && value !== "files") return null }
       else if (key === "type") { if (!LIBRARY_TYPES.has(value)) return null; if (value === "all") continue }

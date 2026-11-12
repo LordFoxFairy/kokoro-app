@@ -14,13 +14,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useT } from "@/i18n/context"
+import { resolveMessage } from "@/i18n/resolve"
+import { MAX_INPUT_LENGTH } from "@/ui/composer/composer"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import type { MessageKey } from "@/i18n/messages"
 
+import { creationOptionLines, readCreationOption, writeCreationOption } from "./creation-draft"
 import styles from "./kokoro-welcome.module.css"
 
 type CreationWorkflowSurfaceProps = {
   intent: Extract<CreationIntent, "presentation" | "design" | "game">
+  draft?: string
   onPrompt?: (prompt: string, intent?: CreationIntent) => void
 }
 
@@ -40,6 +44,8 @@ const presentationPrompts: ReadonlyArray<{ label: MessageKey; prompt: MessageKey
 
 const presentationTemplateRanges = ["4 - 8", "8 - 12", "12 - 16", "16 - 20", "20 - 24"] as const
 type PresentationTemplateRange = (typeof presentationTemplateRanges)[number]
+const presentationDraftLines = creationOptionLines(presentationTemplateRanges,
+  (locale, range) => resolveMessage(locale, "firstSite.slideCount", { range }))
 
 type PresentationTemplate = {
   label: MessageKey
@@ -173,9 +179,22 @@ function PresentationTemplatePreview({ image, images }: Pick<PresentationTemplat
   return <Image src={image ?? ""} alt="" width={120} height={72} />
 }
 
-function PresentationWorkflow({ onPrompt }: Pick<CreationWorkflowSurfaceProps, "onPrompt">) {
+function PresentationWorkflow({ draft = "", onPrompt }: Pick<CreationWorkflowSurfaceProps, "draft" | "onPrompt">) {
   const t = useT()
-  const [templateRange, setTemplateRange] = useState<PresentationTemplateRange>("8 - 12")
+  const selectedRange = readCreationOption(draft, presentationDraftLines)
+  const templateRange = selectedRange?.option ?? "8 - 12"
+  const [blocked, setBlocked] = useState(false)
+
+  const selectRange = (range: PresentationTemplateRange) => {
+    const next = writeCreationOption(draft, t("firstSite.slideCount", { range }), selectedRange)
+    const exceeds = next.trim().length > MAX_INPUT_LENGTH
+    setBlocked(exceeds)
+    if (!exceeds) onPrompt?.(next, "presentation")
+  }
+  const prefill = (prompt: string) => {
+    setBlocked(false)
+    onPrompt?.(selectedRange ? writeCreationOption(prompt, selectedRange.line) : prompt, "presentation")
+  }
 
   return (
     <div className={styles.workflowStack}>
@@ -183,7 +202,7 @@ function PresentationWorkflow({ onPrompt }: Pick<CreationWorkflowSurfaceProps, "
         <h2 id="kokoro-presentation-prompts-heading">{t("firstSite.presentationExamples")}</h2>
         <div className={styles.presentationPromptGrid}>
           {presentationPrompts.map(({ label, prompt }) => (
-            <PromptCard key={label} label={label} prompt={prompt} onPrompt={onPrompt} intent="presentation" />
+            <PromptCard key={label} label={label} prompt={prompt} onPrompt={prefill} intent="presentation" />
           ))}
         </div>
       </section>
@@ -207,15 +226,11 @@ function PresentationWorkflow({ onPrompt }: Pick<CreationWorkflowSurfaceProps, "
             <DropdownMenuContent align="end" side="bottom" sideOffset={6}>
               <DropdownMenuRadioGroup
                 value={templateRange}
-                onValueChange={(value) => {
-                  const selectedRange = presentationTemplateRanges.find((range) => range === value)
-                  if (selectedRange) setTemplateRange(selectedRange)
-                }}
                 aria-label={t("firstSite.slideCount", { range: templateRange })}
               >
                 <DropdownMenuGroup>
                   {presentationTemplateRanges.map((range) => (
-                    <DropdownMenuRadioItem key={range} value={range}>
+                    <DropdownMenuRadioItem key={range} value={range} onSelect={() => selectRange(range)}>
                       {range}
                     </DropdownMenuRadioItem>
                   ))}
@@ -224,6 +239,7 @@ function PresentationWorkflow({ onPrompt }: Pick<CreationWorkflowSurfaceProps, "
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        {blocked ? <p role="status" className="text-sm text-destructive">{t("firstSite.creationOptionTooLong", { limit: MAX_INPUT_LENGTH })}</p> : null}
         <div className={styles.presentationTemplateGrid}>
           {presentationTemplates.map(({ label, prompt, image, images }) => (
             <Button
@@ -233,7 +249,7 @@ function PresentationWorkflow({ onPrompt }: Pick<CreationWorkflowSurfaceProps, "
               className={styles.presentationTemplate}
               data-slot="presentation-template"
               data-testid="presentation-template"
-              onClick={() => onPrompt?.(t(prompt), "presentation")}
+              onClick={() => prefill(t(prompt))}
             >
               <PresentationTemplatePreview
                 {...(image === undefined ? {} : { image })}
@@ -281,9 +297,9 @@ function CardWorkflow({ cards, intent, onPrompt }: { cards: ReadonlyArray<Workfl
   )
 }
 
-export function CreationWorkflowSurface({ intent, onPrompt }: CreationWorkflowSurfaceProps) {
+export function CreationWorkflowSurface({ intent, draft = "", onPrompt }: CreationWorkflowSurfaceProps) {
   if (intent === "presentation") {
-    return <PresentationWorkflow {...(onPrompt === undefined ? {} : { onPrompt })} />
+    return <PresentationWorkflow draft={draft} {...(onPrompt === undefined ? {} : { onPrompt })} />
   }
   return <CardWorkflow
     cards={intent === "design" ? designCards : gameCards}

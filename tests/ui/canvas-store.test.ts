@@ -20,7 +20,7 @@ import { makeDeliveryPayload, makeEvent } from "../core/fixtures"
 
 beforeEach(resetCanvasStore)
 
-const FILE_REF = { kind: "file", path: "out/a.md" } as const
+const FILE_REF = { kind: "file", runId: "run_a", versionId: "wsv_" + "a".repeat(64), epoch: {} } as const
 
 describe("开合与会话级记忆", () => {
   it("open：换引用快照 + 订阅方收到通知", () => {
@@ -62,7 +62,7 @@ describe("开合与会话级记忆", () => {
 
   it("按键隔离：conv_1 的手动关闭不影响 conv_2；空键/未知键回落关闭空槽", () => {
     openCanvas("conv_1", FILE_REF)
-    openCanvas("conv_2", { kind: "file", path: "out/b.md" })
+    openCanvas("conv_2", { ...FILE_REF, versionId: "wsv_" + "b".repeat(64) })
     closeCanvas("conv_1")
     expect(canvasSlot(readCanvasState(), "conv_1").open).toBe(false)
     expect(canvasSlot(readCanvasState(), "conv_2").open).toBe(true)
@@ -77,19 +77,14 @@ describe("开合与会话级记忆", () => {
 })
 
 describe("resolveCanvasContent（引用 → 线程活数据）", () => {
-  it("file：命中清单取实体，未及刷新的新文件以 MIME 兜底", () => {
-    const thread = {
-      ...createSessionStreamState(),
-      files: [{ path: "out/a.md", mime: "text/markdown", bytes: 12 }],
-    }
-    expect(resolveCanvasContent({ kind: "file", path: "out/a.md" }, thread)).toEqual({
-      kind: "file",
-      file: { path: "out/a.md", mime: "text/markdown", bytes: 12 },
-    })
-    expect(resolveCanvasContent({ kind: "file", path: "out/new.txt" }, thread)).toEqual({
-      kind: "file",
-      file: { path: "out/new.txt", mime: "text/plain", bytes: 0 },
-    })
+  it("resolves the exact owner-read process version and never falls back to its path", () => {
+    const thread = createSessionStreamState()
+    const epoch = {}
+    const selected = { kind: "file", runId: "run_new", versionId: "wsv_" + "2".repeat(64), epoch } as const
+    const old = { runId: "run_old", versionId: "wsv_" + "1".repeat(64), path: "/outputs/report.md", mime: "text/markdown", bytes: 12, contentSha256: "a".repeat(64) }
+    const latest = { ...old, runId: selected.runId, versionId: selected.versionId }
+    expect(resolveCanvasContent(selected, thread, [old, latest])).toEqual({ kind: "file", file: latest })
+    expect(resolveCanvasContent(selected, thread, [old])).toBeNull()
   })
 
   it("delivery：按二元 ID 命中；缺位返回 null（不渲染悬空面板）", () => {

@@ -6,7 +6,7 @@
   --kokoro-line: #ded8cc;
   --kokoro-accent: #c54f32;
   --kokoro-accent-soft: #f7ded4;
-  --kokoro-code: #1f2329;
+  --kokoro-code: var(--kokoro-paper-raised);
   --kokoro-radius-sm: 6px;
   --kokoro-radius-md: 14px;
   --kokoro-shadow: 0 14px 38px rgb(55 45 32 / 8%);

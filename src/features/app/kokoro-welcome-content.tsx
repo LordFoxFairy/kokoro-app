@@ -1,7 +1,7 @@
 "use client"
 
 import { ArrowUp, ArrowUpLeft, BarChart3, BriefcaseBusiness, Building2, ChartPie, ChevronDown, ChevronLeft, ChevronRight, Cloud, FileText, Folder, Gamepad2, Images, LayoutGrid, Link2, Map, PenLine, Rocket, Search, ShoppingBag, SquareTerminal } from "lucide-react"
-import { type Dispatch, type ReactNode, type SetStateAction } from "react"
+import { type Dispatch, type ReactNode, type SetStateAction, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { CodeWindowIcon } from "@/components/icons/code-window-icon"
@@ -10,6 +10,9 @@ import { Separator } from "@/components/ui/separator"
 import { CreationWorkflowSurface } from "./creation-workflow-surface"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { useT } from "@/i18n/context"
+import { resolveMessage } from "@/i18n/resolve"
+import { MAX_INPUT_LENGTH } from "@/ui/composer/composer"
+import { creationOptionLines, readCreationOption, writeCreationOption } from "./creation-draft"
 import { cn } from "@/lib/utils"
 
 import coreStyles from "./kokoro-welcome-direct-core.module.css"
@@ -20,8 +23,7 @@ type DirectWelcomeContentProps = {
   brandName: string
   composer?: ReactNode
   draft: string
-  selectedCreationType: string | null
-  setSelectedCreationType: Dispatch<SetStateAction<string | null>>
+  websiteOption: ReturnType<typeof readWebsiteDraftOption>
   creationTypesScrolled: boolean
   setCreationTypesScrolled: Dispatch<SetStateAction<boolean>>
   referenceStatus: string | null
@@ -42,8 +44,20 @@ type DirectWelcomeContentProps = {
   referenceInputRef: React.RefObject<HTMLInputElement | null>
 }
 
-export function DirectWelcomeContent({ brandName, composer, draft, selectedCreationType, setSelectedCreationType, creationTypesScrolled, setCreationTypesScrolled, referenceStatus, setReferenceStatus, onPrompt, onCreationIntentSelect, onOpenSettings, onCreateProject, preview, websiteCreation, appCreation, showDraftProjectContext, showDirectPrompts, showStarterCards, creativeIntent, promptSelectedRef, creationTypesRef, referenceInputRef }: DirectWelcomeContentProps) {
+export function DirectWelcomeContent({ brandName, composer, draft, websiteOption, creationTypesScrolled, setCreationTypesScrolled, referenceStatus, setReferenceStatus, onPrompt, onCreationIntentSelect, onOpenSettings, onCreateProject, preview, websiteCreation, appCreation, showDraftProjectContext, showDirectPrompts, showStarterCards, creativeIntent, promptSelectedRef, creationTypesRef, referenceInputRef }: DirectWelcomeContentProps) {
   const t = useT()
+  const [categoryBlocked, setCategoryBlocked] = useState(false)
+  const selectCategory = (label: (typeof creationTypes)[number]["label"]) => {
+    const line = t("firstSite.websiteCategoryLine", { category: t(label) })
+    const next = writeCreationOption(draft, line, websiteOption)
+    const exceeds = next.trim().length > MAX_INPUT_LENGTH
+    setCategoryBlocked(exceeds)
+    if (!exceeds) onPrompt?.(next, "website")
+  }
+  const prefillWebsiteIdea = (prompt: string) => {
+    setCategoryBlocked(false)
+    onPrompt?.(websiteOption ? writeCreationOption(prompt, websiteOption.line) : prompt, "website")
+  }
   return (
       <div className={cn(coreStyles.directContent, responsiveStyles.directContent)}>
         <div className={cn(coreStyles.directIntro, responsiveStyles.directIntro)}>
@@ -216,7 +230,8 @@ export function DirectWelcomeContent({ brandName, composer, draft, selectedCreat
                 }}
               >
                 {creationTypes.map(({ label, badge, icon: TypeIcon }) => (
-                  <Button key={label} type="button" variant="outline" className={coreStyles.creationType} onClick={() => setSelectedCreationType(label)}>
+                  <Button key={label} type="button" variant="outline" className={coreStyles.creationType}
+                    aria-pressed={websiteOption?.option === label} onClick={() => selectCategory(label)}>
                     <TypeIcon aria-hidden="true" />
                     <span>{t(label)}</span>
                     {badge && preview ? (
@@ -249,7 +264,8 @@ export function DirectWelcomeContent({ brandName, composer, draft, selectedCreat
                 {creationTypesScrolled ? <ChevronLeft aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
               </Button>
             </div>
-            {websiteCreation && selectedCreationType ? (
+            {categoryBlocked ? <p role="status" className="text-sm text-destructive">{t("firstSite.creationOptionTooLong", { limit: MAX_INPUT_LENGTH })}</p> : null}
+            {websiteOption ? (
               <div className={coreStyles.ideaSection}>
                 <p className={coreStyles.ideaTitle}>{t("firstSite.exploreIdeas")}</p>
                 <div className={coreStyles.ideaList} role="list">
@@ -259,7 +275,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, selectedCreat
                       type="button"
                       variant="outline"
                       className={coreStyles.ideaButton}
-                      onClick={() => onPrompt?.(t(prompt), "website")}
+                      onClick={() => prefillWebsiteIdea(t(prompt))}
                     >
                       <span>{t(label)}</span>
                       <ArrowUpLeft aria-hidden="true" />
@@ -307,7 +323,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, selectedCreat
           </div>
         ) : null}
 
-        {showStarterCards && creativeIntent ? <CreationWorkflowSurface intent={creativeIntent} {...(onPrompt === undefined ? {} : { onPrompt })} /> : null}
+        {showStarterCards && creativeIntent ? <CreationWorkflowSurface intent={creativeIntent} draft={draft} {...(onPrompt === undefined ? {} : { onPrompt })} /> : null}
 
 
       </div>
@@ -339,6 +355,13 @@ const creationTypes = [
   { label: "firstSite.buildMiniGame", badge: null, icon: Gamepad2 },
   { label: "firstSite.buildProductivity", badge: null, icon: Rocket },
 ] as const
+
+const websiteDraftLines = creationOptionLines(creationTypes.map(({ label }) => label), (locale, label) =>
+  resolveMessage(locale, "firstSite.websiteCategoryLine", { category: resolveMessage(locale, label) }),
+)
+export function readWebsiteDraftOption(draft: string) {
+  return readCreationOption(draft, websiteDraftLines)
+}
 
 const creationIdeas = [
   { label: "firstSite.ideaProductLaunch", prompt: "firstSite.ideaProductPrompt" },

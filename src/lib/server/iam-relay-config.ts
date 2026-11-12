@@ -27,7 +27,7 @@ export function iamRelayConfig(env: NodeJS.ProcessEnv): IamRelayConfig | null {
   const webOrigin = configuredOrigin(env.KOKORO_WEB_ORIGIN, true)
   const secret = env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim()
   if (bffOrigin === null || webOrigin === null || !secret) return null
-  return { bffOrigin, webOrigin, webHost: new URL(webOrigin).host, secret, secureCookies: env.NODE_ENV === "production" }
+  return { bffOrigin, webOrigin, webHost: new URL(webOrigin).host, secret, secureCookies: new URL(webOrigin).protocol === "https:" || env.NODE_ENV === "production" }
 }
 
 export function matchesCanonicalWebRequest(request: Request, config: IamRelayConfig, method: "GET" | "POST"): boolean {

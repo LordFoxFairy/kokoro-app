@@ -4,7 +4,7 @@ import { libraryArtifactDetailResponseSchema, libraryArtifactListResponseSchema 
 
 const item = {
   kind: "artifact", conversation_id: "conversation-1", artifact_id: "artifact-1", asset_id: "asset-1",
-  artifact_kind: "document", title: "Report", filename: "report.pdf", mime_type: "application/pdf",
+  artifact_kind: "document", title: "Report", filename: "report.pdf", mime_type: "application/pdf", favorited: false,
   size_bytes: "2048", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-09-28T10:00:00Z",
 }
 const envelope = (items: unknown[], next_cursor: string | null = null) => ({ data: { items, next_cursor }, meta: { request_id: "req-1" } })

@@ -19,8 +19,9 @@ it("failed pending retirement leaves the route and creation intent intact on glo
   const id = engine.getSnapshot().store?.activeId ?? null
   window.history.replaceState(null, "", `/app?conversation=${id}`)
   const sync = vi.fn(), setRoute = vi.fn(), setIntent = vi.fn()
+  const draft = { text: "keep draft", refs: [] }
   const hook = renderHook(() => useAppFrameActions({ engine, preview: true, projectWorkspace: false, standaloneSurface: false, chatHref: "/app", activeId: id,
-    draft: "keep draft", clearDraft: vi.fn(), updateDraft: vi.fn(), setDeploymentIntent: setIntent,
+    readDraft: () => draft, clearDraft: vi.fn(), updateDraft: vi.fn(), setDeploymentIntent: setIntent,
     syncConversationUrl: sync, setConversationRouteId: setRoute, focusComposer: vi.fn(), closeSettings: vi.fn(), brandName: undefined, commandNewChatTimerRef: { current: null } }), { wrapper: ({ children }: { children: ReactNode }) => <LocaleProvider>{children}</LocaleProvider> })
   vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("full", "QuotaExceededError") })
   act(() => hook.result.current.startNewChatWithUrl())

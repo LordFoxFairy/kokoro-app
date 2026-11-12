@@ -57,7 +57,9 @@ describe("preview transport control loop", () => {
       sessionId: "preview-session",
       resumeCursor: null,
       onCursor: () => {},
-      onEvent: (event) => {
+      onFrame: (frame) => {
+        const event = frame.projectionEvent
+        if (event === null) throw Error("Missing preview projection")
         events.push(event.kind)
         eventIds.push(event.event_id)
         if (event.kind === "activity.updated") activities.push(event.payload)
@@ -113,7 +115,9 @@ describe("preview transport control loop", () => {
       sessionId: "preview-reject-session",
       resumeCursor: null,
       onCursor: () => {},
-      onEvent: (event) => {
+      onFrame: (frame) => {
+        const event = frame.projectionEvent
+        if (event === null) throw Error("Missing preview projection")
         events.push(event.kind)
         eventIds.push(event.event_id)
         if (event.kind === "interaction.state" && event.payload.phase === "waiting") {
@@ -177,7 +181,9 @@ describe("preview transport control loop", () => {
       sessionId: "preview-known-failure-session",
       resumeCursor: null,
       onCursor: () => {},
-      onEvent: (event) => {
+      onFrame: (frame) => {
+        const event = frame.projectionEvent
+        if (event === null) throw Error("Missing preview projection")
         if (event.kind === "run.failed") failures.push(event.payload)
       },
       onStreamError: (error) => { throw error },
@@ -205,7 +211,7 @@ describe("preview transport control loop", () => {
       sessionId,
       resumeCursor: null,
       onCursor: () => {},
-      onEvent: (event) => firstEvents.push(event.kind),
+      onFrame: (frame) => { if (frame.projectionEvent === null) throw Error("Missing preview projection"); firstEvents.push(frame.projectionEvent.kind) },
       onStreamError: (error) => { throw error },
     })
     await waitFor(() => firstEvents.includes("run.completed"))
@@ -219,7 +225,7 @@ describe("preview transport control loop", () => {
       sessionId,
       resumeCursor: null,
       onCursor: () => {},
-      onEvent: (event) => replayedEvents.push(event.kind),
+      onFrame: (frame) => { if (frame.projectionEvent === null) throw Error("Missing preview projection"); replayedEvents.push(frame.projectionEvent.kind) },
       onStreamError: (error) => { throw error },
     })
     await waitFor(() => replayedEvents.includes("run.completed"))
@@ -243,7 +249,7 @@ describe("preview transport control loop", () => {
       sessionId: sessionA,
       resumeCursor: null,
       onCursor: () => {},
-      onEvent: (event) => firstAEvents.push(event.kind),
+      onFrame: (frame) => { if (frame.projectionEvent === null) throw Error("Missing preview projection"); firstAEvents.push(frame.projectionEvent.kind) },
       onStreamError: (error) => { throw error },
     })
     await waitFor(() => firstAEvents.includes("run.completed"))
@@ -259,7 +265,7 @@ describe("preview transport control loop", () => {
       sessionId: sessionB,
       resumeCursor: null,
       onCursor: () => {},
-      onEvent: (event) => firstBEvents.push(event.kind),
+      onFrame: (frame) => { if (frame.projectionEvent === null) throw Error("Missing preview projection"); firstBEvents.push(frame.projectionEvent.kind) },
       onStreamError: (error) => { throw error },
     })
     await waitFor(() => firstBEvents.includes("run.completed"))
@@ -270,7 +276,7 @@ describe("preview transport control loop", () => {
       sessionId: sessionA,
       resumeCursor: null,
       onCursor: () => {},
-      onEvent: (event) => replayedA.push(event.kind),
+      onFrame: (frame) => { if (frame.projectionEvent === null) throw Error("Missing preview projection"); replayedA.push(frame.projectionEvent.kind) },
       onStreamError: (error) => { throw error },
     })
     await waitFor(() => replayedA.includes("run.completed"))

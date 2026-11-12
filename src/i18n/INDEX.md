@@ -1,8 +1,10 @@
-2026-11-02：仅承接正常1f700的scheduled.*自动化/RSS/运行记录键；新增scheduled.approvalUnavailable准确解释禁用审批，不覆盖全局firstSite提示或其他locale键。文案不授执行/配置权限。
+2026-11-12：九语言新增 Composer 专用 modelCatalogEmpty／modelNotInCatalog，只陈述当前成功目录事实，不暗示自动采用工作区默认模型或修改已锁定选择。布局按内容与容器适配，不按语言硬编码尺寸。
 
-2026-11-01：九语言新增 `mcp.read.*` 的 API/连接器页/目录/关系及尾页读取错误和显式重试文案，仅 UI 反馈，不从文案推断 owner 状态。
+2026-11-12：九语言新增中性 thread.runEnded，仅表达 exact Run 已终止，不伪造 Skill ready/failed；fail.modelAccessDenied 同时提示积分和模型权限，沿原 failure tuple，无新 wire。
 
-2026-11-01：九语言新增 `mcp.jsonImportChooseDetail`，明确多项导入后由用户选择对应详情；不新增 wire / fallback 或状态事实。
+2026-11-09 A‑08：当前 Composer 资源选择使用中英标签，明确“添加不发送”、unknown 同文件重试、16项上限；最近任务有确定候选才显示“最终答复”，无候选显示空态。其余 locale 沿既有 fallback，不从 UI 文案授予资源可读权限。
+
+2026-11-04 T‑09：九种语言同步 `fail.contextWindow`，区分模型上下文上限和用量预算，不提示重试。
 
 2026-10-28：九语言新增原生edit_file/ls/glob/grep中性操作标签，仅原同活动身份使用，不从名称推断执行成功。
 

@@ -185,9 +185,41 @@ it("live Project cold start never advertises unknown capabilities and only resol
     view.rerender(frame(undefined))
     expectUnadvertised()
     view.rerender(frame(undefined, true))
-    expect(screen.getByText("网站", { exact: true })).toBeInTheDocument()
+    // The live Project websites owner has no synthetic preview card.
+    expect(screen.queryByText("网站", { exact: true })).not.toBeInTheDocument()
     expect(screen.getByText("定时任务", { exact: true })).toBeInTheDocument()
     expect(screen.getByRole("region", { name: "连接器" })).toBeInTheDocument()
+  } finally {
+    view.unmount()
+    window.history.replaceState({}, "", "/app")
+  }
+})
+
+it("live Project reads instruction history only when the instruction capability is enabled", async () => {
+  const alpha = projectReadFixtures[0]!
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "project-reader")
+  window.history.replaceState({}, "", `/app/project/${alpha.id}`)
+  pathname.value = window.location.pathname
+  const readInstructions = vi.fn(async () => Response.json({ data: { items: [] }, meta: { request_id: "req_project_instructions" } }))
+  stubBusinessFetch(async input => {
+    const path = new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname
+    if (path === "/api/hub/projects") return projectReadEnvelope()
+    if (path === `/api/hub/projects/${alpha.id}/instruction-revisions`) return readInstructions()
+    return Response.json({}, { status: 503 })
+  })
+  const frame = (flags?: React.ComponentProps<typeof AppFrame>["featureFlags"]) => (
+    <ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" projectWorkspace projectRef={alpha.id}
+      projectReadBoundary={{ admitted: true, subject: "project-reader", generation: 1 }} emptyState={KokoroProjectWorkspace}
+      {...(flags === undefined ? {} : { featureFlags: flags })} /></LocaleProvider></ThemeProvider>
+  )
+  const view = render(frame())
+  try {
+    await screen.findByRole("heading", { name: alpha.name })
+    expect(readInstructions).not.toHaveBeenCalled()
+    view.rerender(frame([{ key: "workspace.instructions", enabled: false }]))
+    expect(readInstructions).not.toHaveBeenCalled()
+    view.rerender(frame([{ key: "workspace.instructions", enabled: true }]))
+    await waitFor(() => expect(readInstructions).toHaveBeenCalledTimes(1))
   } finally {
     view.unmount()
     window.history.replaceState({}, "", "/app")
@@ -527,18 +559,8 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
     const method = init?.method ?? (input instanceof Request ? input.method : "GET")
     if (path === "/api/auth/session" && method === "GET") {
       return Response.json({
-        authenticated: true,
-        subject: "project-reader",
-        expires_at: Date.now() + 3_600_000,
+        data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" },
       })
-    }
-    if (path === "/api/auth/csrf" && method === "GET") {
-      return Response.json({ csrfToken: "a".repeat(64) })
-    }
-    if (path === "/api/auth/session" && method === "POST") {
-      expect(init?.headers).toEqual({ "content-type": "application/x-www-form-urlencoded" })
-      expect(init?.body?.toString()).toBe(`csrfToken=${"a".repeat(64)}`)
-      return Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 })
     }
     if (path === "/api/hub/projects" && method === "GET") {
       return Response.json({ data: { projects }, meta: { request_id: "req_project_read_r40" } })
@@ -564,10 +586,8 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
       (init?.method ?? (input instanceof Request ? input.method : "GET")) === method
   })
   expect(authRequests("/api/auth/session", "GET")).toHaveLength(1)
-  expect(authRequests("/api/auth/csrf", "GET")).toHaveLength(1)
-  expect(authRequests("/api/auth/session", "POST")).toHaveLength(1)
-  expect(authRequests("/api/auth/session", "POST")[0]?.[1]?.signal)
-    .toBe(authRequests("/api/auth/session", "GET")[0]?.[1]?.signal)
+  expect(authRequests("/api/auth/csrf", "GET")).toHaveLength(0)
+  expect(authRequests("/api/auth/session", "POST")).toHaveLength(0)
   expect(engineFactory).toHaveBeenCalledWith(expect.objectContaining({ preview: false }))
   fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
 
@@ -593,7 +613,7 @@ function projectReadEnvelope(projects = projectReadFixtures) {
 
 async function mountAuthenticatedProjectRail(
   read: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
-  readSession: () => Promise<Response> = async () => Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 }),
+  readSession: () => Promise<Response> = async () => Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } }),
 ) {
   const pageClients = await import("@/ui/shell/page-clients")
   const { AppGate } = await import("@/ui/auth/app-gate")
@@ -603,17 +623,14 @@ async function mountAuthenticatedProjectRail(
     const url = input instanceof Request ? input.url : String(input)
     const path = new URL(url, window.location.origin).pathname
     const method = init?.method ?? (input instanceof Request ? input.method : "GET")
-    // Recheck counters count readonly GETs, never the credential rotation POST.
+    // Native IAM admission is a readonly same-origin session read.
     if (path === "/api/auth/session" && method === "GET") return readSession()
-    if (path === "/api/auth/csrf" && method === "GET") {
-      return Response.json({ csrfToken: "a".repeat(64) })
-    }
-    if (path === "/api/auth/session" && method === "POST") {
-      expect(init?.headers).toEqual({ "content-type": "application/x-www-form-urlencoded" })
-      expect(init?.body?.toString()).toBe(`csrfToken=${"a".repeat(64)}`)
-      return Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 })
-    }
     if (path === "/api/hub/projects") return read(input, init)
+    if (path === "/api/hub/self/project-pins" && method === "GET") {
+      return Response.json({ data: { items: [], next_cursor: null } }, {
+        headers: { "cache-control": "private, no-store", "x-request-id": "req_project_rail_pins" },
+      })
+    }
     return Response.json({ error: { code: "unavailable" } }, { status: 503 })
   })
   const view = render(<ThemeProvider><LocaleProvider><AppGate brandName="站点品牌" /></LocaleProvider></ThemeProvider>)
@@ -621,6 +638,32 @@ async function mountAuthenticatedProjectRail(
   fireEvent.click(await screen.findByRole("button", { name: "展开侧栏" }), { detail: 0 })
   return { ...view, fetchMock }
 }
+
+it("当前账号重新打开项目侧栏时保留已确认的排序，并只展示 owner 当前项目", async () => {
+  const [alpha, beta] = projectReadFixtures
+  const removed = { ...alpha!, id: "project_read_removed", name: "待删除项目", slug: "removed" }
+  const created = { ...alpha!, id: "project_read_created", name: "新项目", slug: "created" }
+  const order = () => Array.from(document.querySelectorAll("[data-project-list] [data-project-id]"),
+    row => row.getAttribute("data-project-id"))
+  let ownerProjects = [alpha!, beta!, removed]
+  const read = async () => projectReadEnvelope(ownerProjects)
+  const first = await mountAuthenticatedProjectRail(read)
+  const source = await screen.findByRole("button", { name: alpha!.name })
+  expect(order()).toEqual([alpha!.id, beta!.id, removed.id])
+
+  source.focus()
+  fireEvent.keyDown(source, { key: " " })
+  fireEvent.keyDown(source, { key: "ArrowDown" })
+  fireEvent.keyDown(source, { key: " " })
+  expect(order()).toEqual([beta!.id, alpha!.id, removed.id])
+
+  first.unmount()
+  document.cookie = "sidebar_state=; Max-Age=0; path=/"
+  ownerProjects = [alpha!, beta!, created]
+  await mountAuthenticatedProjectRail(read)
+  await screen.findByRole("button", { name: created.name })
+  expect(order()).toEqual([beta!.id, alpha!.id, created.id])
+})
 
 it.each(["401", "bad-shape"])("身份重新准入后列表返回 %s，清旧项目且不伪装为空集合", async (failure) => {
   let calls = 0
@@ -670,7 +713,7 @@ it("同账号焦点核验保留项目、会话和草稿，不重新请求业务�
   await mountAuthenticatedProjectRail(async () => { projectReads++; return projectReadEnvelope() }, async () => {
     checks++
     if (checks === 2) return new Promise<Response>((resolve) => { finishCheck = resolve })
-    return Response.json({ authenticated: true, subject: "project-reader" })
+    return Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })
   })
   const projectLink = await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   const conversation = await screen.findByRole("button", { name: "保留的会话" })
@@ -690,7 +733,7 @@ it("同账号焦点核验保留项目、会话和草稿，不重新请求业务�
   expect(screen.queryByTestId("conversations-loading")).not.toBeInTheDocument()
   expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
   expect(composer).toHaveValue("核验期间保留的草稿")
-  await act(async () => { finishCheck(Response.json({ authenticated: true, subject: "project-reader" })) })
+  await act(async () => { finishCheck(Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })) })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   expect(projectReads).toBe(1)
   expect(sessionReads).toHaveBeenCalledTimes(sessionReadCount)
@@ -714,7 +757,7 @@ it("身份标记退休后清空并取消旧读取，迟到响应不能复活项�
   }, async () => {
     checks++
     if (checks === 3) return new Promise<Response>((resolve) => { resolveSession = resolve })
-    return Response.json({ authenticated: true, subject: "project-reader" })
+    return Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })
   })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   const composer = screen.getByRole("textbox", { name: "对话输入" })
@@ -729,7 +772,7 @@ it("身份标记退休后清空并取消旧读取，迟到响应不能复活项�
   expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
   await act(async () => { resolveOld(projectReadEnvelope()); await Promise.resolve() })
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
-  await act(async () => { resolveSession(Response.json({ authenticated: true, subject: "project-reader" })) })
+  await act(async () => { resolveSession(Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })) })
   await screen.findByRole("link", { name: "新对话 · 研究项目乙" })
   expect(calls).toBe(3)
   expect(screen.queryByRole("link", { name: "新对话 · 研究项目甲" })).not.toBeInTheDocument()
@@ -811,7 +854,7 @@ it("健康正式列表在 session 401 服务异常后撤销，但保留 Chat 且
   let checks = 0
   await mountAuthenticatedProjectRail(async () => { reads++; return projectReadEnvelope() }, async () => {
     checks++
-    return checks === 1 ? Response.json({ authenticated: true, subject: "project-reader" }) : Response.json({ authenticated: false }, { status: 401 })
+    return checks === 1 ? Response.json({ data: { authenticated: true, subject: "project-reader", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } }) : Response.json({ authenticated: false }, { status: 401 })
   })
   await screen.findByRole("link", { name: "新对话 · 研究项目甲" })
   act(() => window.dispatchEvent(new Event("focus")))
@@ -1298,7 +1341,7 @@ it("global New task leaves the project untouched and resets only the admitted di
   const view = renderHook(() => useAppFrameActions({
     engine: project, projectWorkspace: true, projectRef,
     readBoundary: { admitted: true, subject: "global-new-reader", generation: 1 },
-    standaloneSurface: false, chatHref: "/app", activeId: null, draft: "project draft", clearDraft,
+    standaloneSurface: false, chatHref: "/app", activeId: null, readDraft: () => ({ text: "project draft", refs: noDraftRefs }), clearDraft,
     updateDraft: vi.fn(), setDeploymentIntent: vi.fn(), syncConversationUrl: vi.fn(),
     setConversationRouteId: vi.fn(), focusComposer: vi.fn(), closeSettings: vi.fn(),
     brandName: "Kokoro", commandNewChatTimerRef: { current: null },
@@ -1477,6 +1520,8 @@ it("an explicit project overview submission creates a fresh target instead of po
 })
 
 
+const noDraftRefs = [] as const
+
 function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: string, conversation: string | null = null, projectWorkspace = true) {
   const clearDraft = vi.fn()
   const syncConversationUrl = vi.fn()
@@ -1484,7 +1529,7 @@ function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: st
   const options = {
     engine: projectEngine, projectWorkspace, projectRef, routedConversationId: conversation,
     standaloneSurface: false, chatHref: "/app", activeId: projectEngine.getSnapshot().store?.activeId ?? null,
-    draft: "new root intent", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
+    readDraft: () => ({ text: "new root intent", refs: noDraftRefs }), clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
     syncConversationUrl, setConversationRouteId,
     focusComposer: vi.fn(), closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }
@@ -1722,7 +1767,7 @@ it.each(["unknown", "active"] as const)("project overview Send visibly disables 
     if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
     if (state === "active") await waitFor(() => expect(projectClient.streams).toHaveLength(1))
     fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "root cannot reset this task" } })
-    expect(screen.getByRole("button", { name: /发送消息|发送插话/ })).toBeDisabled()
+    expect(screen.getByRole("button", { name: /发送消息|添加到队列/ })).toBeDisabled()
     expect(projectClient.createCalls).toHaveLength(1)
     expect(projectEngine.getSnapshot().store?.activeId).toBe(convB)
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
@@ -1846,7 +1891,7 @@ it.each(["library", "leave"] as const)("R254 Move %s只改owner绑定并刷新�
 
 it("ordinary account capability read uses its own exact endpoint and exposes no Admin entry", async () => {
   stubBusinessFetch(vi.fn<typeof fetch>(async () => Response.json({ sessions: [], next_cursor: null })))
-  mountFrame({ desktopRailCollapsed: false })
+  mountFrame({ desktopRailCollapsed: false, projectReadBoundary: { admitted: true, subject: "ordinary-capability-reader", generation: 1 } })
   await waitFor(() => expect(adminAccessFetch).toHaveBeenCalled())
   for (const [input, init] of adminAccessFetch.mock.calls) {
     expect(input).toBe("/api/admin-access")
@@ -2060,7 +2105,7 @@ function trialActions(trialEngine = engine, preview = false, projectRef?: string
     engine: trialEngine, preview, readBoundary: { admitted, subject: "trial-actor", generation },
     projectWorkspace: projectRef !== undefined, ...(projectRef === undefined ? {} : { projectRef }),
     standaloneSurface: !projectRef && window.location.pathname === "/app/skills", chatHref: "/app",
-    activeId: trialEngine.getSnapshot().store?.activeId ?? null, draft: "", clearDraft: vi.fn(), updateDraft,
+    activeId: trialEngine.getSnapshot().store?.activeId ?? null, readDraft: () => ({ text: "", refs: noDraftRefs }), clearDraft: vi.fn(), updateDraft,
     setDeploymentIntent: vi.fn(), syncConversationUrl, setConversationRouteId: vi.fn(), focusComposer: vi.fn(),
     closeSettings, brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }), { wrapper: strict ? ({ children }) => <StrictMode><LocaleProvider>{children}</LocaleProvider></StrictMode> : LocaleProvider, initialProps: { admitted: true, generation: 1 } })
@@ -2231,7 +2276,7 @@ it("project trial survives the actual URL handoff and Composer submit action", a
     return useAppFrameActions({
       engine: projectEngine, preview: false, readBoundary: { admitted: true, subject: "trial-actor", generation: 1 },
       projectWorkspace: true, projectRef, routedConversationId, standaloneSurface: false, chatHref: "/app",
-      activeId: projectEngine.getSnapshot().store?.activeId ?? null, draft: "edited project example", clearDraft: vi.fn(), updateDraft: vi.fn(),
+      activeId: projectEngine.getSnapshot().store?.activeId ?? null, readDraft: () => ({ text: "edited project example", refs: noDraftRefs }), clearDraft: vi.fn(), updateDraft: vi.fn(),
       setDeploymentIntent: vi.fn(), setConversationRouteId, focusComposer: vi.fn(), closeSettings: vi.fn(),
       syncConversationUrl: id => window.history.replaceState({}, "", `/app/project/${projectRef}?conversation=${encodeURIComponent(id!)}`),
       brandName: "Kokoro", commandNewChatTimerRef: { current: null },
@@ -2427,11 +2472,13 @@ it("retires a previously published Settings retry callback instead of borrowing 
   const content = (generation: number) => <LocaleProvider><SkillCatalogDialog inline open client={createManusSkillHubClient(hub, { admitted: true, subject: "retry-actor", generation })} enabledOverrides={new Map()} installedOverrides={new Map()} busy={null} errorName={null} onOpenChange={vi.fn()} onCloseAutoFocus={vi.fn()} onOpenUpload={vi.fn()} onOpenGithub={vi.fn()} onSetEnabled={vi.fn()} onOpenDetail={vi.fn()} selectedDetailKey={JSON.stringify(["retry-series", "retry-revision"])} onDetailProjection={onDetailProjection} /></LocaleProvider>
   const view = render(content(1))
   await waitFor(() => expect(projections.at(-1)?.failed).toBe(true))
-  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
-  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "重试" })).toBeVisible()
+  expect(screen.getByRole("alert")).toBeVisible()
   const retiredRetry = projections.at(-1)!.retry
   view.rerender(content(2))
   await screen.findByRole("button", { name: "查看详情 Fresh retry item" })
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.queryByRole("alert")).toBeNull()
   const confirmedReads = reads
   await act(async () => { retiredRetry(); await Promise.resolve() })
   expect(reads).toBe(confirmedReads)
@@ -2692,15 +2739,16 @@ it("retires Settings cursor reads on filter changes and continues the failed cur
   const more = screen.getByRole("button", { name: "加载更多" })
   await waitFor(() => expect(more).toBeEnabled())
   expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
-  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.getByRole("alert")).toBeVisible()
   fireEvent.click(more)
   await screen.findByRole("button", { name: "查看详情 coding-second" })
+  expect(screen.queryByRole("alert")).toBeNull()
   await act(async () => { releaseOld(response({ skills: [card("late-old-page")], tagOptions: {} })) })
   expect(screen.queryByRole("button", { name: "查看详情 late-old-page" })).toBeNull()
   expect(codingAttempts).toBe(2)
 })
 
-it("keeps a failed Settings filter read quiet and recovers through normal filter re-entry without claiming empty", async () => {
+it("shows a failed Settings filter read and recovers through normal filter re-entry without claiming empty", async () => {
   observeSettingsCatalogPages()
   let attempts = 0
   let defaultReads = 0
@@ -2722,8 +2770,8 @@ it("keeps a failed Settings filter read quiet and recovers through normal filter
   await screen.findByRole("button", { name: "查看详情 Initial retained page" })
   fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "offline" } })
   await waitFor(() => expect(attempts).toBe(1))
-  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
-  expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  expect(screen.getByRole("alert")).toBeVisible()
+  expect(screen.getByRole("button", { name: "重试" })).toBeVisible()
   expect(screen.queryByText("没有匹配的技能")).not.toBeInTheDocument()
   const search = screen.getByRole("searchbox", { name: "搜索技能" })
   fireEvent.change(search, { target: { value: "" } })
@@ -3082,6 +3130,45 @@ it("catalog local import recheck retires an acknowledged result rather than redi
 })
 
 
+it.each(["settings", "catalog"] as const)("closed overlays defer connector reads until the %s surface opens", async (entry) => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const hub = { ...createHubClient(),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+  }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "overlay-read-actor", generation: 1 }
+  function Shell() {
+    const [settings, setSettings] = useState<"mcp" | null>(null)
+    const [catalog, setCatalog] = useState(false)
+    const shell = useRef<HTMLDivElement | null>(null), trigger = useRef<HTMLElement | null>(null)
+    return <div ref={shell}>
+      <button onClick={() => entry === "settings" ? setSettings("mcp") : setCatalog(true)}>Open connector surface</button>
+      <AppFrameOverlaySurfaces mounted settingsTab={settings} preview={false} readBoundary={boundary}
+        mcpCatalog={{ open: catalog, onOpenChange: setCatalog, returnFocusRef: trigger, onCreate: vi.fn() }}
+        brandName="Kokoro" onCloseSettings={() => setSettings(null)} onTabChange={tab => setSettings(tab === "mcp" ? "mcp" : null)}
+        onCreateSkillWithAi={vi.fn()} onTrySkill={() => false} settingsReturnFocusRef={trigger} shellRef={shell}
+        mcpCreateMode={null} setMcpCreateMode={vi.fn()} mcpCreateReturnFocusRef={trigger}
+        commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }}
+        commandOpen={false} onCommandOpenChange={vi.fn()} />
+    </div>
+  }
+  render(<StrictMode><LocaleProvider><Shell /></LocaleProvider></StrictMode>)
+  await act(async () => { await Promise.resolve() })
+  expect(hub.listMcpConnectors).not.toHaveBeenCalled()
+  expect(hub.listMcpConnectorProviders).not.toHaveBeenCalled()
+  expect(hub.listCustomApis).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "Open connector surface" }))
+  expect(await screen.findByRole("dialog")).toBeVisible()
+  await waitFor(() => {
+    expect(hub.listMcpConnectors).toHaveBeenCalled()
+    expect(hub.listMcpConnectorProviders).toHaveBeenCalled()
+    expect(hub.listCustomApis).toHaveBeenCalled()
+  })
+})
+
 it.each([false, true])("a global MCP import invalidates Settings before it opens (old warm pending: %s)", async (pendingWarm) => {
   const pageClients = await import("@/ui/shell/page-clients")
   const { warmMcpProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
@@ -3107,6 +3194,8 @@ it.each([false, true])("a global MCP import invalidates Settings before it opens
   const otherRelease = warmMcpProjection({ client: otherHub, identity: "other-actor" })
   const other = renderHook(() => useMcpProjection({ client: otherHub, identity: "other-actor", cursor: null, view: "connections" }))
   const settingsClosed = vi.fn()
+  // Keep the pending-read invalidation risk explicit; closed overlays no longer prefetch.
+  const ownRelease = warmMcpProjection({ client: hub, identity: "preview", readGeneration: 0 })
   function Shell() {
     const [mode, setMode] = useState<import("@/ui/mcp/mcp-panel-model").McpCreateMode | null>(null)
     const [settings, setSettings] = useState<"mcp" | null>(null)
@@ -3146,7 +3235,7 @@ it.each([false, true])("a global MCP import invalidates Settings before it opens
   expect(list).toHaveBeenCalledTimes(2)
   expect(other.result.current.connectorProjection?.items).toEqual([])
   expect(otherHub.listMcpConnectors).toHaveBeenCalledTimes(1)
-  otherRelease(); other.unmount()
+  ownRelease(); otherRelease(); other.unmount()
 })
 
 
@@ -3157,6 +3246,7 @@ it.each([
   const pageClients = await import("@/ui/shell/page-clients")
   const { ConnectorsSettingsSection } = await import("@/ui/settings/sections/connectors-settings-section")
   const { warmCustomApiProjection, useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
+  const { warmMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
   const empty = { items: [], page: { next_cursor: null } }
   const profile = { profile_id: "created-api", name: "New shared API", state_version: "1",
     created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
@@ -3182,6 +3272,8 @@ it.each([
   const other = renderHook(() => useCustomApiProjection({ client: hub, identity: "preview-other", refreshKey: 0 }))
   const otherHub = { ...hub, listCustomApis: vi.fn().mockResolvedValue(empty) }
   const independent = renderHook(() => useCustomApiProjection({ client: otherHub, identity: "preview", refreshKey: 0 }))
+  // Seed unrelated MCP facts explicitly so only the API mutation's invalidation is measured.
+  const releaseMcp = warmMcpProjection({ client: hub, identity: "preview", readGeneration: 0 })
   await waitFor(() => expect(other.result.current.loading).toBe(false))
   await waitFor(() => expect(independent.result.current.loading).toBe(false))
   function Shell() {
@@ -3237,7 +3329,7 @@ it.each([
   expect(other.result.current.data.items).toEqual([])
   expect(independent.result.current.data.items).toEqual([])
   expect(otherHub.listCustomApis).toHaveBeenCalledOnce()
-  release(); otherRelease(); reopened.unmount(); other.unmount(); independent.unmount()
+  releaseMcp(); release(); otherRelease(); reopened.unmount(); other.unmount(); independent.unmount()
 })
 
 it.each(["global", "settings"] as const)("%s creation ACK cannot close a newer creation window", async (entry) => {
@@ -3526,7 +3618,8 @@ it("an empty JSON ACK remains unknown and retries only its frozen original docum
   const hub = { ...apiCreationHub(), importPrivateMcpJson: write }
   vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
   render(apiCreationOverlay({ admitted: true, subject: "json-empty-ack", generation: 1 }, "json"))
-  await waitFor(() => expect(hub.listMcpConnectors).toHaveBeenCalledOnce())
+  await act(async () => { await Promise.resolve() })
+  expect(hub.listMcpConnectors).not.toHaveBeenCalled()
   const initialConnectorReads = hub.listMcpConnectors.mock.calls.length
   const editor = screen.getByRole("textbox", { name: "请粘贴您的配置 JSON" })
   fireEvent.change(editor, { target: { value: atomicMcpDocument } })
@@ -5350,7 +5443,7 @@ function currentSkillDraftActions(draft = "original editable text", trialEngine 
     engine: currentEngine, readBoundary: { admitted, subject, generation },
     projectWorkspace: projectRef !== undefined, ...(projectRef === undefined ? {} : { projectRef }),
     routedConversationId: null, standaloneSurface: false, chatHref: "/app",
-    activeId: currentEngine.getSnapshot().store?.activeId ?? null, draft, clearDraft, updateDraft,
+    activeId: currentEngine.getSnapshot().store?.activeId ?? null, readDraft: () => ({ text: draft, refs: noDraftRefs }), clearDraft, updateDraft,
     setDeploymentIntent: vi.fn(), syncConversationUrl: vi.fn(), setConversationRouteId: vi.fn(), focusComposer: vi.fn(),
     closeSettings, brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }), { wrapper: LocaleProvider, initialProps: { currentEngine: trialEngine, admitted: true, subject: "draft-actor", generation: 1 } })

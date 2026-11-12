@@ -1,4 +1,6 @@
-`composer-connections.tsx` uses one switch-row presentation for distinct MCP and Custom API choices. Identity keys and limits stay separate (16 MCP/32 APIs); stable list→add→management order for both placements, existing36px rows and200–400px panel budget stay unchanged. Pending/error reads remain quiet and never impersonate empty success.
+2026-11-12：模型／模式附属菜单保原 Radix top8px／collision12px／键盘回焦；菜单按内容定宽并受视口上限约束，完整标签自然换行，checked 常驻字重，触屏行至少44px。目录成功为空可见提示；锁定显式模型缺席不冒显示另一个默认项，不改 engine 选择／草稿／命令。两个反馈键九语言齐备；代表语言／长名布局不等于全部译文质量验收。
+
+`composer-connections.tsx` uses one switch-row presentation for distinct MCP and Custom API choices. Identity keys and limits stay separate (16 MCP/32 APIs); stable list→add→management order for both placements, existing36px rows and200–400px panel budget stay unchanged. Initial pending and failed reads display lightweight status in the existing list; neither impersonates empty success.
 
 ## 语音预览边界（2026-10-28）
 
@@ -23,7 +25,7 @@ AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户
 - Enter 发送 / Shift+Enter 换行；IME 合成期 Enter 只确认候选词不发送。
 - 首条消息后模式/模型/agent 锁定（`modeLocked`）：由 shell 传入，组件不自持锁态。
 
-- Send 的可见性只由运行态与非空 draft 决定；disabled 消费上游 engine admission，非空但暂不可提交时保留按钮与草稿，Stop 不受该判定阻断。
+- Send 的可见性只由运行态与非空 draft 决定；disabled 消费上游 engine admission，非空但暂不可提交时保留按钮与草稿，Stop 不受该判定阻断。 有活动 Run 时，按实际提交路径显示「添加到队列」「发送但不中断」或「打断并发送」。针对当前 Run 的操作只在其已开始且目标精确匹配时启用，不把 FIFO 称为插话。
 ## 显式技能选择
 
 `SelectedSkillPill` 仅显示 shell 传入的真实选择名称并提供键盘/触屏移除入口；不管理安装或 source 授权。清除只影响未来消息，不修改 engine 已冻结的未知提交。选择名不写入提示词充当能力身份。
@@ -32,7 +34,7 @@ AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户
 
 - 恢复或语音追加的草稿超过现有 4000 字符提交上限时，保留完整草稿，在输入区关联可访问提示并禁用 Send；表单提交也阻断，缩短后自动恢复。有效输入不额外占布局。
 
-- 模型目录保留受控 `modelCatalogStatus` 的加载／成功／失败事实；失败只作 SR 状态，不在 Composer 插入可见错误／重试面板。同 scope 已确认候选和选择保留，首次未知不造候选或默认值；仅完整成功目录校正失效选择（含真正空目录），已锁定会话不改模型。底层 `retryModels` 的显式程序化恢复保持；正常页面重新挂载会重新读取，不宣称同一常驻壳的重入已恢复，也不把此展示修正当读取故障根因修复。明确发送失败仍归原消息／命令反馈，产品模式与业务模型身份保持分离。
+- 模型目录保留受控 `modelCatalogStatus` 的加载／成功／失败事实；首次无候选时显示轻量加载／错误，允许通过现 `onRetryModels` 显式重读；已有候选时保留原选择及安静错误提示。同 scope 已确认候选和选择保留，首次未知不造候选或默认值；仅完整成功目录校正失效选择（含真正空目录），已锁定会话不改模型。底层 `retryModels` 的原冷却和读取恢复保持；正常页面重新挂载会重新读取，不宣称同一常驻壳的重入已恢复，也不把此展示修正当读取故障根因修复。明确发送失败仍归原消息／命令反馈，产品模式与业务模型身份保持分离。
 
 ## 当前消息的连接来源
 
@@ -44,4 +46,8 @@ AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户
 
 Composer 仅报告新输入的 slash 范围；成功选择仅移除该范围，保留原文、原会话和光标，不自动 Send。IME、paste、URL/path 与选区替换不打开命令；菜单键盘/Esc 不落入原 Enter-submit。真正 source 选择与首次 Send 承接仍由 `useAppFrameSkillTrial` 单一生命周期持有，旧 actor/scope/route 的结果和迟到 focus 不复活。`SelectedSkillPill` 原样复用，当前仍为 textarea＋controls pill，不冒称行内不可编辑 token 已一比一。
 
-2026-10-29实测修正：Manus首页与项目的连接器列表在前、添加和管理固定底部，不随上下placement逆序；删除原placement监听与反转，键盘首次进入真实首个选择项、Esc回焦。已发送选择由私有snapshot提供候选，Engine保护新提交／手选，controller完整重新核验目录后CAS恢复。加号仍缺真实文件／资料库／最近任务上下文链，不将本节现Skills实现视作完整资源菜单。
+2026-10-29实测修正：Manus首页与项目的连接器列表在前、添加和管理固定底部，不随上下placement逆序；删除原placement监听与反转，键盘首次进入真实首个选择项、Esc回焦。已发送选择由私有snapshot提供候选，Engine保护新提交／手选，controller完整重新核验目录后CAS恢复。
+
+## 当前草稿的资源选择（A‑08，实施候选）
+
+`composer-resource-picker.tsx` / `.module.css` 承接现加号的显式本地上传、Library CLEAN files/FINAL artifacts 与当前 scope 最近任务。最近任务只在打开时读原私有 snapshot；无任何交付且有 durable final 标记才显示“最终答复”，用 opaque Message ID，不读正文。存在交付仍沿原 artifact 分页；Project 仅保当前 Conversation 归属。引用只报告 kind/resource_id，≤16、可移除，上传/选择/关闭不发送；未知上传保原 File/key，身份/路由/页面退休 abort 并忽略迟到结果。真实浏览器/正式组合验收归 Root。

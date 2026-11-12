@@ -8,13 +8,13 @@ import {
   accountProfileUpdateAckSchema,
   parseAccountProfileJson,
 } from "@/lib/account-profile-update.schema";
-it("pins formal15.2 and exactly one narrow name SDK operation", async () => {
+it("pins the IAM-owned read/write profile contract and generated SDK operations", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml");
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(
-    "4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333",
+    "a26431d45ad96c4e80e6751d61e66a14b3933ae7c2ffb6f9e7df57fcc7e6808f",
   );
-  expect(YAML.parse(bytes.toString()).info.version).toBe("29.3.0");
-  expect(Object.keys(sdk)).toEqual(["updateAccountProfile"]);
+  expect(YAML.parse(bytes.toString()).info.version).toBe("28.35.0");
+  expect(Object.keys(sdk)).toEqual(["readAccountProfile", "updateAccountProfile"]);
 });
 it("keeps UTF16/closed and escaped original rules exact", () => {
   expect(

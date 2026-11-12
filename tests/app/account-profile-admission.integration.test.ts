@@ -1,149 +1,133 @@
-import { createServer, type Server } from "node:http";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createServer, type Server } from "node:http"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const { currentProductSession } = vi.hoisted(() => ({ currentProductSession: vi.fn() }));
-vi.mock("@/lib/server/product-session", () => ({
-  currentProductSession,
-}));
-vi.mock("@/lib/server/oidc-bff-agent", () => ({
-  boundedOidcBffAgent: vi.fn(),
-}));
-import { GET } from "@/app/api/account/profile/route";
+import { GET } from "@/app/api/account/profile/route"
 
-type Scenario = {
-  status?: number;
-  mutate?: (body: Record<string, unknown>, headers: Record<string, string>) => void;
-  raw?: string;
-};
+type Scenario = { profileStatus?: number | "disconnect"; profileBody?: unknown; foreignOwnerRejected?: boolean }
 
-describe("SET43 account profile admission through real BFF HTTP", () => {
-  let server: Server | undefined;
-  let scenario: Scenario;
-  let paths: string[];
-  let outboundIds: string[];
+// This is a named HTTP BFF peer, not an IAM integration or a Web principal store.
+describe("account profile native-session boundary through the BFF", () => {
+  let server: Server | undefined
+  let scenario: Scenario
+  let paths: string[]
+  let headers: Record<string, string>[]
 
   beforeEach(async () => {
-    scenario = {};
-    paths = [];
-    outboundIds = [];
-    const now = Date.now();
-    currentProductSession.mockReset().mockResolvedValue({
-      id: "set43-local-session", generation: 1, subject: "alice",
-      access: "set43-server-access", accessExpiresAt: now + 60_000,
-      expiresAt: now + 120_000,
-    });
+    scenario = {}
+    paths = []
+    headers = []
     server = createServer((request, response) => {
-      paths.push(request.url ?? "");
-      const id = String(request.headers["x-kokoro-request-id"] ?? "");
-      outboundIds.push(id);
-      if (request.url === "/iam/oauth2/userinfo") {
-        response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify({ sub: "alice", name: "Alice", email: null, email_verified: null }));
-        return;
+      paths.push(request.url ?? "")
+      headers.push(Object.fromEntries(Object.entries(request.headers).map(([key, value]) => [key, String(value)])))
+      const requestId = String(request.headers["x-kokoro-request-id"] ?? "")
+      if (request.url !== "/v1/account/profile") {
+        response.writeHead(404)
+        response.end()
+        return
       }
-      if (request.url !== "/v1/me") { response.writeHead(404); response.end(); return; }
-      const body: Record<string, unknown> = scenario.status === 200
-        ? { data: { user_id: "alice", tenant_id: "tenant-one", platform_admin: false }, meta: { request_id: id } }
-        : { error: { code: "session_invalid", message: "Session is invalid" }, meta: { request_id: id } };
-      const headers: Record<string, string> = {
-        "content-type": "application/json", "cache-control": "no-store", "x-request-id": id,
-      };
-      scenario.mutate?.(body, headers);
-      response.writeHead(scenario.status ?? 401, headers);
-      response.end(scenario.raw ?? JSON.stringify(body));
-    });
+      const admitted = request.headers.cookie === "kokoro-issuer.session_token=native"
+      const status = !admitted ? 401 : scenario.foreignOwnerRejected ? 502 : scenario.profileStatus ?? 200
+      if (status === "disconnect") {
+        request.socket.destroy()
+        return
+      }
+      const code = status === 401 ? "session_authentication_required" : status === 429 ? "account_profile_rate_limited" : status === 502 ? "account_profile_response_invalid" : "account_profile_unavailable"
+      response.writeHead(status, {
+        "content-type": "application/json", "cache-control": "no-store", "x-request-id": requestId,
+        ...(status === 429 ? { "retry-after": "3" } : {}),
+      })
+      response.end(JSON.stringify(status !== 200
+        ? { error: { code, message: "fixture private upstream details", retryable: status === 429 || status === 503 } }
+        : scenario.profileBody ?? { data: { subject: "alice", name: "Alice", email: "alice@example.test", email_verified: true } }))
+    })
     await new Promise<void>((resolve, reject) => {
-      server!.once("error", reject);
-      server!.listen(0, "127.0.0.1", resolve);
-    });
-    const address = server.address();
-    if (!address || typeof address === "string") throw new Error("fixture did not bind");
+      server!.once("error", reject)
+      server!.listen(0, "127.0.0.1", resolve)
+    })
+    const address = server.address()
+    if (!address || typeof address === "string") throw new Error("fixture did not bind")
     for (const [key, value] of Object.entries({
       KOKORO_BFF_BASE_URL: `http://127.0.0.1:${address.port}`,
-      KOKORO_WEB_ORIGIN: "http://web.test", NEXTAUTH_URL: "http://web.test/api/auth",
-      KOKORO_INTERNAL_SECRET_WEB_BFF: "set43-fixture-secret",
-      KOKORO_OIDC_CLIENT_ID: "set43-client", KOKORO_OIDC_CLIENT_SECRET: "set43-client-secret",
+      KOKORO_WEB_ORIGIN: "http://web.test",
+      KOKORO_INTERNAL_SECRET_WEB_BFF: "fixture-secret",
       KOKORO_WEB_AUTH_SECRET: "set43-auth-secret-at-least-thirty-two-characters",
-      KOKORO_WEB_REDIS_URL: "redis://unused.invalid/0", KOKORO_DOMAIN: "product.test",
+      KOKORO_WEB_REDIS_URL: "redis://unused.invalid/0",
+      KOKORO_DOMAIN: "product.test",
       KOKORO_TENANT_ID: "tenant-one",
-    })) vi.stubEnv(key, value);
-  });
+    })) vi.stubEnv(key, value)
+  })
 
   afterEach(async () => {
-    vi.unstubAllEnvs();
+    vi.unstubAllEnvs()
     if (server) {
-      const owned = server;
-      server = undefined;
-      owned.closeAllConnections();
-      await new Promise<void>((resolve, reject) => owned.close((error) => error ? reject(error) : resolve()));
+      const owned = server
+      server = undefined
+      owned.closeAllConnections()
+      await new Promise<void>((resolve, reject) => owned.close((error) => (error ? reject(error) : resolve())))
+      expect(owned.listening).toBe(false)
     }
-  });
+  })
 
-  const read = () => GET(new Request("http://web.test/api/account/profile", {
-    headers: { host: "web.test", cookie: "set43-local-cookie" },
-  }));
+  it("delegates missing native credentials once to the BFF and returns its sanitized session denial", async () => {
+    const response = await GET(new Request("http://web.test/api/account/profile", { headers: { host: "web.test" } }))
+    expect(response.status).toBe(401)
+    expect(paths).toEqual(["/v1/account/profile"])
+    expect(headers[0]?.cookie).toBeUndefined()
+    expect(await response.json()).toEqual({ error: { code: "session_invalid", message: "session_invalid", retryable: false } })
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+  })
 
-  it("projects an authoritative session_invalid rejection as profile 401 without userinfo", async () => {
-    const response = await read();
-    expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ error: {
-      code: "account_profile_session_required", message: "account_profile_session_required",
-    } });
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(response.headers.get("x-request-id")).toBeTruthy();
-    expect(paths).toEqual(["/v1/me"]);
-    expect(outboundIds[0]).toMatch(/^[0-9a-f-]{36}$/u);
-  });
+  it("makes one profile request with the native cookie and trusted transport, without me probes", async () => {
+    const response = await GET(new Request("http://web.test/api/account/profile", { headers: { host: "web.test", cookie: "kokoro-issuer.session_token=native; unrelated=private", "x-kokoro-actor-id": "forged" } }))
+    expect(response.status).toBe(200)
+    expect(paths).toEqual(["/v1/account/profile"])
+    expect(headers[0]?.cookie).toBe("kokoro-issuer.session_token=native")
+    expect(headers[0]?.origin).toBe("http://web.test")
+    expect(headers[0]?.forwarded).toBe("host=product.test")
+    expect(headers[0]?.["x-kokoro-service"]).toBe("web-bff")
+    expect(headers[0]?.["x-kokoro-internal-secret"]).toBe("fixture-secret")
+    expect(headers[0]?.["x-kokoro-actor-id"]).toBeUndefined()
+    expect(headers[0]?.authorization).toBeUndefined()
+    expect(await response.json()).toEqual({ data: { subject: "alice", name: "Alice", email: "alice@example.test", email_verified: true } })
+  })
 
-  it("accepts the JSON charset parameter for an authoritative session rejection", async () => {
-    scenario = { mutate: (_body, headers) => {
-      headers["content-type"] = "application/json; charset=utf-8";
-    } };
-    const response = await read();
-    expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ error: {
-      code: "account_profile_session_required", message: "account_profile_session_required",
-    } });
-    expect(paths).toEqual(["/v1/me"]);
-  });
+  it.each([429, 503, "disconnect"] as const)("preserves the profile operation's safe failure mapping for BFF %s", async status => {
+    scenario.profileStatus = status
+    const response = await GET(new Request("http://web.test/api/account/profile", { headers: { host: "web.test", cookie: "kokoro-issuer.session_token=native" } }))
+    const code = status === 429 ? "account_profile_rate_limited" : "account_profile_unavailable"
+    expect(paths).toEqual(["/v1/account/profile"])
+    expect(response.status).toBe(status === 429 ? 429 : 503)
+    expect(await response.json()).toEqual({ error: { code, message: code, retryable: true } })
+    expect(response.headers.get("retry-after")).toBe(status === 429 ? "3" : null)
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    expect(response.headers.get("x-request-id")).toBeTruthy()
+  })
 
-  const invalid: [string, Scenario][] = [
-    ["wrong response header ID", { mutate: (_body, headers) => { headers["x-request-id"] = "other"; } }],
-    ["wrong meta ID", { mutate: (body) => { body.meta = { request_id: "other" }; } }],
-    ["extra envelope field", { mutate: (body) => { body.extra = true; } }],
-    ["extra error field", { mutate: (body) => { body.error = { code: "session_invalid", message: "invalid", extra: true }; } }],
-    ["extra meta field", { mutate: (body) => { body.meta = { ...(body.meta as object), extra: true }; } }],
-    ["missing no-store", { mutate: (_body, headers) => { delete headers["cache-control"]; } }],
-    ["wrong MIME", { mutate: (_body, headers) => { headers["content-type"] = "text/plain"; } }],
-    ["MIME prefix impostor", { mutate: (_body, headers) => { headers["content-type"] = "application/json-invalid"; } }],
-    ["Location", { mutate: (_body, headers) => { headers.location = "http://web.test/elsewhere"; } }],
-    ["Set-Cookie", { mutate: (_body, headers) => { headers["set-cookie"] = "fixture=private"; } }],
-    ["malformed JSON", { raw: "{" }],
-    ["other 401 code", { mutate: (body) => { body.error = { code: "permission_denied", message: "denied" }; } }],
-    ["empty message", { mutate: (body) => { body.error = { code: "session_invalid", message: "" }; } }],
-    ["owner unavailable", { status: 503 }],
-    ["service authentication rejected", { status: 403, mutate: (body) => {
-      body.error = { code: "service_auth_failed", message: "Service authentication failed" };
-    } }],
-  ];
-  it.each(invalid)("keeps %s as dependency failure without userinfo", async (_label, value) => {
-    scenario = value;
-    const response = await read();
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: {
-      code: "account_profile_admission_failed", message: "account_profile_admission_failed",
-    } });
-    expect(paths).toEqual(["/v1/me"]);
-  });
+  it("does not turn a rejected native credential into an admitted profile", async () => {
+    const response = await GET(new Request("http://web.test/api/account/profile", { headers: { host: "web.test", cookie: "kokoro-issuer.session_token=revoked" } }))
+    expect(paths).toEqual(["/v1/account/profile"])
+    expect(response.status).toBe(401)
+    expect(await response.json()).toEqual({ error: { code: "session_invalid", message: "session_invalid", retryable: false } })
+  })
 
-  it("retains successful real identity admission followed by authoritative userinfo", async () => {
-    scenario = { status: 200 };
-    const response = await read();
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ data: {
-      subject: "alice", name: "Alice", email: null, email_verified: null,
-    } });
-    expect(paths).toEqual(["/v1/me", "/iam/oauth2/userinfo"]);
-    expect(currentProductSession).toHaveBeenCalledTimes(2);
-  });
-});
+  it("withholds a foreign owner projection rejected by the BFF's expectedSubject guard", async () => {
+    // BFF src/http/routes/account-profile.ts binds expectedSubject to admitted userId.
+    // Its real account-profile-client.test.ts rejects foreign owner subjects as 502;
+    // this BFF peer publishes that failure, never an accepted Bob200 or a Web /me proof.
+    scenario.foreignOwnerRejected = true
+    const response = await GET(new Request("http://web.test/api/account/profile", { headers: { host: "web.test", cookie: "kokoro-issuer.session_token=native" } }))
+    expect(paths).toEqual(["/v1/account/profile"])
+    expect(response.status).toBe(502)
+    expect(await response.json()).toEqual({ error: { code: "account_profile_response_invalid", message: "account_profile_response_invalid", retryable: false } })
+  })
+
+  it("rejects malformed secret-bearing BFF wire without leaking the private payload", async () => {
+    scenario.profileBody = { data: { subject: "alice", name: "Alice", email: "alice@example.test", email_verified: true, token: "private-secret-canary" } }
+    const response = await GET(new Request("http://web.test/api/account/profile", { headers: { host: "web.test", cookie: "kokoro-issuer.session_token=native" } }))
+    expect(paths).toEqual(["/v1/account/profile"])
+    expect(response.status).toBe(502)
+    expect(await response.json()).toEqual({ error: { code: "account_profile_response_invalid", message: "account_profile_response_invalid", retryable: false } })
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    expect(response.headers.get("x-request-id")).toBeTruthy()
+  })
+})

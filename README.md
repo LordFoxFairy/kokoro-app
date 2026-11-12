@@ -1,3 +1,11 @@
+## T-01 标准认证消费者（2026-11-03，本地候选）
+
+固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` / browser-private auth-session1.0.0 的原字节和生成 codec；状态 strict data 只含匿名 false 或真实 subject/tenant/RFC3339 UTC expiry。普通业务不再经 Web 假claims 或前后/me；原生登录/退出/CSRF交互安全、原body/key/CAS/receipt与unknown显式恢复保持。UI寿命和跨标签无秘密失效不成为认证证明。
+
+App显式 `/api/auth/session` GET 默认rolling、逐条透传框架Set-Cookie，RSC明确refresh=false且不写/清Cookie；raw `/iam/get-session` 与query/alias闭集关闭，原生交互仍使用正式relay3。Admin只观察同一状态，不另建CSRF/refresh/store；资格/me仍由当前BFF/IAM政策判定，401/403、身份变化、pagehide与迟到响应退休私有UI，不自动重发写命令。
+
+Root在冻结输入上已完成contract452、architecture50、默认6390/0skip、lint/types/build/posttypes；当前仅候选工程验收，真实BFF/IAM组合、共享浏览器登录/rolling/撤权仍待Root验证，未合并main、部署或声称G1通过。旧测试中专属于已删除假id/generation/access与前后/me的oracle，按同一D0退休；Cookie/BFF错误、取消/有界I/O、UI epoch/ABA与unknown原命令风险由实际边界测试承接，不以删失败断言放宽生产。
+
 ## 2026-10-22 精确模型选价绑定（本地已验）
 
 已固定BFF a77276b／Public23完整原件并同步七生成器和在线Docs；费率必填精确模型修订ID＋摘要，生产同源桥及原身份／预算／恢复规则不变。完整App门4749 PASS／0SKIP、preview108零重试和Docs检查通过，四MCP WIP原字节保留。正常后台与Agent真实结算仍待，详见 [docs/CURRENT.md](docs/CURRENT.md)；以下仅历史。
@@ -37,7 +45,8 @@ Public22.3.0/182固定BFF `e461d5178c6bf92558d7cd7dd288cb29cb008525`，canonical
 # Kokoro User Web
 
 `kokoro`（发布仓库名 `kokoro-app`，package `@kokoro/app`）是 Kokoro 的正式 User Web。
-它拥有页面、浏览器交互状态、Auth.js/OIDC Product Session 和同源 HTTP adapter；不拥有 Conversation、
+它拥有页面、浏览器交互状态与同源 HTTP adapter；第一方登录使用 IAM 签发的原生 HttpOnly Session cookie，
+不再运行历史 Auth.js/OIDC RP。OAuth/OIDC 授权服务器与第三方连接保持独立。它不拥有 Conversation、
 Message、Project、Run、Billing、Capability 等服务端业务事实，也不拥有 PostgreSQL 或 Redis。
 
 ## 边界
@@ -51,16 +60,18 @@ Browser
 
 - 浏览器只访问当前站点的 `/api/*`，不持有服务地址、workload token、runtime JWT、tenant/site
   选择器或内部凭据。
-- Web 以部署侧 `KOKORO_DOMAIN` 生成受信 `Forwarded` 上下文，并在线核验 Product Session 后
-  向 BFF 传递单一 Bearer；旧 sealed cookie 不再参与认证。
+- Web 以部署侧 `KOKORO_DOMAIN` 生成受信 `Forwarded` 上下文；仅将 allowlist 内的 IAM issuer Cookie、
+  配置 Origin 和 Web 服务身份交给 BFF 做在线准入，不把浏览器自报 tenant/subject 当 authority。
+  App 是同源薄桥，当前 Session 与资格由 BFF／IAM 准入，不建立第二套 Session、principal 或引用协议。
 - Web 的同源 API 是 `browser-private` surface，只服务当前 Web，不进入 Developer API 门户。
   对外 Product API 只由 `kokoro-bff` 的 `public` contract 发布。
-- Web 与 BFF 的 Agent 对话事件网络协议只允许 AG-UI。`SessionEvent` 只能作为 Web 内部 reducer
+- Web 与 BFF 的 Agent 对话事件网络协议只允许 AG-UI。`ChatProjectionEvent` 只是 Web 内部 reducer
   投影；Vercel AI SDK 的 `ChatTransport`/`UIMessage` 也只能是 Web 内部状态与渲染适配，不能形成
   第二条网络流或第二个 cursor 事实源。
 
-当前实现仍处于协议收敛期：AG-UI parser 已存在，但 live SSE client 仍兼容读取旧
-`SessionEvent`，且仓内尚未实现 `AgUiChatTransport`/`UIMessage` 适配。准确状态和缺口见
+当前 live SSE client 通过 `AgUiChatTransport` 读取、校验和重连 AG-UI，拒绝旧 reducer-shaped wire；
+mapper 将同一帧映射为 AI SDK `UIMessageChunk` 和内部 reducer 投影，不新增网络协议或 cursor。
+历史正文分片也使用锁定 AI SDK 的 `readUIMessageStream` 作本地文本装配。实际验收与剩余范围见
 [`docs/CURRENT.md`](docs/CURRENT.md)。
 
 ## 代码地图
@@ -68,7 +79,7 @@ Browser
 | 路径 | 职责 |
 | --- | --- |
 | `src/app/` | Next.js 页面与同源 `/api/*` route adapter |
-| `src/lib/server/` | Product Session 在线 admission、受信上下文、上游 HTTP 与错误映射；旧 envelope 仅供待删除登录/Team 链 |
+| `src/lib/server/` | 原生 Session 的同源薄桥、受信上下文、上游 HTTP 与错误映射；认证与资格准入归 BFF／IAM |
 | `src/contract/` | 当前运行时 Zod contract 与路径 helper |
 | `src/engine/`、`src/core/` | Chat 状态机、重连和纯 reducer 投影 |
 | `src/features/`、`src/ui/`、`src/components/` | 产品 surface 与 UI；本阶段不修改 |
@@ -81,8 +92,7 @@ Browser
 
 ## 五分钟启动
 
-要求：Node.js 22、Corepack，以及仓库当前锁定的 `pnpm@11.2.2`。Root 规范要求迁移到
-`pnpm@11.25.0`，该工具链升级尚未在本阶段执行，见 `docs/CURRENT.md`。
+要求：Node.js 22、Corepack，以及 `package.json` 当前锁定的 `pnpm@11.25.0`。
 
 ```bash
 corepack enable
@@ -104,11 +114,13 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm test:e2e
 ```
 
-`pnpm test` 会包含 contract 与 architecture 测试；独立命令用于快速定位治理失败。当前尚无
-`test:e2e` script，Playwright/axe/视觉回归和真实 BFF 联调仍是发布缺口，不能由 unit test 或
-preview fixture 替代。
+`pnpm test` 会包含 contract 与 architecture 测试；独立命令用于快速定位治理失败。
+`pnpm test:e2e` 使用 Playwright 的桌面／移动 Chromium 配置，默认启动确定性 preview；
+也可通过 `KOKORO_E2E_BASE_URL` 指向已有服务。preview 回归不替代真实 BFF／owner 链路验收，
+已有证据与未验范围见 [`docs/CURRENT.md`](docs/CURRENT.md)。
 
 ## 部署
 
@@ -119,4 +131,4 @@ preview fixture 替代。
   不作为生产证据。
 ## 产品文档维护
 
-公开文档与 API 参考位于独立包 [`developer-docs/`](developer-docs/README.md)，运行 `pnpm docs:dev`、`pnpm docs:build` 或 `pnpm docs:check`；内部工程说明仍在 [`docs/`](docs/INDEX.md)，不进入公开构建。门户迁移候选、Root 配对删除和未完成能力以 [`docs/CURRENT.md`](docs/CURRENT.md) 为准，不把文档生成成功等同业务验收。
+公开文档与 API 参考位于独立包 [`developer-docs/`](developer-docs/README.md)，运行 `pnpm docs:dev`、`pnpm docs:build` 或 `pnpm docs:check`；内部工程说明仍在 [`docs/`](docs/INDEX.md)，不进入公开构建。产品指南从 [`developer-docs/docs/product/index.md`](developer-docs/docs/product/index.md) 开始，按任务、文件、项目、定时、连接子目录分层；API 从 [`developer-docs/docs/api/index.md`](developer-docs/docs/api/index.md) 独立阅读，接口参考由固定 BFF 合同生成。帮助菜单的 `/docs` 需要部署环境实际挂载，本次未发布部署；不把文档生成成功等同业务验收。

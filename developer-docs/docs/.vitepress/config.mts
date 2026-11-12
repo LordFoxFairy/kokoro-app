@@ -38,7 +38,7 @@ const REFERENCE_LABELS: Readonly<Record<string, string>> = {
 
 function loadReferenceItems(): ReferenceItem[] {
   const manifestUrl = new URL(
-    '../reference/v1/generated/manifest.json',
+    '../api/reference/v1/generated/manifest.json',
     import.meta.url,
   );
   if (!existsSync(manifestUrl)) return [];
@@ -59,15 +59,17 @@ const referenceItems = loadReferenceItems();
 
 export default defineConfig({
   lang: 'zh-CN',
-  title: 'Kokoro Developer API',
-  description: 'Kokoro public Product API 的中文 contract-first 开发者门户。',
+  title: 'Kokoro 文档',
+  description: 'Kokoro 产品指南、外部接入与第一方 API 参考。',
   cleanUrls: true,
   lastUpdated: false,
+  markdown: {
+    theme: { light: 'github-light-high-contrast', dark: 'github-dark-high-contrast' },
+  },
   themeConfig: {
     nav: [
-      { text: '文档', link: '/introduction' },
-      { text: 'API 参考', link: '/reference/v1/' },
-      { text: '变更记录', link: '/changelog' },
+      { text: '产品指南', link: '/product/' },
+      { text: 'API 文档', link: '/api/' },
     ],
     search: {
       provider: 'local',
@@ -84,76 +86,94 @@ export default defineConfig({
         },
       },
     },
-    sidebar: [
-      {
-        text: '开始使用',
-        items: [
-          { text: '介绍', link: '/introduction' },
-          { text: '快速开始', link: '/quickstart' },
-          { text: '认证与请求约定', link: '/authentication' },
-        ],
-      },
-      {
-        text: 'API 参考',
-        items: [
-          { text: 'Kokoro API v1', link: '/reference/v1/' },
-          ...referenceItems,
-        ],
-      },
-      {
-        text: '核心概念',
-        items: [
-          { text: '项目', link: '/concepts/projects' },
-          { text: '对话与消息', link: '/concepts/conversations-messages' },
-          { text: '异步 Agent run', link: '/concepts/asynchronous-runs' },
-          { text: '生命周期与状态', link: '/concepts/lifecycle' },
-          { text: 'AG-UI 流与 replay', link: '/concepts/ag-ui' },
-          { text: '文件与 artifact', link: '/concepts/files-artifacts' },
-          { text: '定时任务', link: '/concepts/scheduled-tasks' },
-        ],
-      },
-      {
-        text: '工作流指南',
-        items: [
-          { text: '技能读取与精确版本', link: '/guides/skills' },
-          { text: '创建 run', link: '/guides/create-run' },
-          { text: '继续对话', link: '/guides/follow-up' },
-          { text: '取消 run', link: '/guides/cancel-run' },
-          { text: '恢复 run', link: '/guides/resume-run' },
-          { text: '断线后 replay', link: '/guides/replay-after-disconnect' },
-          { text: '幂等 command', link: '/guides/idempotent-commands' },
-          { text: 'Cursor 分页', link: '/guides/cursor-pagination' },
-          { text: '积分与非现金充值', link: '/guides/credits' },
-          { text: '上传生命周期', link: '/guides/upload-lifecycle' },
-          { text: 'Webhooks 当前边界', link: '/guides/webhooks' },
-        ],
-      },
-      {
-        text: '平台行为',
-        items: [
-          { text: '响应与错误', link: '/platform/responses-errors' },
-          { text: 'Request ID', link: '/platform/request-ids' },
-          { text: '幂等性', link: '/platform/idempotency' },
-          { text: '速率与重试', link: '/platform/rate-limits-retries' },
-          { text: 'UTC 与 RFC 3339', link: '/platform/time' },
-          { text: '版本与弃用', link: '/platform/versioning' },
-          { text: '安全边界', link: '/platform/security' },
-        ],
-      },
-      {
-        text: '发布信息',
-        items: [
-          { text: '变更记录', link: '/changelog' },
-          { text: 'Contract provenance', link: '/provenance' },
-        ],
-      },
-    ],
+    sidebar: {
+      '/product/': [
+        {
+          text: '产品功能',
+          items: [
+            { text: '快速开始', link: '/product/' },
+            { text: '任务与对话', items: [{ text: '发送、过程与恢复', link: '/product/tasks/' }] },
+            { text: '文件与结果', items: [{ text: '附件、资料库与 Canvas', link: '/product/files/' }] },
+            { text: '项目', items: [{ text: '会话、指令与手工 Todo', link: '/product/projects/' }] },
+            { text: '定时任务', items: [{ text: '计划、日历与执行记录', link: '/product/scheduled-tasks/' }] },
+            { text: '连接与语音', items: [{ text: '入口、授权与识别', link: '/product/connections/' }] },
+            { text: '当前支持范围', link: '/product/availability' },
+          ],
+        },
+      ],
+      '/api/': [
+        {
+          text: '开始使用',
+          items: [
+            { text: '介绍', link: '/api/' },
+            { text: '快速开始', link: '/api/quickstart' },
+            { text: '认证与适用范围', link: '/api/authentication' },
+            { text: '技能读取与精确版本', link: '/api/guides/skills' },
+          ],
+        },
+        {
+          text: '字段参考',
+          collapsed: true,
+          items: [
+            { text: 'Kokoro API v1', link: '/api/reference/v1/' },
+            ...referenceItems,
+          ],
+        },
+        {
+          text: '核心概念',
+          items: [
+            { text: '项目', link: '/api/concepts/projects' },
+            { text: '对话与消息', link: '/api/concepts/conversations-messages' },
+            { text: '异步 Agent run', link: '/api/concepts/asynchronous-runs' },
+            { text: '生命周期与状态', link: '/api/concepts/lifecycle' },
+            { text: 'AG-UI 流与 replay', link: '/api/concepts/ag-ui' },
+            { text: '文件与 artifact', link: '/api/concepts/files-artifacts' },
+            { text: '定时任务', link: '/api/concepts/scheduled-tasks' },
+          ],
+        },
+        {
+          text: '第一方工作流参考',
+          collapsed: true,
+          items: [
+            { text: '创建 run', link: '/api/guides/create-run' },
+            { text: '继续对话', link: '/api/guides/follow-up' },
+            { text: '取消 run', link: '/api/guides/cancel-run' },
+            { text: '恢复 run', link: '/api/guides/resume-run' },
+            { text: '断线后 replay', link: '/api/guides/replay-after-disconnect' },
+            { text: '幂等 command', link: '/api/guides/idempotent-commands' },
+            { text: 'Cursor 分页', link: '/api/guides/cursor-pagination' },
+            { text: '积分与非现金充值', link: '/api/guides/credits' },
+            { text: '上传生命周期', link: '/api/guides/upload-lifecycle' },
+            { text: 'Webhooks 当前边界', link: '/api/guides/webhooks' },
+          ],
+        },
+        {
+          text: '平台行为',
+          items: [
+            { text: '响应与错误', link: '/api/platform/responses-errors' },
+            { text: 'Request ID', link: '/api/platform/request-ids' },
+            { text: '幂等性', link: '/api/platform/idempotency' },
+            { text: '速率与重试', link: '/api/platform/rate-limits-retries' },
+            { text: 'UTC 与 RFC 3339', link: '/api/platform/time' },
+            { text: '版本与弃用', link: '/api/platform/versioning' },
+            { text: '安全边界', link: '/api/platform/security' },
+          ],
+        },
+        {
+          text: '发布信息',
+          items: [
+            { text: '变更记录', link: '/api/changelog' },
+            { text: 'Contract provenance', link: '/api/provenance' },
+          ],
+        },
+      ],
+    },
     socialLinks: [
       { icon: 'github', link: 'https://github.com/LordFoxFairy/Kokoro' },
     ],
     footer: {
       message: 'Public contract 的事实 owner 是 kokoro-bff。',
-      copyright: 'Kokoro Developer API',
+      copyright: 'Kokoro 文档',
     },
     outline: { label: '本页目录', level: [2, 3] },
   },

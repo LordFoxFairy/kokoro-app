@@ -184,7 +184,7 @@ export function schemaDefault(contract, schema) {
   return undefined;
 }
 
-export function formatExample(value) {
+function formatExample(value) {
   if (value === undefined) return '—';
   return JSON.stringify(value);
 }

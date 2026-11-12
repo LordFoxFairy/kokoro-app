@@ -1,9 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-const { currentProductSession } = vi.hoisted(() => ({
-  currentProductSession: vi.fn(),
-}))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+
+
 import { GET, POST, PUT } from "@/app/api/admin/[...path]/route"
 const prefix = "http://web.test/api/admin/billing/metering/"
 const context = (name: string) => ({
@@ -51,7 +49,7 @@ let server: Server, calls: IncomingMessage[], payloads: string[], peer: (req: In
 function input(name = "policy-revisions", raw = command, headers: Record<string, string> = {}, signal?: AbortSignal) {
   return new Request(prefix + name, {
     method: "POST",
-    headers: {
+    headers: {cookie: "kokoro-issuer.session_token=fixture",
       "content-type": "application/json",
       "content-length": String(new TextEncoder().encode(raw).length),
       "idempotency-key": "original-metering-key",
@@ -88,10 +86,7 @@ function reply(req: IncomingMessage, res: ServerResponse, status = req.method ==
 beforeEach(async () => {
   calls = []
   payloads = []
-  currentProductSession.mockReset().mockResolvedValue({
-    access: "admitted-product-token",
-    accessExpiresAt: Date.now() + 60000,
-  })
+
   peer = reply
   server = createServer((req, res) => {
     calls.push(req)
@@ -127,7 +122,7 @@ afterEach(async () => {
 it("reads honest nullable pricing through only the formal Product route", async () => {
   const result = await GET(
     new Request(prefix + "pricing", {
-      headers: { "x-kokoro-request-id": "metering-bridge-1" },
+      headers: {cookie: "kokoro-issuer.session_token=fixture",  "x-kokoro-request-id": "metering-bridge-1" },
     }),
     context("pricing"),
   )
@@ -161,7 +156,7 @@ it.each(["rate-revisions", "policy-revisions"])("preserves exact %s command and 
   expect(result.status).toBe(201)
   expect(payloads).toEqual([raw])
   expect(calls[0]!.url).toBe("/v1/admin/billing/metering/" + name)
-  expect(calls[0]!.headers.authorization).toBe("Bearer admitted-product-token")
+  expect(calls[0]!.headers.cookie).toBe("kokoro-issuer.session_token=fixture")
   expect(calls[0]!.headers.forwarded).toBe("host=configured.product.test")
   expect(calls[0]!.headers["idempotency-key"]).toBe("original-metering-key")
   expect(calls[0]!.headers["x-kokoro-tenant-id"]).toBeUndefined()
@@ -205,9 +200,9 @@ it("permits exactly 1MiB of command bytes but rejects overflow without touching 
   const padded = command + " ".repeat(1_048_576 - new TextEncoder().encode(command).length)
   expect((await POST(input("policy-revisions", padded), context("policy-revisions"))).status).toBe(201)
   expect(payloads).toEqual([padded])
-  currentProductSession.mockClear()
+
   expect((await POST(input("policy-revisions", padded + " "), context("policy-revisions"))).status).toBe(400)
-  expect(currentProductSession).not.toHaveBeenCalled()
+
   expect(calls).toHaveLength(1)
 })
 it("keeps the original funding cap while the metering command grows", async () => {
@@ -224,7 +219,7 @@ it("keeps the original funding cap while the metering command grows", async () =
     },
   )
   expect(result.status).toBe(400)
-  expect(currentProductSession).not.toHaveBeenCalled()
+
   expect(calls).toHaveLength(0)
 })
 it("rejects read query, framing, encoding and command headers before Product inspection", async () => {
@@ -235,13 +230,13 @@ it("rejects read query, framing, encoding and command headers before Product ins
       (
         await GET(
           new Request(prefix + "pricing", {
-            headers: { [name]: name === "content-length" ? "0" : "arbitrary" },
+            headers: {cookie: "kokoro-issuer.session_token=fixture",  [name]: name === "content-length" ? "0" : "arbitrary" },
           }),
           context("pricing"),
         )
       ).status,
     ).toBe(400)
-  expect(currentProductSession).not.toHaveBeenCalled()
+
   expect(calls).toHaveLength(0)
 })
 it("rejects malformed publication framing, key and query without owner I/O", async () => {
@@ -272,7 +267,7 @@ it("rejects malformed publication framing, key and query without owner I/O", asy
   ).toBe(400)
   req.headers.delete("content-length")
   expect((await POST(req, context("policy-revisions"))).status).toBe(400)
-  expect(currentProductSession).not.toHaveBeenCalled()
+
   expect(calls).toHaveLength(0)
 })
 it("exposes no metering prefix proxy or alternate methods", async () => {
@@ -280,24 +275,16 @@ it("exposes no metering prefix proxy or alternate methods", async () => {
     expect((await GET(new Request(prefix + name), context(name))).status).toBe(404)
   expect((await GET(new Request(prefix + "policy-revisions"), context("policy-revisions"))).status).toBe(404)
   expect((await POST(input("pricing"), context("pricing"))).status).toBe(404)
-  expect((await PUT(new Request(prefix + "pricing", { method: "PUT" }), context("pricing"))).status).toBe(404)
-  expect(currentProductSession).not.toHaveBeenCalled()
+  expect((await PUT(new Request(prefix + "pricing", {headers: {cookie: "kokoro-issuer.session_token=fixture"},  method: "PUT" }), context("pricing"))).status).toBe(404)
+
   expect(calls).toHaveLength(0)
 })
 it("rejects encoded aliases rather than creating a second management route", async () => {
   expect((await GET(new Request(prefix.replace("metering", "%6detering") + "pricing"), context("pricing"))).status).toBe(400)
-  expect(currentProductSession).not.toHaveBeenCalled()
+
   expect(calls).toHaveLength(0)
 })
-it("does not dispatch without the current Product session or disclose private admission failures", async () => {
-  currentProductSession.mockResolvedValueOnce(null)
-  expect((await POST(input(), context("policy-revisions"))).status).toBe(401)
-  currentProductSession.mockRejectedValueOnce(new Error("private detail"))
-  const result = await POST(input(), context("policy-revisions"))
-  expect(result.status).toBe(503)
-  expect(JSON.stringify(await result.json())).not.toContain("private detail")
-  expect(calls).toHaveLength(0)
-})
+
 it("recovers only explicit original bytes and key after a lost response", async () => {
   peer = (req) => req.socket.destroy()
   expect((await POST(input(), context("policy-revisions"))).status).toBe(503)
@@ -317,34 +304,14 @@ it.each([400, 403, 409, 503])("preserves owner %s without rewriting or retrying 
   expect(await result.text()).toBe(raw)
   expect(calls).toHaveLength(1)
 })
-it("keeps the original budget when session inspection ignores cancellation", async () => {
-  const now = Date.now(),
-    clock = vi.spyOn(Date, "now").mockReturnValue(now)
-  currentProductSession.mockImplementation(async () => {
-    clock.mockReturnValue(now + 10001)
-    return { access: "admitted-product-token", accessExpiresAt: now + 60000 }
-  })
-  expect((await POST(input(), context("policy-revisions"))).status).toBe(503)
-  expect(calls).toHaveLength(0)
-})
-it("settles a still-pending admission at the absolute budget with zero BFF requests", async () => {
-  vi.useFakeTimers()
-  try {
-    currentProductSession.mockImplementation(() => new Promise(() => undefined))
-    const result = POST(input(), context("policy-revisions"))
-    await vi.advanceTimersByTimeAsync(10000)
-    expect((await result).status).toBe(503)
-    expect(calls).toHaveLength(0)
-  } finally {
-    vi.useRealTimers()
-  }
-})
+
+
 it("bounds a partial incoming publication before session admission", async () => {
   vi.useFakeTimers()
   try {
     const req = new Request(prefix + "policy-revisions", {
       method: "POST",
-      headers: {
+      headers: {cookie: "kokoro-issuer.session_token=fixture",
         "content-type": "application/json",
         "content-length": "2",
         "idempotency-key": "original-metering-key",
@@ -359,7 +326,7 @@ it("bounds a partial incoming publication before session admission", async () =>
     const result = POST(req, context("policy-revisions"))
     await vi.advanceTimersByTimeAsync(10000)
     expect((await result).status).toBe(503)
-    expect(currentProductSession).not.toHaveBeenCalled()
+
     expect(calls).toHaveLength(0)
   } finally {
     vi.useRealTimers()
@@ -405,7 +372,7 @@ it("passes a complete large latest snapshot without copying Set-Cookie or Locati
   }
   const result = await GET(
     new Request(prefix + "pricing", {
-      headers: { "x-kokoro-request-id": "metering-bridge-1" },
+      headers: {cookie: "kokoro-issuer.session_token=fixture",  "x-kokoro-request-id": "metering-bridge-1" },
     }),
     context("pricing"),
   )

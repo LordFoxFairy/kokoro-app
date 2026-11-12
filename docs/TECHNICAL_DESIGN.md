@@ -1,52 +1,101 @@
-## 2026-11-03 B-08 个人材料容量失败的正式消费（候选）
+## Task B当前主线承接（2026-11-12）
 
-沿原生成 tuple 与 ConversationThread 展示。发送前 personal_context_too_large 只提示减少个人资料/知识后手动重试原请求；已准入的 context_window_exceeded 是不可重试终态，材料已冻结，修改设置后须重新发起或重新生成。原 pending body/key、发送/Run/草稿状态机及知识待接提示不变。
+以current native／Public28.35为唯一活动事实：旧29.3不是更高版本即可覆盖的同一发行，scheduled保现executions而非旧RSS/runs第二链；分享metadata、private reauthorize及picture需owner正式交付后再接，未发行读不返回假空事实。只读配置与运行连接授权继续分开。
 
-## 2026-11-02 团队角色权限的正式消费者修正
+沿原actor-owned connector command保密body与unknown key，confirmed ACK只投影API profile locator或有序JSON connector/server locator，不保ACK/凭据。详情独立fresh exact GET，失败只重读locator；迟到ACK可失效原actor目录，但不借新窗口／主体打开详情。组合复用现creation context、McpProjectionRead与原设置/列表边界，不新建cache、store、session、SDK或业务owner。当前验证见CURRENT，源头API不增量。
 
-唯一完整来源固定 BFF `8ae73fde765ba55a77679c36199dcc9c1553fa11` / Public29.2.0，SHA256 `df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c`。沿原十二个 public 生成器与原分享投影生成器更新来源；除 TeamRole.skill 增加已发布的 `delete_series` 外，其余投影只变来源证明，不改运行语义。Web 的既有严格角色 decoder 同步这一枚举，不新增权限、Team 协议或宽松 fallback。
+## Composer 菜单与读取职责（2026-11-12）
 
-测试专用有限逆证先按完整摘要与单行差恢复 Public29.1，再按 owner 已发布的两个精确分享块恢复 Public29.0，随后进入原双父历史证明。旧 proof、200 操作清单、policy3 原字节保持，不重签 oracle，不进入运行 decoder。
+沿现 Radix 菜单定位／碰撞／焦点语义，只在 Composer 局部 CSS 保内容宽度、视口上限、完整标签换行与 checked 常驻强调；触屏不缩小点击行。当前目录成功为空有明确状态；锁定的显式选择缺席时不回退冒显示另一个默认模型。选择身份／engine／草稿／命令与九语言原解析／fallback 机制保持。
 
-## 2026-11-02 B-10 会话分享权威读回（候选）
+关闭的 AppFrame overlay 不再拥有 connector 预读；Composer 原读取仍承接默认／恢复／chips，Settings 和目录只在真实打开时拥有自身读生命周期。已有 scope 复用、失效、迟到响应与 ACK 风险保留，不加 cache/store／SDK／认证层。测试以显式自有 warm fixture 承接 pending 风险，不为旧测试保无用生产 I/O。无 wire、数据模型或 owner 边界变化。
 
-沿原 SessionClient、精确 session-share 同源 adapter 和 AppFrame→WorkspaceHeader→ShareButton 接线，不新增客户端、服务或分享 owner。唯一新增 use-session-share 管理窗口的只读 metadata、显式命令与退休：打开/重开/可见焦点恢复仅 GET；权威 share:null 才可创建，已有分享显示原链接，读错不可冒私有。显式创建/撤销后必须 GET 回读；未知只允许读核实，不自动重放命令。subject/generation/admitted、client、sessionId、SessionScope 与 preview 绑定窗口，切换立即清旧链接并取消/丢弃迟到结果；原双击锁和精确键盘回焦保持。命令与回读共用一次10秒窗口；失败重试保可见反馈/同步pending，仅本控件仍持焦点时恢复。恢复焦点读取若出现不同share ID，原撤销确认退役。
+## 设置局部布局：内容约束优先
 
-消费正式 BFF2e737cad9649460dc477fc7d96ba593783fef619 的具名 session-share-metadata-browser/1.0.0 投影（SHA112d6e9be1f3969b7820f85a06e627966b72d669b02898d7f57f64e18d03bb2f），它机械提取 Public29.1 的 exact GET/refs 闭包；源 canonical SHA4e4ce620887b1a1a431a9346d0d259aa5bed3bd5af06f4428f11e9054173418e。原 Public29/12 generators/SDK 与历史 proofs 逐字保留，仅作为原操作固定消费基线，不冒当前完整合同。新增投影由精确 provenance/正规 generator 生成闭集 decoder/type；不新增 browser BFF 路由或手写 wire。
+Skills搜索、操作、范围筛选按容器分行，不为参考截图锁固定行高；手机端也保持横轴换行，避免宽度basis变成空白高度。筛选不强制等宽拆分本可完整显示的单词。
 
-## 2026-11-02 B-01 已断开私有 MCP 的独立新授权（候选）
+连接器与Skills设置操作宽度由文案与图标决定，工具栏容器和操作组各自允许换行；搜索保可用下限，长译文增高而非越界。仅局部CSS负责几何，不向通用Button塞入业务页面尺寸，也不按语言硬编码宽度。个性化底栏保既有滚动／焦点行为，只收敛视觉空白与背景；删除无效样式，不为残留类名补新组件。owner、wire、Schema、状态机、依赖均不变；不是新设计系统或全站重写。
 
-正式 owner 为 Platform2cf63945 与 BFFe3b5fb75 的 browser-private reauthorization profile1.0.0；复用既有 Management command、actor/window/generation 围栏与 RAM 生命周期，不新增 journal 或持久化恢复机制。断开配置窗口终身只读；唯一新增显式“创建新授权”意图冻结原 server/source connector/双 CAS/key，未知结果仅重发原 POST，不能与 Prepare receipt GET 或 OAuth reconnect 混用。
+## 2026-11-12 · AG-UI 正文单轨与最小工作台反馈
 
-严格 ACK 只投影新 connector/server/provider locator，不渲染为当前配置，不自动 Prepare。当前窗口确认后新建 exact 详情窗口，不继承旧 revokedVersion 或只读锁；fresh connector 与本人 private-server GET 均成功后才沿原显式 Connect。关窗、换主体/准入代及迟到 ACK 不更新当前窗口；原未知请求在同 actor command shell 的既有恢复入口保留，非浏览器刷新持久恢复。Composer/项目/Run/A 路径和执行资格不扩大。
+沿现网络 decoder／mapper，live 和 ordered history 的文本都交锁定 AI SDK `readUIMessageStream` 装配。engine仍拥有提交、恢复、opaque cursor、scope和取消；reducer只采用SDK绝对快照，删除手工delta拼字。owner revision／watermark到达后，原有有界原始后缀仍经同一SDK重放，不拿旧绝对快照覆盖已确认前缀。
 
-## Public29：正式双父输入与原自动化功能承接（2026-11-02，候选）
+接收frame并不立即确认cursor。现adapter批次等待machine的SDK采用，正文／最终cursor共同接管后才触发terminal相关读取；同chunk后续解析错误、EOF和重连等待已接收批次。scope／hydrate／dispose则立即退休旧reader和队列，旧异步结果不进入新scope。SDK EOF不是Run终态，tool／reasoning chunks不是公开答案正文；无第二useChat网络或兼容回退。
 
-唯一BFF公开输入为正式双父7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb / 29.0.0，完整SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7。12现public generator正规生成，五独立private/profile及policy3不漂移。200操作只有scheduled-task-runs新增；API/MCP/Skills/Run执行展示无本次wire增量。test-only有限inverse保整份approved28.17与RSS20各自完整hash及有序inventory，再接原历史链；只消费正式committed public proof片段，不依赖sibling可编辑源码或SQL事实。
+UI复用exact Run终态，中性结束旧未决Skill，不伪造其成功或失败；控制owner仍独占action／读取。首页保持单Composer，只补首次模型目录可见反馈／既有显式重试与连接器原列表加载／错误。没有新增owner、API、Schema或依赖。真实后端首片由Root收据绑定，App最终验证状态以CURRENT为准。
 
-ScheduledTask既有feature按共同祖先逐文件核对后承接正常1f700的calendar/RSS闭集、原命令key/body/未知恢复、编辑器、筛选、日历与运行记录。只在现KokoroAppSurface增加必要home workflow→现ScheduledTaskSurface选择，不触engine、Run、transport或展示。RSS的feed检查时间与运行observation不冒日历执行时间；已保存配置/排程不代表任务运行成功。Unsupported审批控件保持disabled，用scheduled局部准确原因，不改全局提示。
+## A‑08：当前消息资源选择（2026‑11‑09，实施候选）
 
-运行记录薄桥与reader沿现Product Session及scope：服务端10秒完整绝对期限含初末会话核验/EOF，浏览器15秒/调用者取消、无自动重试；strict closed页、opaque cursor与身份/过滤/大小/时间精度均保持。正常源由Root成对激活，本候选源码完成不代表正常3314已更新。
+沿 Root 已批准方案复用同一 Composer 的 `+` 菜单：本地文件、资料库、最近任务；Skills/MCP 原流程不变。`composer-resource-picker.tsx` 只负责候选读取、显式上传与受控选择。最近任务打开当前列表成员时只读一次同 scope 私有 Session snapshot，校验 exact task 和 owner；存在交付或更多交付时保持 FINAL artifacts 分页。只有明确无交付的任务才可选择最近的 completed ordered durable 最终答复，缺标记显示空态；不读 Message parts、猜正文或把答案复制为文件。Project artifacts 仍按当前已知会话过滤，候选不授予执行权限。
 
-## 2026-11-02 B-01 精确详情失败恢复
+上传不发送 Chat；未知结果保原 File/key 显式重试，取消/移除不发送。actor、tenant、admission generation、scope、route 与 pagehide 退休读取/上传，迟到结果不加入选择。原 `useDraft` 按当前主体/租户保未发 refs，Project Overview 在 fresh Conversation 分配后才发送本次选择，原 unknown submission/recovery 冻结引用不随草稿改动。steer wire 无附件能力，故该模式禁用选择。无新 owner、依赖、路由或兼容分支。真实浏览器与正式精确组合由 Root 验收。
 
-API、Provider、provider connection 与 private server 保持原 exact reader owner；本窗口显式 attempt 只驱动失败 GET，scope 同时绑定 actor、准入代、locator、窗口及既有修订/binding。同步 pending 防双击，退休闭包/迟到响应不更新新窗口。重试保留可见失败反馈、等待中禁用，失败按现 McpReadFeedback 焦点所有权恢复，用户已移焦不抢回。创建交接仍不读列表；Save / Create / Prepare / unknown 原请求生命周期不变。
+## A‑12：正式定时执行记录与结果入口（2026‑11‑08，实施候选）
 
-## 2026-11-01 B-14 Manifest 展示读取的有限等待
+复用现 `features/scheduled-tasks`、BFF public read 和普通 Conversation reader。新增 Updates 页签按需读取正式执行记录，加载/空态/错误与任务定义读取相互独立；分页和显式刷新只读，不重发执行命令。结果链接只使用 owner 返回的可访问 Conversation/assistant Message 关联，queued/submitted 不显示为已接纳或已完成；不复制终稿或引入第二套事件流。
 
-现 `use-runtime-manifest`每个非preview scope只设一次20秒绝对预算，覆盖fetch至body解析；异步边界核单调时钟，timer尚未获调度也不能让截止时刻的响应生效。成功、错误、超时各settle一次并清timer；超时退休/abort本次读取、恢复PRODUCT默认source:error并清retrying。cleanup、模式切换和新attempt静默取消，旧迟到不能再消费JSON或应用主题；未由当前controller取消的AbortError按失败处理。只有显式GET retry建立新attempt，不自动重试、不阻塞核心Chat、不退成preview。原manifest解码、空导航、theme/locale过滤与权限边界保持；正常缺System配置的503、历史pending与本源码缺口分别取证。
+`project_id` 继续只控制创建上下文，新的 `filter_project_id` 仅是浏览器筛选位置：任务/执行读取映射 BFF query `project_id`，从现 Project 目录读取候选；筛选变化退休旧读取和 cursor，不改变草稿归属。现周期、IANA 时区和 DST 算法保持。App 只访问同源 adapter，不导入 sibling 源码；执行记录使用正式 BFF `a889f695d8cc936d2fd3ce3bdb1ff5e8db70446f` / Public 28.23.0 的完整原件与摘要固定到独立 vendor；具名生成器只投影执行记录 GET 引用闭包，复用生成响应/项，不重钉其他能力或新增 SDK runtime。本片未观察到 Manus 非空 Updates 参考，不称新版整页像素一致。
 
-## 2026-11-01 B-01 读取错误的局部恢复
+## A‑07：Project Overview 待办区（D0，待实现与验收）
 
-沿现 MCP / Provider / relations / Custom API reader 分别呈现可见内联失败与 GET 重试，保留同主体代际的已读卡片；只有当前相关读取均权威成功才展示全空/无匹配，不把旧 confirmed 空视为当前事实。API 故障只影响管理列表或 All 广场，不污染无关 Provider 分类。目录弹窗复用同一紧凑反馈，不用整页错误卡替换内容。
+仅在 Project Overview 当前 Project 已真实读回且当前 subject 通过现准入时，挂独立待办区；不挂 Chat engine、Run Todo、排程或目录，不在 preview 伪造成功。显示 owner 顺序、初次加载／空态／失败、创建／改名／改状态与确认删除。每次写成功只读回一次当前列表，不把 GET 冒充写回执；慢读/冲突保已确认行和编辑草稿。派发前在当前标签 sessionStorage 按已验 subject 与 canonical Project 冻结 Task、method、key、body、revision，ACK／明确拒绝后移除；未知可跨本标签刷新，只允许显式原样重试，不复制到其他主体或项目。存储写入失败不发命令；412 只读刷新并让用户重新确认，不自动用新版本覆盖。退出 Project 或准入更换退役请求、拒绝迟到结果。
 
-现 MCP projection 和 Custom API head reload 增补当前 owner/generation 的同步 attempt/pending 围栏，并由匹配读取的实际 settlement 释放；不轮询 loading、不用计时器假解锁、不刷新健康 aggregate、不重放创建/连接/Prepare。Provider 目录沿原 tail/循环恢复，API 普通尾页沿原 cursor，循环停止后显式重读 head。当前 owner/admitted 校验及已有401再准入、abort/迟到隔离保持，无新错误中心或读取服务。
+## T‑09：Public 28.19 非重试超窗终态
 
-## 2026-11-01 B-01 创建完成后的精确详情衔接
+沿用现有生成 failure tuple、AG‑UI 和快照 parser。ConversationThread 显示本地化超窗失败文案，保留已有正文，不展示原请求 Retry。未知提交重试与独立重新生成语义不变，不加第二套映射协议。
 
-沿现有 actor-owned connector command 生命周期保留创建ACK的安全locator投影：Custom API仅profileId，JSON仅原序exact serverId/connectorId/providerKey及非秘密名称；不保存raw ACK、URL、headers或environment。主命令仍唯一保存原body/key与unknown显式重试，不新增POST/自动Prepare。投影只在可信Hub严格ACK后接受，换actor退休清除；读取须核flow/boundary/completed，finish前捕获到本form mounted窗口，完成回调失败仅重试UI衔接，不重发命令。完成前后核current窗口；晚ACK只使原actor读失效，不自动弹已关闭或其它主体窗口。
+> D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
 
-复用现McpCreateDialog与McpProjectionRead详情协调：API沿窄createdApiDetail初始化既有apiIntent并fresh exact GET；JSON单项沿现createdDetail（不将导入ACK冒充当前配置）；多项在同窗口展示原序结果供明确选择，详情关闭可回列表。关闭、已确认删除均通知外层结束，不残留空壳。换client/actor/mode/open退役；同主体新代只保locator，事实随reader生命周期重验。沿现Dialog/按钮、键盘及回焦，不建新owner/存储/通用工作流。
+## I-56 HTTPS Cookie 安全模式（2026-11-03，源码候选，待 Root 复验）
+
+基线 App `bfb749c3dae0519abee7803d82f552ea3e39adcf` 的标准认证消费者已完成本仓工程验收；其 `iamRelayConfig` 仅按 `NODE_ENV=production` 选择 Secure 模式。[Root 唯一计划 I-56／§3.6](../../../docs/superpowers/plans/2026-11-01-task-a-c1-c4-technical-plan.md) 设计门通过后，本源码候选只修正该模式判定，原 HTTPS 测试按真实模式承接名称／属性。定向规则、登录与 relay 组件已验证，完整相关工程门、真实 IAM/BFF Cookie 删除及新组合浏览器仍待 Root 复验，不以基线工程通过或本地替身当 I-56 已验收。
+
+IAM 仍是唯一 Cookie owner：其 owner 切片移除 `useSecureCookies` 的 NODE_ENV 覆盖，交锁定 Better Auth 按 issuer URL 的官方默认选择名称与 Secure 属性，发行与真实资源验收另由 owner／Root 负责。App 不复制该算法或新增认证 SDK；本候选只在既有 relay config 中，以可信 canonical `KOKORO_WEB_ORIGIN` 为 public origin，采用“HTTPS **或** `NODE_ENV=production`”选择 Secure 模式。HTTP 开发保持 plain；HTTPS 开发／测试改用 Secure＋`__Secure-kokoro-issuer.`；生产 HTTPS 不变，production＋HTTP 也保留原 Secure 安全 floor，不降为 plain。此片不新增 flag、跨字段校验或 mixed-scheme 原生组合支持承诺。
+
+既有 published relay 3.0 的精确 Cookie 名及模式保持：plain 前缀 `kokoro-issuer.`，Secure 前缀 `__Secure-kokoro-issuer.`，叶名仅 `session_token`、`session_data`、`dont_remember`。每次 relay 仍按选定模式处理，不改成各入口无条件宽收两前缀；Path、HttpOnly、SameSite、Cookie 内容及原响应校验不变。现 `product-bff` 的六个合法完整名 allowlist 无需扩展；安全状态仅逐条承接 BFF 已过滤的 `Set-Cookie`，不为删除指令放宽 HTTPS Secure 校验。Admin 继续观察同源状态，不新增 Cookie 解析器。
+
+普通业务、原生登录／退出／邀请交互、JSON、路径、Schema 和依赖均不变；固定 vendor、版本、摘要与生成物未改，relay3.0／状态1.0 正常只读生成检查通过。旧 HTTPS 开发 plain Cookie 的切换只需清除该旧 Cookie 后重新登录，不清 canonical 草稿或业务数据库，不加旧名前缀 fallback；本阶段不执行用户浏览器操作或正常服务切换。HTTP 开发、HTTPS 非生产与 production 安全 floor 的定向回归通过；真实删除／rolling／精确组合旅程仍由 Root 后继验收，详细传输规则见 [API_CONTRACT](API_CONTRACT.md)。
+
+## T-01 认证标准重设计（2026-11-02，本地消费者候选）
+
+本轮沿 Root 唯一计划 §3.6 和已通过 D0 实施，不新增认证 owner、Schema、依赖或认证存储。具体固定来源见 `contract/bff-auth-session-source.json`；生成器只消费本仓 vendor 的原字节，不导入 sibling 源码。普通业务一次同源/BFF派发，当前权限仍由 BFF/IAM 与业务 owner 判断。
+
+### Owner、依赖与请求边界
+
+- IAM 的 Better Auth 实例唯一拥有登录、HttpOnly Session Cookie、Session 到期／撤销和 active tenant；Nest BFF 是第一方业务请求的唯一认证入口，以官方能力鲜验 Session 后建立真实 principal，再进入业务授权。App 不拥有第二套 Session、principal、token store 或认证 SDK，不用空 access、假 session id、generation=0、固定 60 秒 TTL 拼接旧 RP claims。
+- Browser → App 同源薄桥 → BFF 认证边缘 → 业务 owner。App 只转 allowlisted issuer Cookie、配置 Origin、受信服务身份、request id 与取消；Cookie 到 BFF 认证边界即止，普通 owner 业务不接 Cookie、登录 Session id/ref 或伪 scope。浏览器自报 subject／tenant／服务身份不参与 authority。
+- 普通业务一次 BFF 调用，不再做 `/me → business → /me`；必要私有结果交付前的鲜验归 BFF，不在 App 造 `sameNativeSessionSnapshot`。BFF 的真实 principal 和业务 owner 的当前资源、成员、管理员政策分别授权，原事务、CAS、审计、幂等和未知提交保障保留。
+- BFF 已固定发行唯一 browser-private `GET /browser/v1/auth/session`；App 的既有同源 `GET /api/auth/session` 消费其固定 generated contract。公开 `GET /v1/me` 保持原 user_id／tenant_id／platform_admin 三字段，不为浏览器 Session 观察扩字段。
+
+### 页面状态与 Cookie 生命周期
+
+- layout 首次只读观察取得完整安全状态，仅作候选；正常 SSR/client 首帧一致为 checking 且未准入，effect 核现有 marker 与无秘密失效 hint 后消费。marker 可读、无冲突且无 hint 时零额外 GET；冲突、过期、已有 hint 或 marker/hint 读取失败时 fresh GET，不先准入旧观察，不清新 subject 的 draft/unknown 原命令。状态明确区分 checking、authenticated、anonymous、forbidden 与 unavailable；authenticated 只持真实 subject、tenant 和 expiresAt。expiresAt 来自 IAM 实际 Session，按 RFC 3339 UTC 传输，只用于 UI 状态／安排重读，不是当前许可或撤销有效性证明。
+- 同一状态 GET 的正常传输选项 `refresh` 是 boolean、默认 true；浏览器 Route Handler 按 generated query 调用默认值，允许 IAM 原生 rolling。BFF → App → Browser 的合法多个 `Set-Cookie` 完整保留，仍受 allowlist、属性、大小与 no-store 约束，不合并成单个 Cookie。RSC 首观察明确 `refresh=false`，由 BFF 转成官方 `disableCookieCache=true`、`disableRefresh=true`，鲜读但不 rolling。RSC 没有向浏览器写 Cookie 的能力，不承诺清除失效 Cookie，后续正常状态 GET 负责浏览器清理；不宣称服务端收到的 `Set-Cookie` 已落到浏览器。该 query 不是新认证协议，不变成身份 header，也不扩普通业务 adapter 参数；纯业务认证检查始终不 rolling。
+- 保留本地 UI epoch、abort、ABA、pagehide/pageshow 与迟到响应退休；这是读取／展示寿命，不是认证凭据代际，不进入业务 wire。同 subject 的 tenant 变化也退休原私有视图。登录／退出／认证上下文变化通过无秘密跨标签失效事件先撤旧 epoch、再重读，事件及 storage marker 只撤准入，不授准入。
+- BFF 鲜验原请求 Cookie 与浏览器切换为另一枚仍有效 Cookie 是不同观察；后者的迟到 UI 由上述本地失效／页面寿命围栏承接。外部撤销至少在下一受保护请求拒绝，不宣称轮询或 expiry 能瞬时撤回全部旧展示。具名只读 401 恢复可合并一次状态 GET，写命令和 unknown 原 key/body 不自动重放。
+- `/manage` 继续是同源独立 Admin 前端，复用同一 Product 登录和 GET 状态；没有 Admin 独立 refresh。管理员资格仍由 BFF/IAM 当前政策决定，明确 false 与依赖 503 分开，UI 菜单显示不成为授权。
+
+### 替换与验收
+
+本地候选已删除 `NativeSessionClaims` 假字段、`admittedNativeSession` 的 `/me` 包装、snapshot 比较及业务前后 `/me`；将 `[...nextauth]` 外壳替换为具名 Session route，移除旧 csrf/session POST/refresh 与 signout alias。保留原生登录／退出 CSRF、固定 tenant、深链和第三方 MCP OAuth／公共 API 身份；账户设备和 Chat 的资源 session_id 不按名字删除。Admin 旧 strict 三字段／refresh_required 消费者须同片切换，不保双轨。
+
+同时关闭现有浏览器原样 `/iam/get-session` relay，避免安全状态 DTO 之外仍能取得完整原生 Session／token；官方 get-session 仅保留 IAM → BFF 认证 client 使用，浏览器只走正式安全 `/api/auth/session`。BFF owner 正规重发 browser relay policy，App 锁定新 commit/digest 后生成消费，不手删 vendor／upstream get-session；verify-email、sign-up、set-active、invitation 等真实交互保持。后继用真实 HTTP secret-canary 验证旧浏览器路径拒绝且不返回 raw body，安全状态响应无 raw Session／token／登录 Session id 泄漏。
+
+机器合同先由 BFF/IAM owner 固定并正规生成，App/Admin 再迁移。待验包括真实 expiry／rolling Cookie、冷登录／深链、Admin 共享登录和撤管理员、退出／独立撤销、同主体 tenant／会话变化、多标签迟到响应、IAM 503 与取消；工程门和真实浏览器证据均未由本节提供。
+
+## T-05 固定 Product 原生冷登录完成条件（2026-11-01，候选）
+
+沿 Root 已批准方案 B，IAM 唯一拥有 session、active tenant 与资格；App 只拥有同源适配。现 `/auth/sign-in` 的登录完成条件为：密码签入签发可用 issuer token → 用新 cookie 经现 BFF relay `organization/set-active` 选择部署侧 `KOKORO_TENANT_ID` → 复用 `admittedNativeSession` 在线 `/v1/me` 准入 → 才导航到原 native return target。固定 tenant 是与 BFF admission credential 配对的 server-only opaque ID（1..255 字符，无空白/控制字符），不是请求字段、浏览器候选列表或新身份协议；配置缺失/非法在发送凭据前失败。没有恢复 OAuth continuation、旧 RP 或 Product Session。
+
+三个上游阶段共享一个 5 秒绝对期限和取消信号，relay 仅领取剩余预算；最终准入返回与 flow 清理后再次核期限，迟到不导航。响应先沿既有 allowlist/属性校验，再按 cookie 名合并最新值；删除指令不进入后继 Cookie，成功响应每名只写最后一次指令，合并 header 仍有界。Origin/Host、一次性 CSRF、body/response 限额与原失败凭据反馈保持。
+
+密码签入返回 200 后，后续任何失败都退休本次 flow/清本次 CSRF、明确返回错误、不自动重发密码且不下发新的 issuer cookie；已有浏览器 issuer cookie 保持，不撤销其他 session、不额外 sign-out。未交给浏览器的新 session 由 IAM 自身 TTL/owner 回收。本地 focused 替身测试只证明 adapter 决策与传输参数，真实冷浏览器及登录/异域恢复/登出/撤权四旅程由 Root 串行验收，未据此称整体闭环。
+
+## T-07 Public28.18 单一来源同步（2026-11-01）
+
+既有 snapshot 已为正式 BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9`／Public28.18.0；本轮修复此前仅 account-profile 生成链更新、其余 public pin 滞后的 provenance，不修改 snapshot 或业务运行代码。12 个原 public generator 保持原窄消费边界，通过原 `--write` 重出派生物；独立 private artifact、download policy3及其 owner pin不变，无依赖／Schema／owner变化。
+
+新 `tests/contract/bff-account-profile-read-parent.ts` 在旧 Custom API inverse 前处理28.18：先验证完整 child SHA，只删除具名账户资料 GET、AccountProfileReadResponse 与版本差异，再验证完整28.17 parent SHA。旧28.17及更早父hash／转换逻辑保持；新字段、原PATCH、无关操作、版本及额外字节漂移均拒绝。该链只用于测试历史保护，不成为运行时兼容层或第二可编辑contract；下方方案保留历史语境。
 
 ## Composer Custom API safe selection（Root已核准，正式契约消费者候选）
 
@@ -457,7 +506,11 @@ Owner导入为原事务/receipt中的整文档原子持久化，不拆成多个R
 
 ACK按subject/scope/session/key核同后先写精确receipt，再在owner snapshot-first原流程消化；已落receipt不再提供POST重试。取消/New先退休恢复资格，晚ACK沿原cancelledSubmissions保护；退休写失败不假完成切换。普通dispose/离开scope保未决记录；身份切换清退当前tab原前缀。sessionStorage复制标签可能复制原记录，仍只允许同key/body人工恢复，不冒跨tab锁。关闭tab/browser清理属于sessionStorage生命周期，不承诺跨设备恢复。
 
-BFF现chat-turn-commit以tenant/subject/conversation/key和request_digest读取正式outbox精确回执，消息ID由原stable identity派生；本片不改保留/删除规则，也不设置超时后重置key。ACK持久化异常保exact RAM receipt，后继发送/原恢复先补本地ACK再GET，不重POST已知成功命令；切回同session/key/body的恢复对象可承接原晚ACK，已落盘ACK也可只读恢复。重复同key在途请求按attempt计数，失败单个请求不清其它attempt的取消意图；无run_id的failed assistant可由exact assistant message ID证明终态，不复活queued。不凭本地错误重做命令；记录损坏/读拒绝fail-closed。运行中pendingSteerReceipts队列的跨刷新持久化不在此首发修复，继续开放。
+BFF现chat-turn-commit以tenant/subject/conversation/key和request_digest读取正式outbox精确回执，消息ID由原stable identity派生；本片不改保留/删除规则，也不设置超时后重置key。ACK持久化异常保exact RAM receipt，后继发送/原恢复先补本地ACK再GET，不重POST已知成功命令；切回同session/key/body的恢复对象可承接原晚ACK，已落盘ACK也可只读恢复。同一原键只允许一个本地在途请求；无 run_id 的失败 assistant 仍可由精确 assistant message ID 证明终态，不复活 Run。不凭本地错误重做命令，记录损坏或读拒绝时不发送。A‑03 将现有 FIFO 发送也收进同一原提交记录：提交前保存、刷新不重发、失败不改变当前 Run/审批、显式重试沿原键和原输入，迟到回执按精确身份合并。此行为不向当前模型注入消息，也不打断 Run。
+
+Public 28.21 的显式打断复用同一入口和记录：只把渲染与当前引擎同时证明的 exact active head 冻结入提交，和原键一起重试。已被 BFF 明确拒绝才允许用户恢复原稿；当前浏览器路由／主体变更后旧按钮不发请求。停止、等待审批和后继 FIFO 仍由正式事件/快照决定，前端不乐观伪造已取消。
+
+Public 28.22 的同 Run 补充复用同源 control 和同一会话提交记录；记录种类区分首发／队列／打断与原 Run 补充的实际 wire。后者不发普通 Message POST、不触发 create late-ACK 自动取消、不产生 Run/assistant 或重开当前 SSE。渲染与提交都检查原目标，刷新后仅显式重试精确原键；已接纳消息的后续状态以现 Snapshot 的 exact canonical ID 为准。设置预览不会写偏好或发补充。
 
 实施先补503→engine重建→404、ACK前刷新、200不精确配对、scope/subject、quota、取消与晚ACK回归；再正常页面复现对比及owner受影响门。Manus该失败窗口未观察，不声称其内部持久化实现相同。独立只读接缝审查已完成；验收状态见CURRENT，不因设计存在勾完成。
 
@@ -709,7 +762,7 @@ Product现有Admin同源adapter只增加三个模型目录GET和单标签路由P
 - 账户登录方式和设备、数据管理和集成详情使用所属页面的局部导航状态；进入内页聚焦标题，返回原入口，离页及身份退休后清理状态。设备管理保留原会话读取、分页、撤销确认与未知结果恢复。
 - 创建前流程归所属模块的具名 Dialog 或页内编辑器。邮箱前缀、工作流指令、API key 名称和到期选项、Webhook URL、知识和记忆输入仅为临时草稿；取消、离页及原有身份代际退休清空。电话、钱包的静态说明仅按主体退休，不携带可写权限或业务草稿。
 - Mail 发件人在页面内编辑；Escape 仅在该编辑器拥有焦点时关闭并回焦，监听随编辑器卸载清理，不改变外层设置或其他弹窗的键盘行为。
-- 个性化导入入口在原滚动容器内 sticky，并保留正常流占位；末字段可滚到其上方。知识偏好未知，保存仍禁用，完整不可用原因只显示一次。
+- 个性化导入入口在原滚动容器内 sticky，并保留正常流占位；末字段可滚到其上方。底栏复用 Settings surface token并采用紧凑间距，长译文自然换行／增高，不以固定高度遮住内容。知识偏好未知，保存仍禁用，完整不可用原因只显示一次。
 - 用量分类不推算余额、额度或费用。套餐详情只消费已读取目录的原值；空目录可显式重读，保留原单飞、取消、截止和身份隔离。
 - 帮助页搜索和分类只在本页筛选现有指南，展开项随筛选清理；指南跳转复用既有设置导航，不发送客服消息。
 - Team 邀请在进入写状态机前复用正式 request schema 校验邮箱及角色，失败仅显示局部关联提示；有效请求保持原 wire。退出及成员移除确认初始聚焦取消，仅显式取消才回到当前身份、当前 client 的原入口。
@@ -3676,8 +3729,6 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 | 删除/验证 | 删除 section 内重复四字段类型与旧不安全读取/保存编排；复用 schema 类型。新增真实交互回归覆盖读失败零写、连续编辑、冲突恢复、卸载取消；focused、contract、architecture、lint/type/test/build/e2e 由主控验收并记录未执行项。 |
 
 ## SET-07：账户本人资料读取与设置展示（设计已定，待实现）
-
-2026-11-03 头像读取补记：IAM 锁定的 `@better-auth/oauth-provider` 1.7.3 已由 `profile` scope 将 `user.image` 发布为标准 `picture` claim；现有 Web 投影将它丢弃。沿原 userinfo → 同源账户资料 → 原账户卡补可选 `picture`，不改 IAM/BFF 公共契约、scope、持久化或上传能力。只接受不含用户认证信息、最长 2048 字符的 HTTPS URL；可选 claim 无效时仅省略图片，其他资料照常读取。浏览器复用原 Radix Avatar 加载，无服务端图片代理或优化请求，使用 no-referrer/anonymous；加载失败保留姓名首字母。原主体/准入代退休与最终 session 复验继续生效，Avatar 按读取 scope 和 URL 重新挂载，避免沿用旧账号图片。旧响应未带 picture 仍合法；原账户姓名 CAS 写入格式不变。验证覆盖标准 claim、危险 URL、旧响应、图片成功/失败及身份退休。
 
 | 项 | 决定 |
 | --- | --- |

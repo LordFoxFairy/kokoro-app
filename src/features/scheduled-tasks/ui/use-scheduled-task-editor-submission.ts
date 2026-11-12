@@ -5,8 +5,7 @@ import { useRef, useState, type FormEvent } from "react"
 import { isUnknownScheduledTaskResult } from "../api/scheduled-task-client"
 
 import { expiryDateToUtcInstant } from "../model/calendar"
-import { scheduledRssConditionsSchema, scheduledRssFeedUrlSchema } from "@/contract/scheduled"
-import { cloneScheduledTaskDraft, isIanaTimezone } from "../model/scheduled-task"
+import { isIanaTimezone } from "../model/scheduled-task"
 import type { ScheduledTaskDraft, ScheduledTaskEditorValue, ScheduledTaskInitial } from "../model/scheduled-task"
 import { initialScheduledTaskEditorState, useMountedRef } from "./scheduled-task-editor-state"
 
@@ -16,7 +15,6 @@ type UseScheduledTaskEditorSubmissionOptions = {
   initialPrompt: string
   onSave: ((task: ScheduledTaskEditorValue) => Promise<void> | void) | undefined
   onClose: () => void
-  defaultTime?: string
 }
 
 export function useScheduledTaskEditorSubmission({
@@ -25,16 +23,21 @@ export function useScheduledTaskEditorSubmission({
   initialPrompt,
   onSave,
   onClose,
-  defaultTime,
 }: UseScheduledTaskEditorSubmissionOptions) {
   const frozen = useRef<ScheduledTaskEditorValue | null>(
-    initialDraft ? cloneScheduledTaskDraft({ ...initialDraft, expiresAt: initialDraft.expiresAt })
+    initialDraft
+      ? {
+          ...initialDraft,
+          ...(initialDraft.weekdays ? { weekdays: [...initialDraft.weekdays] } : {}),
+          ...(initialDraft.monthDays ? { monthDays: [...initialDraft.monthDays] } : {}),
+          expiresAt: initialDraft.expiresAt,
+        }
       : null,
   )
   const submitting = useRef(false)
   const mounted = useMountedRef()
   const [state, setState] = useState(() =>
-    initialScheduledTaskEditorState(initialTask ?? initialDraft ?? null, initialPrompt, defaultTime),
+    initialScheduledTaskEditorState(initialTask ?? initialDraft ?? null, initialPrompt),
   )
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(false)
@@ -43,12 +46,12 @@ export function useScheduledTaskEditorSubmission({
     onSave &&
     state.title.trim() &&
     state.prompt.trim() &&
-    (state.triggerKind === "rss" ? scheduledRssFeedUrlSchema.safeParse(state.feedUrl).success && scheduledRssConditionsSchema.safeParse(state.conditions).success : isIanaTimezone(state.timezone) &&
+    isIanaTimezone(state.timezone) &&
     (unconfirmed ||
       ((state.frequency !== "weekly" || state.weekdays.length > 0) &&
         (state.frequency !== "monthly" || state.monthDays.length > 0) &&
         (state.frequency !== "once" || /^\d{4}-\d{2}-\d{2}$/.test(state.localDate)))) &&
-    /^([01]\d|2[0-3]):[0-5]\d$/u.test(state.time)) &&
+    /^([01]\d|2[0-3]):[0-5]\d$/u.test(state.time) &&
     (!state.expires || state.expiryDate),
   )
 
@@ -60,8 +63,8 @@ export function useScheduledTaskEditorSubmission({
     setSaveError(false)
     let submitted: ScheduledTaskEditorValue | undefined
     try {
-      submitted = cloneScheduledTaskDraft(frozen.current ?? toScheduledTaskEditorValue(state, initialTask))
-      await onSave(cloneScheduledTaskDraft(submitted))
+      submitted = frozen.current ?? toScheduledTaskEditorValue(state, initialTask)
+      await onSave(submitted)
     } catch (error) {
       if (submitted && isUnknownScheduledTaskResult(error)) {
         frozen.current = submitted
@@ -87,16 +90,20 @@ function toScheduledTaskEditorValue(
   state: ReturnType<typeof initialScheduledTaskEditorState>,
   initialTask: ScheduledTaskInitial | null,
 ): ScheduledTaskEditorValue {
-  const expiresAt = state.expires
-    ? state.triggerKind === "rss" && state.expiryDate === state.initialExpiryDate && state.initialExpiryInstant !== undefined
-      ? state.initialExpiryInstant
-      : expiryDateToUtcInstant(state.expiryDate, state.triggerKind === "rss" ? state.expiryTimezone : state.timezone)
-    : initialTask?.expiresAt === undefined ? undefined : null
-  const common = { title: state.title.trim(), prompt: state.prompt.trim(), expiresAt, autoApprove: state.autoApprove }
-  return state.triggerKind === "rss"
-    ? { ...common, triggerKind: "rss", feedUrl: state.feedUrl, conditions: state.conditions.map(group => group.map(clause => ({ ...clause }))) }
-    : { ...common, triggerKind: "calendar", frequency: state.frequency, time: state.time, timezone: state.timezone,
-      ...(state.frequency === "weekly" ? { weekdays: [...state.weekdays] } : {}),
-      ...(state.frequency === "monthly" ? { monthDays: [...state.monthDays] } : {}),
-      ...(state.frequency === "once" ? { localDate: state.localDate } : {}) }
+  return {
+    ...(state.frequency === "weekly" ? { weekdays: [...state.weekdays] } : {}),
+    ...(state.frequency === "monthly" ? { monthDays: [...state.monthDays] } : {}),
+    ...(state.frequency === "once" ? { localDate: state.localDate } : {}),
+    title: state.title.trim(),
+    prompt: state.prompt.trim(),
+    frequency: state.frequency,
+    time: state.time,
+    timezone: state.timezone,
+    expiresAt: state.expires
+      ? expiryDateToUtcInstant(state.expiryDate, state.timezone)
+      : initialTask?.expiresAt === undefined
+        ? undefined
+        : null,
+    autoApprove: state.autoApprove,
+  }
 }

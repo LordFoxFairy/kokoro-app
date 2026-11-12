@@ -12,7 +12,7 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const portalRoot = resolve(scriptDirectory, '..');
 const outputDirectory = process.env.KOKORO_REFERENCE_OUTPUT
   ? resolve(process.env.KOKORO_REFERENCE_OUTPUT)
-  : join(portalRoot, 'docs/reference/v1/generated');
+  : join(portalRoot, 'docs/api/reference/v1/generated');
 const catalog = loadCatalog(join(portalRoot, 'catalog/contracts.yaml'));
 const entry = catalog.contracts[0];
 if (entry === undefined) {

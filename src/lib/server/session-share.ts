@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { parseSharedTasksJson } from "@/lib/shared-tasks-json";
 import { shareAckSchema, shareErrorSchema } from "@/lib/shared-tasks.schema";
-import { sessionShareMetadataWireSchema } from "@/generated/bff-session-share-metadata";
 import { productBffConfig, productBffHeaders } from "./product-bff";
-import { currentProductSession } from "./product-session";
 import { requestWithDomain } from "./upstream-http";
 
 export async function sessionShare(
@@ -26,19 +24,17 @@ export async function sessionShare(
   if (!config) return fail(503, "session_share_dependency_unavailable");
   const url = new URL(request.url),
     origin = new URL(config.session.webOrigin);
-  const reading = request.method === "GET";
-  if (!["GET", "POST", "DELETE"].includes(request.method))
+  if (!["POST", "DELETE"].includes(request.method))
     return fail(405, "session_share_method_not_allowed");
   if (
     url.protocol !== origin.protocol ||
     request.headers.get("host") !== origin.host ||
-    (reading ? request.headers.has("origin") && request.headers.get("origin") !== origin.origin : request.headers.get("origin") !== origin.origin)
+    request.headers.get("origin") !== origin.origin
   )
     return fail(403, "session_share_forbidden_origin");
   const key = request.headers.get("idempotency-key");
   if (
-    (!reading && !key) ||
-    (reading && (key !== null || request.body !== null || request.headers.has("content-type") || request.headers.has("content-length") || request.headers.has("last-event-id") || request.headers.has("if-match"))) ||
+    !key ||
     request.headers.has("content-encoding") ||
     request.headers.has("transfer-encoding")
   )
@@ -156,16 +152,11 @@ export async function sessionShare(
         return fail(400, "session_share_invalid_request");
       }
     }
-    const session = await currentProductSession(request, config.session);
+
     check();
-    if (
-      !session ||
-      session.accessExpiresAt <= Date.now() ||
-      session.expiresAt <= Date.now()
-    )
-      return fail(401, "session_invalid");
-    const outgoing = productBffHeaders(config, session, requestId);
-    if (key !== null) outgoing.set("idempotency-key", key);
+
+    const outgoing = productBffHeaders(config, request, requestId);
+    outgoing.set("idempotency-key", key);
     if (request.method === "POST")
       outgoing.set("content-type", "application/json");
     response = await requestWithDomain(
@@ -225,11 +216,11 @@ export async function sessionShare(
     try {
       const raw = parseSharedTasksJson(text);
       if (status === 200) {
-        const ack = reading ? sessionShareMetadataWireSchema.parse(raw) : shareAckSchema.parse(raw);
+        const ack = shareAckSchema.parse(raw);
         if (ack.meta.request_id !== requestId) throw Error();
         output = ack.data;
       } else {
-        if (!(reading ? [400, 401, 403, 404, 429, 503] : [401, 403, 404, 409, 429, 503]).includes(status)) throw Error();
+        if (![401, 403, 404, 409, 429, 503].includes(status)) throw Error();
         const e = shareErrorSchema.parse(raw);
         if (e.meta.request_id !== requestId) throw Error();
         output = e;
@@ -244,26 +235,9 @@ export async function sessionShare(
     } catch {
       return fail(502, "session_share_response_invalid");
     }
-    const latest = await currentProductSession(request, config.session);
+
     check();
-    if (
-      !latest ||
-      [
-        "id",
-        "generation",
-        "subject",
-        "access",
-        "accessExpiresAt",
-        "expiresAt",
-      ].some(
-        (k) =>
-          latest[k as keyof typeof latest] !==
-          session[k as keyof typeof session],
-      ) ||
-      latest.accessExpiresAt <= Date.now() ||
-      latest.expiresAt <= Date.now()
-    )
-      return fail(401, "session_invalid");
+
     if (status !== 200) {
       const e = output as { error: { code: string } };
       output = {

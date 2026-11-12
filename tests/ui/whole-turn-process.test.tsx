@@ -19,7 +19,7 @@ it("collapses the whole finished process, not final text, and expands real inter
   expect(screen.getByText("Final answer remains visible")).toBeVisible()
   expect(screen.getByText("Inspecting the requested file")).not.toBeVisible()
   fireEvent.click(disclosure)
-  const stage = screen.getByText("Inspecting the requested file"), action = screen.getByText("Read file"), answer = screen.getByText("Final answer remains visible")
+  const stage = screen.getByText("Inspecting the requested file"), action = screen.getByText("File"), answer = screen.getByText("Final answer remains visible")
   expect(stage).toBeVisible()
   expect(stage.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(action.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -38,7 +38,7 @@ it.each([{ succeeded: false }, { finalPartsComplete: false }, { isLive: true }, 
 it("does not hide focused work when a final page arrives, then settles after focus leaves", () => {
   const open = vi.fn()
   const { rerender } = render(<LocaleProvider><AssistantTurn {...props} finalPartsComplete={false} onOpenActivity={open} /></LocaleProvider>)
-  const action = screen.getByRole("button", { name: /Read file/u })
+  const action = screen.getByRole("button", { name: /File/u })
   act(() => action.focus())
   rerender(<LocaleProvider><AssistantTurn {...props} onOpenActivity={open} /></LocaleProvider>)
   expect(action).toHaveFocus()
@@ -53,7 +53,7 @@ it("keeps an inspected opener visible when completion arrives while Canvas owns 
   document.body.append(canvas)
   const open = vi.fn(() => canvas.focus())
   const { rerender } = render(<LocaleProvider><AssistantTurn {...props} finalPartsComplete={false} onOpenActivity={open} /></LocaleProvider>)
-  const opener = screen.getByRole("button", { name: /Read file/u })
+  const opener = screen.getByRole("button", { name: /File/u })
   fireEvent.click(opener)
   expect(canvas).toHaveFocus()
   rerender(<LocaleProvider><AssistantTurn {...props} onOpenActivity={open} /></LocaleProvider>)
@@ -64,46 +64,6 @@ it("keeps an inspected opener visible when completion arrives while Canvas owns 
   expect(opener.closest("[inert]")).toBeNull()
   canvas.remove()
 })
-it("reads visible legacy final proof once and folds only after its exact parts revision is present", async () => {
-  const callbacks = new Set<IntersectionObserverCallback>()
-  vi.stubGlobal("IntersectionObserver", class {
-    constructor(private callback: IntersectionObserverCallback) {}
-    observe() { callbacks.add(this.callback) }
-    disconnect() { callbacks.delete(this.callback) }
-  })
-  try {
-    const readDisplay = vi.fn().mockResolvedValue({ run_id: "run", display_skills: [], tool_paths: [], activity_details: [], tool_facts: [], final_answer: { segment_id: "answer", revision: "8" } })
-    const boundary = { sessionId: "s", isCurrent: () => true, client: { readDisplay } } as unknown as import("@/ui/thread/answer-action-scope").AnswerActionBoundary
-    const part = { messageId: "container", runId: "run", revision: "8", confirmedRevision: "7", partIds: ["text:stage", "activity:a", "text:answer"], status: "complete" as const }
-    const { finalSegmentId, ...legacyProps } = props
-    void finalSegmentId
-    const { rerender } = render(<LocaleProvider><AssistantTurn {...legacyProps} finalPartsComplete={false} parts={[part]} answerActionBoundary={boundary} /></LocaleProvider>)
-    expect(readDisplay).not.toHaveBeenCalled()
-    await act(async () => { for (const cb of callbacks) cb([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver) })
-    expect(readDisplay).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole("button", { name: "Process" })).toBeNull()
-    rerender(<LocaleProvider><AssistantTurn {...legacyProps} finalPartsComplete={false} parts={[{ ...part, confirmedRevision: "8" }]} answerActionBoundary={boundary} /></LocaleProvider>)
-    expect(screen.getByRole("button", { name: "Process" })).toHaveAttribute("aria-expanded", "false")
-    expect(screen.getByText("Final answer remains visible")).toBeVisible()
-    expect(screen.getByText("Inspecting the requested file")).not.toBeVisible()
-    expect(readDisplay).toHaveBeenCalledTimes(1)
-    // Durable identity takes precedence, including when its body has not arrived.
-    rerender(<LocaleProvider><AssistantTurn {...props} finalSegmentId="different" finalPartsComplete={false} parts={[{ ...part, confirmedRevision: "8" }]} answerActionBoundary={boundary} /></LocaleProvider>)
-    expect(screen.queryByRole("button", { name: "Process" })).toBeNull()
-  } finally { vi.unstubAllGlobals() }
-})
-it("requires one exact complete parts owner and does not manufacture a final from unknown or conflicting data", async () => {
-  const { displayFinalSegmentId } = await import("@/ui/thread/completed-turn-sections")
-  const facts = { run_id: "run", display_skills: [], tool_paths: [], activity_details: [], tool_facts: [], final_answer: { segment_id: "answer", revision: "8" } }
-  const part = { messageId: "container", runId: "run", revision: "8", confirmedRevision: "8", partIds: ["text:answer"], status: "complete" as const }
-  expect(displayFinalSegmentId(facts, "run", [part])).toBe("answer")
-  for (const parts of [[], [part, part], [{ ...part, status: "partial" as const }], [{ ...part, confirmedRevision: "7" }], [{ ...part, partIds: ["text:other"] }], [{ ...part, finalSegmentId: "other" }]]) {
-    expect(displayFinalSegmentId(facts, "run", parts)).toBeUndefined()
-  }
-  expect(displayFinalSegmentId(facts, "other", [part])).toBeUndefined()
-  expect(displayFinalSegmentId(null, "run", [part])).toBeUndefined()
-})
-
 it("uses only the whole-turn disclosure for one uninterrupted tools-only process", () => {
   const second = { ...activity, activity_id: "b" }
   const plainSteps: SessionStep[] = [
@@ -136,7 +96,7 @@ it("keeps local disclosures when actual public text separates multiple tool pass
   ]
   render(<LocaleProvider><AssistantTurn {...props} steps={events} /></LocaleProvider>)
   fireEvent.click(screen.getByRole("button", { name: "Process" }))
-  expect(screen.getAllByRole("button", { name: "File reads: 2" })).toHaveLength(2)
+  expect(screen.getAllByRole("button", { name: "Files processed: 2" })).toHaveLength(2)
   expect(screen.getByText("Inspecting the requested file")).toBeVisible()
 })
 
@@ -147,7 +107,7 @@ it("defers removing a focused passage header until blur, then ignores its saved 
     { kind: "text", seq: "3", segmentId: "answer" },
   ]
   const { container, rerender } = render(<LocaleProvider><AssistantTurn {...props} steps={tools} finalPartsComplete={false} onOpenActivity={vi.fn()} /></LocaleProvider>)
-  const header = screen.getByRole("button", { name: "File reads: 2" })
+  const header = screen.getByRole("button", { name: "Files processed: 2" })
   fireEvent.click(header)
   fireEvent.click(header)
   const row = container.querySelector<HTMLButtonElement>('button[data-activity-id="a"]')!
@@ -162,26 +122,34 @@ it("defers removing a focused passage header until blur, then ignores its saved 
   expect(row.closest("[inert]")).toBeNull()
 })
 
-it("preserves the exact Canvas opener when a tools-only turn gains final proof", () => {
-  const tools: SessionStep[] = [
-    { kind: "activity", seq: "1", segmentId: "canvas-tools-only", activity },
-    { kind: "activity", seq: "2", segmentId: "canvas-tools-only", activity: { ...activity, activity_id: "b" } },
-    { kind: "text", seq: "3", segmentId: "answer" },
-  ]
-  const canvas = document.createElement("button")
-  document.body.append(canvas)
+it("does not read Run display for a visible text-only history turn without a final reference, but still reads an inspected action", async () => {
+  const callbacks = new Set<IntersectionObserverCallback>()
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(private callback: IntersectionObserverCallback) {}
+    observe() { callbacks.add(this.callback) }
+    disconnect() { callbacks.delete(this.callback) }
+  })
   try {
-    const inspect = vi.fn(() => canvas.focus())
-    const { rerender } = render(<LocaleProvider><AssistantTurn {...props} steps={tools} finalPartsComplete={false} onOpenActivity={inspect} /></LocaleProvider>)
-    fireEvent.click(screen.getByRole("button", { name: "File reads: 2" }))
-    const opener = screen.getAllByRole("button", { name: /Read file/u })[0]!
-    fireEvent.click(opener)
-    rerender(<LocaleProvider><AssistantTurn {...props} steps={tools} onOpenActivity={inspect} /></LocaleProvider>)
-    expect(screen.getByRole("button", { name: "Process" })).toHaveAttribute("aria-expanded", "true")
-    expect(opener).toBeVisible()
-    expect(opener.closest("[inert]")).toBeNull()
-    act(() => opener.focus())
-    expect(opener).toHaveFocus()
-    expect(screen.queryByRole("button", { name: "File reads: 2" })).toBeNull()
-  } finally { canvas.remove() }
+    const readDisplay = vi.fn().mockResolvedValue({ run_id: "run", display_skills: [], tool_paths: [], tool_facts: [], activity_details: [] })
+    const boundary = { sessionId: "s", isCurrent: () => true, client: { readDisplay } } as unknown as import("@/ui/thread/answer-action-scope").AnswerActionBoundary
+    const onOpenActivity = vi.fn()
+    const { finalSegmentId, ...withoutFinalReference } = props
+    void finalSegmentId
+    const historical = { ...withoutFinalReference, finalPartsComplete: false, answerActionBoundary: boundary, onOpenActivity }
+    const intersect = () => act(async () => {
+      for (const callback of callbacks) callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)
+    })
+
+    const { rerender } = render(<LocaleProvider><AssistantTurn {...historical} steps={steps.filter(step => step.kind === "text")} /></LocaleProvider>)
+    await intersect()
+    expect(readDisplay).not.toHaveBeenCalled()
+    expect(screen.getByText("Final answer remains visible")).toBeVisible()
+    expect(screen.queryByRole("button", { name: "Process" })).toBeNull()
+
+    rerender(<LocaleProvider><AssistantTurn {...historical} /></LocaleProvider>)
+    fireEvent.click(screen.getByRole("button", { name: /File/u }))
+    await intersect()
+    expect(onOpenActivity).toHaveBeenCalledExactlyOnceWith("a")
+    expect(readDisplay).toHaveBeenCalledExactlyOnceWith({ sessionId: "s", runId: "run" }, expect.any(AbortSignal))
+  } finally { vi.unstubAllGlobals() }
 })

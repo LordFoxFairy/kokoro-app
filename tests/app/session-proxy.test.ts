@@ -10,10 +10,8 @@ vi.mock("@/lib/server/upstream-http", async (importOriginal) => ({
   requestWithDomain,
 }))
 
-const { currentProductSession } = vi.hoisted(() => ({
-  currentProductSession: vi.fn(),
-}))
-vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+
+
 
 const ENV = {
   KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
@@ -24,9 +22,9 @@ const ENV = {
   KOKORO_INTERNAL_SECRET_WEB_BFF: "web-bff-secret",
 }
 
-// A retired cookie must never be promoted into a Product Session.
+// A retired cookie must never be promoted into native admission.
 function sessionCookie(): string {
-  return "kokoro_session=retired-forged-envelope"
+  return "kokoro-issuer.session_token=fixture"
 }
 
 function params(path: string[]): { params: Promise<{ path: string[] }> } {
@@ -34,16 +32,13 @@ function params(path: string[]): { params: Promise<{ path: string[] }> } {
 }
 
 beforeEach(() => {
-  currentProductSession.mockReset()
-  currentProductSession.mockResolvedValue({
-    access: "product-access",
-    accessExpiresAt: Date.now() + 60_000,
-  })
+
+
   for (const [k, v] of Object.entries(ENV)) process.env[k] = v
 })
 afterEach(() => {
   vi.unstubAllGlobals()
-  currentProductSession.mockReset()
+
   requestWithDomain.mockReset()
   for (const k of Object.keys(ENV)) delete process.env[k]
 })
@@ -71,7 +66,7 @@ describe("/api/session/[...path] proxy", () => {
     const headers = new Headers(init.headers)
     expect(JSON.parse(new TextDecoder().decode(init.body))).toEqual({ content: "hello" })
     expect(headers.get("idempotency-key")).toBe("message_1")
-    expect(headers.get("authorization")).toBe("Bearer product-access")
+    expect(headers.get("authorization")).toBeNull()
     expect(headers.get("x-kokoro-service")).toBe("web-bff")
     expect(headers.get("x-kokoro-internal-secret")).toBe("web-bff-secret")
     expect(headers.get("x-kokoro-tenant-id")).toBeNull()
@@ -238,11 +233,12 @@ describe("/api/session/[...path] proxy", () => {
     })
   })
 
-  it("returns 401 when there is no envelope", async () => {
-    currentProductSession.mockResolvedValueOnce(null)
+  it("preserves BFF401 without a Web session preflight", async () => {
+    requestWithDomain.mockResolvedValueOnce(Response.json({error:{code:"unauthenticated"}},{status:401}))
+
     vi.stubGlobal("fetch", vi.fn())
     const { GET } = await import("@/app/api/session/[...path]/route")
-    const res = await GET(new Request("http://localhost/api/session/sessions/ses_1"), params(["sessions", "ses_1"]))
+    const res = await GET(new Request("http://localhost/api/session/sessions/ses_1", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(["sessions", "ses_1"]))
     expect(res.status).toBe(401)
   })
 
@@ -271,23 +267,23 @@ describe("exact private message parts GET adapter", () => {
   it("forwards admitted credentials, explicit scope and no-store with the exact byte/time budget", async () => {
     requestWithDomain.mockResolvedValue(new Response(JSON.stringify({ data: page, meta: { request_id: "parts-request" } }), { headers: { "content-type": "application/json" } }))
     const { GET } = await import("@/app/api/session/[...path]/route")
-    const response = await GET(new Request("http://localhost/api/session/sessions/s/messages/m/parts?project_ref=project&limit=16&cursor=opaque", { headers: { authorization: "Bearer forged" } }), params(path))
+    const response = await GET(new Request("http://localhost/api/session/sessions/s/messages/m/parts?project_ref=project&limit=16&cursor=opaque", { headers: {cookie: "kokoro-issuer.session_token=fixture",  authorization: "Bearer forged" } }), params(path))
     expect(response.status).toBe(200); expect(await response.json()).toEqual(page)
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     const [target, , options] = requestWithDomain.mock.calls[0] as [string, string, { timeoutMs: number; maxResponseBytes: number; strictResponseLength: boolean; headers: HeadersInit }]
     expect(target).toBe("http://bff.test/v1/sessions/s/messages/m/parts?project_ref=project&limit=16&cursor=opaque")
     expect(options).toMatchObject({ timeoutMs: 10_000, maxResponseBytes: 1_048_576, strictResponseLength: true })
-    expect(new Headers(options.headers).get("authorization")).toBe("Bearer product-access")
+    expect(new Headers(options.headers).get("authorization")).toBeNull()
   })
   it.each(["scope=direct&project_ref=p", "limit=33", "cursor=", "limit=1&limit=2", "other=x"])("rejects malformed query %s without forwarding", async (query) => {
     const { GET } = await import("@/app/api/session/[...path]/route")
-    const response = await GET(new Request(`http://localhost/api/session/sessions/s/messages/m/parts?${query}`), params(path))
+    const response = await GET(new Request(`http://localhost/api/session/sessions/s/messages/m/parts?${query}`, {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(path))
     expect(response.status).toBe(400); expect(requestWithDomain).not.toHaveBeenCalled()
   })
   it("does not admit command headers or treat a malformed200 as a successful empty message", async () => {
     const { GET } = await import("@/app/api/session/[...path]/route")
-    expect((await GET(new Request("http://localhost/api/session/sessions/s/messages/m/parts", { headers: { "idempotency-key": "command" } }), params(path))).status).toBe(400)
+    expect((await GET(new Request("http://localhost/api/session/sessions/s/messages/m/parts", { headers: {cookie: "kokoro-issuer.session_token=fixture",  "idempotency-key": "command" } }), params(path))).status).toBe(400)
     requestWithDomain.mockResolvedValue(new Response(JSON.stringify({ data: { ...page, revision: "01" }, meta: { request_id: "req" } }), { headers: { "content-type": "application/json" } }))
-    expect((await GET(new Request("http://localhost/api/session/sessions/s/messages/m/parts"), params(path))).status).toBe(502)
+    expect((await GET(new Request("http://localhost/api/session/sessions/s/messages/m/parts", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(path))).status).toBe(502)
   })
 })

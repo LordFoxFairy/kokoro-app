@@ -39,7 +39,8 @@ export type OpenProjectionEventsArgs = {
   resumeCursor: EventCursor | null
   headers?: Headers | Record<string, string>
   abortSignal?: AbortSignal
-  onFrame: (frame: AgUiTransportFrame) => void
+  onFrame: (frame: AgUiTransportFrame) => void | Promise<void>
+  onCursor?: (cursor: EventCursor) => void
   onReconnecting?: (cursor: EventCursor | null) => void
   onConnected?: () => void
   onStreamError: (error: SessionClientError) => void
@@ -170,6 +171,7 @@ export class AgUiChatTransport implements ChatTransport<KokoroUiMessage> {
     const mapper = new AgUiEventMapper(args.interactionBaselines)
     const seenCursors = new Set<EventCursor>()
     let closed = false
+    let acceptedFrames: Promise<void> = Promise.resolve()
 
     if (args.resumeCursor === null) {
       this.#cursorByChat.delete(args.chatId)
@@ -214,8 +216,17 @@ export class AgUiChatTransport implements ChatTransport<KokoroUiMessage> {
       }
       const mapped = parseFrameData(frame, mapper, args.chatId)
       seenCursors.add(cursor)
-      this.#cursorByChat.set(args.chatId, cursor)
-      args.onFrame(mapped)
+      // Deliver decoded frames immediately into the existing engine batch, but
+      // acknowledge/reconnect only after that batch has actually been adopted.
+      const adopted = Promise.resolve(args.onFrame(mapped))
+      void adopted.catch(() => {}) // The ordered chain below reports adoption failure.
+      acceptedFrames = acceptedFrames.then(async () => {
+        await adopted
+        if (!closed) {
+          this.#cursorByChat.set(args.chatId, cursor)
+          args.onCursor?.(cursor)
+        }
+      })
     }
 
     const connect = async (): Promise<void> => {
@@ -286,11 +297,18 @@ export class AgUiChatTransport implements ChatTransport<KokoroUiMessage> {
               break
             }
             parser(decoder.decode(value, { stream: true }))
+            await acceptedFrames
             if (closed) {
               return
             }
           }
         } catch (error) {
+          // A later malformed frame can share the decoder chunk with valid text.
+          // Adopt that prefix before reporting failure; only scope close retires it.
+          try { await acceptedFrames } catch (projectionError) {
+            if (!closed) fail(projectionError instanceof SessionClientError ? projectionError : new SessionClientError("parse", "AG-UI projection failed"))
+            return
+          }
           if (error instanceof SessionClientError) {
             fail(error)
             return

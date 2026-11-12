@@ -402,7 +402,7 @@ describe("fixed-tenant Team Product UI", () => {
     );
   });
 
-  it("ends the Product Session after a successful leave without refetching forbidden members", async () => {
+  it("ends the native session after a successful leave without refetching forbidden members", async () => {
     const api = client();
     show(api);
     fireEvent.click(await screen.findByTestId("team-leave"));

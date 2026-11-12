@@ -1,10 +1,10 @@
-## Public29 正式消费者（候选）
+## 2026-11-12 · Composer menu and lazy overlay reads
 
-BFF7e4ab1c的公开原件与完整双父test-only证明固定，RSS/日历/运行记录承接沿原ScheduledTask owner；设计、传输与本地数据格式见三设计文首，实际验证及正常源状态见 `CURRENT.md`。Public28.17以下历史记录和独立private/policy发行不改写。
+[TECHNICAL_DESIGN](TECHNICAL_DESIGN.md) 记录内容约束与现读取 owner；[CURRENT](CURRENT.md) 记录代表语言／真实正常页与测量边界。API／Schema 无变化，不改 canonical 或 generated artifact。
 
-## 2026-11-02 B-01 精确详情失败恢复
+## T-07 当前 Public28.18 provenance（2026-11-01）
 
-现有三个详情窗复用局部可见 GET 恢复，读取生命周期见 `TECHNICAL_DESIGN.md`，无 wire / 持久化变化见 `API_CONTRACT.md` / `DATA_MODEL.md`；实际验证与正常源状态见 `CURRENT.md`。
+[TECHNICAL_DESIGN](TECHNICAL_DESIGN.md) 与 [API_CONTRACT](API_CONTRACT.md) 文首说明单一完整 owner artifact、12 条原生成链及新增 test-only 完整父字节证明；[DATA_MODEL](DATA_MODEL.md) 说明无持久模型变化。[CURRENT](CURRENT.md) 记录本轮实际验证，不从历史28.17段推断当前pin，也不将本轮静态治理修复视为正常页面／全产品验收。
 
 ## 2026-10-24 Agent 待核对终态（候选，未正常激活）
 
@@ -20,7 +20,7 @@ Public22.5／固定BFF4d8a028，三面设计顶部记录同源桥边界，`CURRE
 
 ## 管理员积分充值通路（2026-10-22）
 
-当前固定Public22.4，具名成员读取及非现金充值经原Product同源链；设计见 `TECHNICAL_DESIGN.md`／`API_CONTRACT.md`，实际验证与未完成范围见 `CURRENT.md`。对外指南唯一维护在App `developer-docs/docs/guides/credits.md`，不复制为另一份公开事实源。
+当前固定Public22.4，具名成员读取及非现金充值经原Product同源链；设计见 `TECHNICAL_DESIGN.md`／`API_CONTRACT.md`，实际验证与未完成范围见 `CURRENT.md`。对外指南唯一维护在App `developer-docs/docs/api/guides/credits.md`，不复制为另一份公开事实源。
 
 ## 当前租户 Credit 初始化（2026-10-22）
 
@@ -242,4 +242,4 @@ Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_
 
 ## 产品与开发者文档门户
 
-[`developer-docs/`](../developer-docs/README.md) 为迁入本仓的独立公开文档包，Reference从固定BFF artifact生成；本目录的内部维护记录不进入公开站点或搜索索引。运行 `pnpm docs:check` 验证门户，正常 App 门禁继续独立执行；候选迁移及Root旧目录收口状态见CURRENT，不冒称已发布。
+[`developer-docs/`](../developer-docs/README.md) 为迁入本仓的独立公开文档包，Reference从固定BFF artifact生成；本目录的内部维护记录不进入公开站点或搜索索引。运行 `pnpm docs:check` 验证门户，正常 App 门禁继续独立执行；外部接入／第一方参考适用范围与实际验证见CURRENT；不冒称已部署。

@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
 const jsonType = /^application\/json(?:\s*;\s*charset=utf-8)?$/iu;
 const requestIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 
-/** The one public Skill list entry forwards its native bearer, never a Product Session. */
+/** The one public Skill list entry forwards its native bearer, never a native session admission. */
 export async function GET(request: Request): Promise<Response> {
   const requestId = crypto.randomUUID();
   const fail = (status: number, code: string) =>

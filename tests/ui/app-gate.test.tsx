@@ -141,7 +141,7 @@ it("silently rechecks a server admission failure without replacing an already ve
 it("renders only the concentrated booting composition while server admission awaits the browser probe", () => {
   state.probeMode = "checking"
   state.probeState = "checking"
-  render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
+  render(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>)
 
   expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "true")
   expect(screen.queryByTestId("runtime-loading")).toBeNull()
@@ -150,7 +150,7 @@ it("renders only the concentrated booting composition while server admission awa
 it("retains the server-admitted shell without mounting private Runtime when the first probe is unavailable", () => {
   state.probeMode = "checking"
   state.probeState = "unavailable"
-  render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
+  render(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>)
 
   expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "true")
   expect(screen.getByRole("status")).toHaveTextContent("Reconnecting")
@@ -159,28 +159,28 @@ it("retains the server-admitted shell without mounting private Runtime when the 
 it("starts native sign-in once for one anonymous generation without restoring private Runtime", () => {
   state.probeState = "anonymous"
   state.probeMode = "checking"
-  const view = render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
+  const view = render(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>)
 
   expect(state.openProductSignIn).toHaveBeenCalledTimes(1)
   expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "true")
   expect(screen.queryByRole("alert")).toBeNull()
-  view.rerender(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
+  view.rerender(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>)
   expect(state.openProductSignIn).toHaveBeenCalledTimes(1)
 })
 
 it("allows a new native sign-in only after leaving and re-entering anonymous state", () => {
   state.probeState = "anonymous"
-  const view = render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
+  const view = render(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>)
   expect(state.openProductSignIn).toHaveBeenCalledTimes(1)
 
   state.probeState = "pass"
   state.probeMode = "authenticated"
-  view.rerender(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
+  view.rerender(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>)
   expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "false")
 
   state.probeState = "anonymous"
   state.probeMode = "checking"
-  view.rerender(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
+  view.rerender(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>)
   expect(state.openProductSignIn).toHaveBeenCalledTimes(2)
   expect(screen.queryByRole("alert")).toBeNull()
 })
@@ -189,7 +189,7 @@ it("keeps the data-free shell when native sign-in throws synchronously", () => {
   state.probeState = "anonymous"
   state.probeMode = "checking"
   state.openProductSignIn.mockImplementationOnce(() => { throw new Error("navigation failed") })
-  render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
+  render(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>)
 
   expect(state.openProductSignIn).toHaveBeenCalledTimes(1)
   expect(state.retry).not.toHaveBeenCalled()
@@ -234,11 +234,11 @@ it("keeps the same public surface during silent recovery and verified admission"
 });
 it("keeps the verified presentation during an outage, but revokes owner access without showing a diagnostic overlay", () => {
   state.pending = true;
-  const view = render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>);
+  const view = render(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>);
   const surface = screen.getByTestId("app-surface");
   expect(surface).toHaveAttribute("data-booting", "false");
   state.pending = false; state.unavailable = true;
-  view.rerender(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>);
+  view.rerender(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>);
   expect(screen.getByTestId("app-surface")).toBe(surface);
   expect(surface).toHaveAttribute("data-booting", "false");
   expect(surface).toHaveAttribute("data-admitted", "false");
@@ -268,11 +268,11 @@ it.each(["visibilitychange", "pageshow"])("resumes bounded server admission chec
 })
 
 
-it("uses the server-admitted boolean only as a cold CSRF-read hint while Runtime stays gated", () => {
+it("passes the complete safe server observation while Runtime remains probe-gated", () => {
   state.probeMode = "checking"
   state.probeState = "checking"
-  render(<LocaleProvider><AppGate serverAdmitted /></LocaleProvider>)
-  expect(state.probeOptions).toHaveBeenCalledWith({ serverUnavailable: false, serverAdmitted: true })
+  render(<LocaleProvider><AppGate initialSession={{ authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" }} /></LocaleProvider>)
+  expect(state.probeOptions).toHaveBeenCalledWith({ serverUnavailable: false, initialSession: { authenticated: true, subject: "reader-native", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })
   expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "true")
   expect(screen.getByTestId("app-surface")).toHaveAttribute("data-admitted", "false")
 })

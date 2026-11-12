@@ -1,5 +1,3 @@
-import { cloneScheduledTaskDraft } from "../model/scheduled-task"
-import { createScheduledTaskRunsReader } from "./scheduled-task-runs-client"
 import { ZodError } from "zod"
 
 import {
@@ -12,6 +10,10 @@ import {
   scheduledTaskErrorSchema,
   scheduledTaskPatchRequestSchema,
   scheduledTasksPath,
+  scheduledTaskExecutionsPath,
+  scheduledTaskExecutionListResponseSchema,
+  scheduledTaskExecutionQuerySchema,
+  scheduledTaskListQuerySchema,
   type ScheduledTaskRecordResponse,
   type ScheduledTaskDetailsResponse,
 } from "@/contract/http"
@@ -20,6 +22,7 @@ import type {
   ScheduledTaskDraft,
   ScheduledTaskPatch,
   ScheduledTaskRecord,
+  ScheduledExecution,
 } from "../model/scheduled-task"
 
 export type ScheduledTaskClientFailureReason = "network" | "http" | "parse"
@@ -48,23 +51,37 @@ function describeUnknown(error: unknown): string {
 }
 
 function toRecord(task: ScheduledTaskRecordResponse): ScheduledTaskRecord {
-  const common = { id: task.id, title: task.title, prompt: task.prompt, nextRun: task.next_run_at,
-    autoApprove: task.auto_approve, enabled: task.enabled, status: task.status,
-    ...(task.project_id === undefined ? {} : { projectId: task.project_id }),
-    ...(task.expires_at === undefined ? {} : { expiresAt: task.expires_at }) }
-  return task.trigger_kind === "rss"
-    ? { ...common, triggerKind: "rss", feedUrl: task.feed_url, conditions: task.conditions.map(group => group.map(clause => ({ ...clause }))) }
-    : { ...common, triggerKind: "calendar", frequency: task.frequency, time: task.time, timezone: task.timezone,
-      ...(task.weekdays === undefined ? {} : { weekdays: [...task.weekdays] }),
-      ...(task.month_days === undefined ? {} : { monthDays: [...task.month_days] }),
-      ...(task.local_date === undefined ? {} : { localDate: task.local_date }) }
+  const record: ScheduledTaskRecord = {
+    id: task.id,
+    title: task.title,
+    frequency: task.frequency,
+    time: task.time,
+    nextRun: task.next_run_at,
+  }
+  if (task.project_id !== undefined) record.projectId = task.project_id
+  if (task.prompt !== undefined) record.prompt = task.prompt
+  if (task.timezone !== undefined) record.timezone = task.timezone
+  if (task.expires_at !== undefined) record.expiresAt = task.expires_at
+  if (task.auto_approve !== undefined) record.autoApprove = task.auto_approve
+  if (task.enabled !== undefined) record.enabled = task.enabled
+  if (task.status !== undefined) record.status = task.status
+  if (task.weekdays !== undefined) record.weekdays = [...task.weekdays]
+  if (task.month_days !== undefined) record.monthDays = [...task.month_days]
+  if (task.local_date !== undefined) record.localDate = task.local_date
+  return record
 }
 
 function toDetails(task: ScheduledTaskDetailsResponse): ScheduledTaskRecord {
-  const record = toRecord(task)
-  if (task.trigger_kind === "rss" && record.triggerKind === "rss") return { ...record, schedulingState: task.scheduling_state,
-    feedState: task.feed_state, lastCheckedAt: task.last_checked_at, nextCheckAt: task.next_check_at, errorCode: task.error_code }
-  return { ...record, schedulingState: task.scheduling_state }
+  return { ...toRecord(task), schedulingState: task.scheduling_state }
+}
+
+function readPath(path: string, query: { projectId?: string | undefined; taskId?: string | undefined; cursor?: string | undefined; limit?: number | undefined }): string {
+  const params = new URLSearchParams()
+  if (query.projectId !== undefined) params.set("project_id", query.projectId)
+  if (query.taskId !== undefined) params.set("task_id", query.taskId)
+  if (query.cursor !== undefined) params.set("cursor", query.cursor)
+  if (query.limit !== undefined) params.set("limit", String(query.limit))
+  return params.size ? `${path}?${params}` : path
 }
 
 function parseRequest<T>(parse: () => T): T {
@@ -77,24 +94,40 @@ function parseRequest<T>(parse: () => T): T {
 }
 
 function createBody(draft: ScheduledTaskDraft) {
-  return parseRequest(() => scheduledTaskCreateRequestSchema.parse({
-    ...(draft.projectId === undefined ? {} : { project_id: draft.projectId }), title: draft.title, prompt: draft.prompt,
-    trigger_kind: draft.triggerKind, auto_approve: draft.autoApprove,
-    ...(draft.triggerKind === "rss" ? { feed_url: draft.feedUrl, conditions: draft.conditions } : {
-      frequency: draft.frequency, time: draft.time, timezone: draft.timezone,
+  return parseRequest(() =>
+    scheduledTaskCreateRequestSchema.parse({
+      ...(draft.projectId === undefined ? {} : { project_id: draft.projectId }),
+      title: draft.title,
+      prompt: draft.prompt,
+      frequency: draft.frequency,
+      time: draft.time,
+      timezone: draft.timezone,
       ...(draft.weekdays === undefined ? {} : { weekdays: draft.weekdays }),
       ...(draft.monthDays === undefined ? {} : { month_days: draft.monthDays }),
       ...(draft.localDate === undefined ? {} : { local_date: draft.localDate }),
-    }), ...(draft.expiresAt === undefined ? {} : { expires_at: draft.expiresAt }),
-  }))
+      auto_approve: draft.autoApprove,
+      ...(draft.expiresAt === undefined ? {} : { expires_at: draft.expiresAt }),
+    }),
+  )
 }
 
 function patchBody(patch: ScheduledTaskPatch) {
-  return parseRequest(() => scheduledTaskPatchRequestSchema.parse(Object.fromEntries(Object.entries({
-    title: patch.title, prompt: patch.prompt, trigger_kind: patch.triggerKind, feed_url: patch.feedUrl, conditions: patch.conditions,
-    frequency: patch.frequency, time: patch.time, timezone: patch.timezone, weekdays: patch.weekdays, month_days: patch.monthDays,
-    local_date: patch.localDate, expires_at: patch.expiresAt, auto_approve: patch.autoApprove, enabled: patch.enabled, status: patch.status,
-  }).filter(([, value]) => value !== undefined))))
+  return parseRequest(() =>
+    scheduledTaskPatchRequestSchema.parse({
+      title: patch.title,
+      prompt: patch.prompt,
+      frequency: patch.frequency,
+      time: patch.time,
+      timezone: patch.timezone,
+      weekdays: patch.weekdays,
+      month_days: patch.monthDays,
+      local_date: patch.localDate,
+      expires_at: patch.expiresAt,
+      auto_approve: patch.autoApprove,
+      enabled: patch.enabled,
+      status: patch.status,
+    }),
+  )
 }
 
 function createIdempotencyKey(prefix: string, taskId?: string): string {
@@ -235,7 +268,15 @@ export function pendingScheduledTaskCreate(
   projectId?: string,
 ): ScheduledTaskDraft | undefined {
   const draft = pendingCreates.get(client)?.get(contextKey(projectId))
-  return draft ? cloneScheduledTaskDraft(draft) : undefined
+  return draft ? cloneDraft(draft) : undefined
+}
+
+function cloneDraft(draft: ScheduledTaskDraft): ScheduledTaskDraft {
+  return {
+    ...draft,
+    ...(draft.weekdays === undefined ? {} : { weekdays: [...draft.weekdays] }),
+    ...(draft.monthDays === undefined ? {} : { monthDays: [...draft.monthDays] }),
+  }
 }
 
 async function createTask(
@@ -245,7 +286,7 @@ async function createTask(
   admission: (() => number | null) | undefined,
   input: ScheduledTaskDraft,
 ): Promise<ScheduledTaskRecord> {
-  const draft = cloneScheduledTaskDraft(input)
+  const draft = cloneDraft(input)
   const body = createBody(draft)
   const context = contextKey(draft.projectId)
   const pending = creates.get(context)
@@ -283,16 +324,27 @@ export function createScheduledTaskClient(
   const commandIdentities = new Map<string, CommandIdentity>()
   const creates = new Map<string, ScheduledTaskDraft>()
   const client: ScheduledTaskClient = {
-    listScheduledTaskRuns: createScheduledTaskRunsReader(fetcher, admission),
-    listScheduledTasks: async () => {
+    listScheduledTasks: async ({ signal, ...options } = {}) => {
+      const query = parseRequest(() => scheduledTaskListQuerySchema.parse(options))
       const response = await request(
         fetcher,
-        scheduledTasksPath(),
+        readPath(scheduledTasksPath(), query),
         scheduledTaskListResponseSchema,
-        undefined,
+        signal === undefined ? undefined : { signal },
         admission,
       )
       return response.tasks.map(toDetails)
+    },
+    listScheduledExecutions: async ({ signal, ...options } = {}) => {
+      const query = parseRequest(() => scheduledTaskExecutionQuerySchema.parse(options))
+      const response = await request(fetcher, readPath(scheduledTaskExecutionsPath(), query),
+        scheduledTaskExecutionListResponseSchema, signal === undefined ? undefined : { signal }, admission)
+      const executions: ScheduledExecution[] = response.executions.map(item => ({
+        id: item.execution_id, taskId: item.task_id, taskTitle: item.task_title, occurrenceAt: item.occurrence_at,
+        state: item.state, conversationId: item.conversation_id, projectId: item.project_id,
+        runId: item.run_id, assistantMessageId: item.assistant_message_id, completedAt: item.completed_at,
+      }))
+      return { executions, nextCursor: response.next_cursor }
     },
     createScheduledTask: (input) => createTask(fetcher, commandIdentities, creates, admission, input),
     updateScheduledTask: async (taskId, patch) => {

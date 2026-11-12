@@ -49,7 +49,7 @@ import {
   type MoveSessionReceipt,
 } from "@/contract/http"
 import type { EventCursor } from "@/contract/agui-events"
-import type { ChatProjectionEvent } from "@/core/chat-projection-event"
+import type { AgUiTransportFrame } from "./agui-chat-transport"
 import { AgUiChatTransport } from "./agui-chat-transport"
 import { readPartsJson } from "./message-parts-reader"
 import { SessionClientError, type ClientFailureReason } from "./client-error"
@@ -57,7 +57,6 @@ import { ConversationMoveError } from "./conversation-move-error"
 import type { SessionScope } from "./session-scope"
 import { shareErrorSchema } from "@/lib/shared-tasks.schema"
 import { parseSharedTasksJson } from "@/lib/shared-tasks-json"
-import { sessionShareMetadataDataSchema, sessionShareMetadataSessionIdSchema, sessionShareMetadataProjectSchema, type SessionShareMetadata } from "@/generated/bff-session-share-metadata"
 
 /** Retry metadata is private to the model catalog reader; other HTTP consumers are unchanged. */
 export class ModelCatalogReadError extends SessionClientError {
@@ -102,7 +101,7 @@ export type OpenEventsArgs = {
   // BFF durable AG-UI ledger 的 opaque cursor；null 表示从当前 snapshot 之前没有可续点。
   resumeCursor: EventCursor | null
   onCursor: (cursor: EventCursor) => void
-  onEvent: (event: ChatProjectionEvent) => void
+  onFrame: (frame: AgUiTransportFrame) => void | Promise<void>
   onReconnecting?: (cursor: EventCursor | null) => void
   onConnected?: () => void
   // 入站载荷未过契约或流已不可恢复：交状态机转错误态。
@@ -122,6 +121,7 @@ export type SessionClient = {
     runId: string,
     body: RunControlBody,
     commandId: string,
+    scope?: SessionScope,
   ) => Promise<RunControlReceipt>
   // Conversation owner only confirms deletion with a strict 200 `deleted` receipt.
   deleteSession: (sessionId: string, scope: SessionScope, signal?: AbortSignal) => Promise<DeleteSessionReceipt>
@@ -132,19 +132,17 @@ export type SessionClient = {
   listModels: (options?: { signal?: AbortSignal }) => Promise<ModelCandidateList>
   // 作品库（ARTIFACT-LIB）：属主 namespace 全部成果跨会话聚合、复合游标分页（cursor 缺省=首页）。
   // 分享（SHARE-1）：创建返 share_id（活跃分享幂等返同 id）；撤销置失效（公共读随即 404）。
-  readShare: (sessionId: string, options: { scope: SessionScope; signal: AbortSignal }) => Promise<SessionShareMetadata>
-  createShare: (sessionId: string, signal?: AbortSignal, scope?: SessionScope) => Promise<ShareReceipt>
-  revokeShare: (sessionId: string, signal?: AbortSignal, scope?: SessionScope) => Promise<ShareReceipt>
+  createShare: (sessionId: string, signal?: AbortSignal) => Promise<ShareReceipt>
+  revokeShare: (sessionId: string, signal?: AbortSignal) => Promise<ShareReceipt>
   openEvents: (args: OpenEventsArgs) => EventStreamHandle
 }
 
 
-async function shareRequest<T>(
+async function shareMutation(
   target: string,
-  method: "GET" | "POST" | "DELETE",
-  parse: (raw: unknown) => T,
+  method: "POST" | "DELETE",
   signal?: AbortSignal,
-): Promise<T> {
+): Promise<ShareReceipt> {
   const controller = new AbortController(),
     deadline = performance.now() + 10_000;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined,
@@ -185,10 +183,10 @@ async function shareRequest<T>(
       cache: "no-store",
       redirect: "error",
       signal: controller.signal,
-      ...(method === "GET" ? {} : { headers: {
+      headers: {
         "idempotency-key": `session-mutation:${crypto.randomUUID()}`,
         ...(method === "POST" ? { "content-type": "application/json" } : {}),
-      } }),
+      },
       ...(method === "POST" ? { body: "{}" } : {}),
     });
     if (retired || controller.signal.aborted) {
@@ -248,9 +246,9 @@ async function shareRequest<T>(
       const error = shareErrorSchema.parse(raw);
       if (error.meta.request_id !== response.headers.get("x-request-id"))
         throw Error("Invalid share binding");
-      throw new SessionClientError("http", error.error.code, error.error.code, response.status);
+      throw new SessionClientError("http", error.error.code, error.error.code);
     }
-    return parse(raw);
+    return shareReceiptSchema.parse(raw);
   };
   try {
     return await Promise.race([cancelled, operation()]);
@@ -417,6 +415,7 @@ async function postJson<T>(
   parse: (raw: unknown) => T,
   commandId?: string,
   signal?: AbortSignal,
+  requiredStatus?: number,
 ): Promise<T> {
   let response: Response
   const idempotencyKey = commandId?.trim() || `session-mutation:${crypto.randomUUID()}`
@@ -432,6 +431,9 @@ async function postJson<T>(
   }
   if (!response.ok) {
     throw await httpError("POST", url, response)
+  }
+  if (requiredStatus !== undefined && response.status !== requiredStatus) {
+    throw new SessionClientError("parse", "Unexpected mutation receipt status")
   }
   return parseJsonResponse(response, parse)
 }
@@ -608,16 +610,25 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       return parseJsonResponse(response, (raw) => runProcessPageSchema.parse(raw))
     },
 
-    readShare: (sessionId, { scope, signal }) => {
-      sessionShareMetadataSessionIdSchema.parse(sessionId)
-      const query = new URLSearchParams(scope.kind === "project" ? { project_ref: sessionShareMetadataProjectSchema.parse(scope.projectRef) } : { scope: "direct" })
-      return shareRequest(url(`${sharePath(sessionId)}?${query.toString()}`), "GET", raw => sessionShareMetadataDataSchema.parse(raw), signal)
-    },
-    createShare: (sessionId, signal, scope) => shareRequest(url(sharePath(sessionId) + (scope === undefined ? "" : `?${new URLSearchParams(scope.kind === "project" ? { project_ref: scope.projectRef } : { scope: "direct" })}`)), "POST", raw => shareReceiptSchema.parse(raw), signal),
-    revokeShare: (sessionId, signal, scope) => shareRequest(url(sharePath(sessionId) + (scope === undefined ? "" : `?${new URLSearchParams(scope.kind === "project" ? { project_ref: scope.projectRef } : { scope: "direct" })}`)), "DELETE", raw => shareReceiptSchema.parse(raw), signal),
+    createShare: (sessionId, signal) => shareMutation(url(sharePath(sessionId)), "POST", signal),
+    revokeShare: (sessionId, signal) => shareMutation(url(sharePath(sessionId)), "DELETE", signal),
 
-    sendControl: (sessionId, runId, body, commandId) =>
-      postJson(url(controlPath(sessionId, runId)), body, (raw) => runControlReceiptSchema.parse(raw), commandId),
+    sendControl: (sessionId, runId, body, commandId, scope) => {
+      const path = controlPath(sessionId, runId)
+      if (body.kind !== "run.steer") {
+        return postJson(url(path), body, (raw) => runControlReceiptSchema.parse(raw), commandId)
+      }
+      const query = scope?.kind === "project"
+        ? new URLSearchParams({ project_ref: scope.projectRef })
+        : new URLSearchParams({ scope: "direct" })
+      return postJson(url(`${path}?${query}`), body, (raw) => {
+        const receipt = runControlReceiptSchema.parse(raw)
+        if (receipt.run_id !== runId || receipt.command_id !== commandId || receipt.message_id === undefined) {
+          throw new SessionClientError("parse", "Steer receipt does not match the submitted Run and command")
+        }
+        return receipt
+      }, commandId, undefined, 202)
+    },
 
     deleteSession: async (sessionId, scope, signal) => {
       const query = new URLSearchParams()
@@ -674,17 +685,13 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
 
     // Canonical AG-UI only: SSE framing, validation, dedupe and reconnect are
     // centralized in AgUiChatTransport; no reducer-shaped wire fallback exists.
-    openEvents: ({ sessionId, resumeCursor, interactionBaselines, onCursor, onEvent, onReconnecting, onConnected, onStreamError }) =>
+    openEvents: ({ sessionId, resumeCursor, interactionBaselines, onCursor, onFrame, onReconnecting, onConnected, onStreamError }) =>
       agUiTransport.openProjectionEvents({
         chatId: sessionId,
         resumeCursor,
         ...(interactionBaselines === undefined ? {} : { interactionBaselines }),
-        onFrame: (frame) => {
-          onCursor(frame.cursor)
-          if (frame.projectionEvent !== null) {
-            onEvent(frame.projectionEvent)
-          }
-        },
+        onFrame,
+        onCursor,
         ...(onReconnecting === undefined ? {} : { onReconnecting }),
         ...(onConnected === undefined ? {} : { onConnected }),
         onStreamError,

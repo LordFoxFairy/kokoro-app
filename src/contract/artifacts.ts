@@ -1,6 +1,7 @@
 // Canonical v1 runtime contract. Keep these schemas synchronized with the checked-in API documentation and contract tests.
 
 import { z } from "zod"
+import { safeVirtualPathSchema } from "./answer-actions"
 
 export const workspaceFileSchema = z
   .object({
@@ -25,3 +26,14 @@ export const deliverySchema = z
   })
   .strict()
 export type Delivery = z.infer<typeof deliverySchema>
+
+// Delivery proofs share the owner's safe virtual-path domain, but never
+// expose a private dot mount such as /.inputs or /.skills.
+export const deliveredArtifactDisplayPathSchema = safeVirtualPathSchema.refine(
+  value => !value.slice(1).split("/").some(segment => segment.startsWith(".")),
+  "Invalid delivered artifact display path",
+)
+export const privateDeliverySchema = deliverySchema.extend({
+  display_path: deliveredArtifactDisplayPathSchema.optional(),
+}).strict()
+export type PrivateDelivery = z.infer<typeof privateDeliverySchema>

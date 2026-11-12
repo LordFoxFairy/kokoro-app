@@ -160,14 +160,6 @@ export const teamLeftMemberResponseSchema = teamMutationResponseSchema(
 export const teamErrorStatuses = new Set([
   400, 401, 403, 404, 409, 413, 429, 502, 503,
 ]);
-export const teamSessionProjectionSchema = z
-  .object({
-    authenticated: z.literal(true),
-    subject: z.string().min(1),
-    expires_at: z.number().finite(),
-  })
-  .strict();
-
 export function teamResponseSchema(method: string, path: string) {
   if (method === "GET") {
     if (path === "members") return teamMembersResponseSchema;

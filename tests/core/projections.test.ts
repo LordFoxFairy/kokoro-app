@@ -15,8 +15,8 @@ describe("buildThreadItems", () => {
   it("用户消息单独成项，连续同 run assistant 段归并为一个 turn", () => {
     let state = appendUserMessage(createSessionStreamState(), { id: "usr_1", content: "hi" })
     state = applyChatProjectionEvents(state, [
-      makeEvent("message.delta", { segment_id: "seg_1", delta: "a" }, { run_id: "run_1" }),
-      makeEvent("message.delta", { segment_id: "seg_2", delta: "b" }, { run_id: "run_1" }),
+      makeEvent("message.text_snapshot", { segment_id: "seg_1", content: "a" }, { run_id: "run_1" }),
+      makeEvent("message.text_snapshot", { segment_id: "seg_2", content: "b" }, { run_id: "run_1" }),
     ])
     const items = buildThreadItems(state)
     expect(items.map((item) => item.kind)).toEqual(["user", "assistant-turn"])
@@ -111,13 +111,13 @@ describe("groupSegments", () => {
     const subagent = { activity: "subagent" as const, activity_id: `act_${"7".repeat(64)}`, segment_id: `seg_${"8".repeat(64)}`, status: "running" as const, display_code: "subagent.execution" as const }
     const first = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("run.created", { run_id: "run_1" }, { seq: 1 }),
-      makeEvent("message.delta", { segment_id: "text_a", delta: "A" }, { seq: 2 }),
+      makeEvent("message.text_snapshot", { segment_id: "text_a", content: "A" }, { seq: 2 }),
       makeEvent("activity.updated", tool, { seq: 3 }),
       makeEvent("activity.updated", nextTool, { seq: 4 }),
-      makeEvent("message.delta", { segment_id: "text_b", delta: "B" }, { seq: 5 }),
+      makeEvent("message.text_snapshot", { segment_id: "text_b", content: "B" }, { seq: 5 }),
       makeEvent("activity.updated", skill, { seq: 6 }),
       makeEvent("activity.updated", subagent, { seq: 7 }),
-      makeEvent("message.delta", { segment_id: "text_c", delta: "C" }, { seq: 8 }),
+      makeEvent("message.text_snapshot", { segment_id: "text_c", content: "C" }, { seq: 8 }),
     ])
     const updated = applyChatProjectionEvents(first, [
       makeEvent("activity.updated", { ...tool, status: "completed" }, { seq: 9 }),
@@ -126,28 +126,13 @@ describe("groupSegments", () => {
     const turn = buildThreadItems(updated)[0]
     const oldTurn = buildThreadItems(first)[0]
     if (turn?.kind !== "assistant-turn" || oldTurn?.kind !== "assistant-turn") throw new Error("expected assistant turn")
-    const segments = groupSegments(turn.steps, updated.executionProcess?.activities)
+    const segments = groupSegments(turn.steps)
     expect(segments.map((segment) => turn.messagesById[segment.segmentId]?.content ?? segment.activities.map((activity) => activity.activity).join(","))).toEqual([
       "A", "tool,tool", "B", "skill,subagent", "C",
     ])
-    expect(segments.map((segment) => segment.segmentId)).toEqual(groupSegments(oldTurn.steps, first.executionProcess?.activities).map((segment) => segment.segmentId))
+    expect(segments.map((segment) => segment.segmentId)).toEqual(groupSegments(oldTurn.steps).map((segment) => segment.segmentId))
     expect(segments.flatMap((segment) => segment.activities)).toEqual(updated.executionProcess?.activities)
     expect(groupSegments(turn.steps)).toEqual(segments)
-  })
-
-  it("keeps unanchored snapshot activities on the original legacy fallback path", () => {
-    const tool = { activity: "tool" as const, activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "completed" as const, display_code: "tool.execution" as const }
-    const skill = { activity: "skill" as const, activity_id: `act_${"c".repeat(64)}`, preflight_id: `spf_${"d".repeat(64)}`, source_refs: ["skill:alpha"], phase: "ready" as const }
-    const snapshot = {
-      ...makeSnapshot({ messages: [{ message_id: "durable", role: "assistant", run_id: "run_1", content: "legacy text", status: "completed", created_at: "2026-07-02T00:00:00Z" }] }),
-      execution_process: { run_id: "run_1", todos: null, activities: [tool, skill], next_cursor: null },
-    }
-    const restored = stateFromSnapshot(snapshot)
-    expect(groupSegments(restored.stepsByRun.run_1 ?? [], restored.executionProcess?.activities)).toMatchObject([
-      { segmentId: "durable", activities: [] },
-      { segmentId: tool.segment_id, activities: [tool] },
-      { segmentId: `skill:${skill.preflight_id}`, activities: [skill] },
-    ])
   })
 
   it("按 segmentId 聚合并保持首次出现顺序", () => {
@@ -187,8 +172,8 @@ describe("groupSegments", () => {
     const steps = updated.stepsByRun.run_1 ?? []
     const beforeSteps = structuredClone(steps)
     const beforeActivities = structuredClone(updated.executionProcess?.activities)
-    const original = groupSegments(initial.stepsByRun.run_1 ?? [], initial.executionProcess?.activities)
-    const segments = groupSegments(steps, updated.executionProcess?.activities)
+    const original = groupSegments(initial.stepsByRun.run_1 ?? [])
+    const segments = groupSegments(steps)
     expect(segments.map(segment => segment.segmentId)).toEqual(original.map(segment => segment.segmentId))
     expect(segments.flatMap(segment => segment.activities)).toEqual([
       { ...tool, status: "completed" }, subagent, nextTool,
@@ -215,8 +200,8 @@ it("keeps snapshot text then post-watermark tool and new text segments in real o
   }))
   const state = applyChatProjectionEvents(initial, [
     makeEvent("tool.invoked", { segment_id: "tool_seg", tool_id: "tool", name: "search", args: {} }, { seq: 11 }),
-    makeEvent("message.delta", { segment_id: "new_seg", delta: "", text_boundary: "start" }, { seq: 12 }),
-    makeEvent("message.delta", { segment_id: "new_seg", delta: "later" }, { seq: 13 }),
+    makeEvent("message.text_snapshot", { segment_id: "new_seg", content: "", text_boundary: "start" }, { seq: 12 }),
+    makeEvent("message.text_snapshot", { segment_id: "new_seg", content: "later" }, { seq: 13 }),
     makeEvent("tool.returned", { segment_id: "tool_seg", tool_id: "tool", name: "search", result: "done", is_error: false }, { seq: 14 }),
   ])
   const turn = buildThreadItems(state)[0]
@@ -303,7 +288,7 @@ describe("native tool rounds and authoritative empty text boundaries", () => {
   function groups(state: ReturnType<typeof readState>) {
     const turn = buildThreadItems(state)[0]
     if (turn?.kind !== "assistant-turn") throw new Error("missing owner turn")
-    return groupSegments(turn.steps, [], turn.messagesById)
+    return groupSegments(turn.steps, turn.messagesById)
   }
   it("joins activities across an owner-proven completed empty slot but never across public text", () => {
     const segments = groups(readState(true))
@@ -321,14 +306,14 @@ describe("native tool rounds and authoritative empty text boundaries", () => {
     const turn = buildThreadItems(state)[0]
     if (turn?.kind !== "assistant-turn") throw new Error("missing owner turn")
     const withoutBody = Object.fromEntries(Object.entries(turn.messagesById).filter(([id]) => id !== "empty"))
-    expect(groupSegments(turn.steps, [], withoutBody).map((segment) => segment.activities.length)).toEqual([1, 0, 1, 0, 1])
+    expect(groupSegments(turn.steps, withoutBody).map((segment) => segment.activities.length)).toEqual([1, 0, 1, 0, 1])
   })
   it("does not infer a completed empty body from START/END and honors later authoritative content", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("run.created", { run_id: "run" }, { run_id: "run" }),
       makeEvent("activity.updated", activity("a"), { run_id: "run" }),
-      makeEvent("message.delta", { segment_id: "empty", delta: "", text_boundary: "start" }, { run_id: "run" }),
-      makeEvent("message.delta", { segment_id: "empty", delta: "", text_boundary: "end" }, { run_id: "run" }),
+      makeEvent("message.text_snapshot", { segment_id: "empty", content: "", text_boundary: "start" }, { run_id: "run" }),
+      makeEvent("message.text_snapshot", { segment_id: "empty", content: "", text_boundary: "end" }, { run_id: "run" }),
       makeEvent("activity.updated", activity("b"), { run_id: "run" }),
     ])
     expect(groups(state).map((segment) => segment.activities.length)).toEqual([1, 0, 1])
@@ -341,7 +326,7 @@ describe("native tool rounds and authoritative empty text boundaries", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("run.created", { run_id: "run" }, { run_id: "run" }),
       makeEvent("activity.updated", activity("a"), { run_id: "run" }),
-      makeEvent("message.delta", { segment_id: "empty", delta: "", text_boundary: "end" }, { run_id: "run" }),
+      makeEvent("message.text_snapshot", { segment_id: "empty", content: "", text_boundary: "end" }, { run_id: "run" }),
       makeEvent("activity.updated", activity("b"), { run_id: "run" }),
     ])
     expect(groups(state).map((segment) => segment.activities.length)).toEqual([1, 0, 1])

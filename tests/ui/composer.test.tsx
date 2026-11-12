@@ -1,6 +1,6 @@
-// Composer 模型选择器（MODEL-UX）：候选下拉渲染 + 选择回调（raw business label key）+ 首条锁定态 + 空候选隐藏。
+// Composer 模型选择器（MODEL-UX）：候选下拉渲染 + raw business label key + 首条锁定态 + 目录读取状态。
 import { readFileSync } from "node:fs"
-import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { renderHook } from "@testing-library/react"
 import { createSessionEngine } from "@/engine/machine"
@@ -112,6 +112,41 @@ describe("Composer model selector", () => {
     } finally { engine.dispose() }
   })
 
+  it("keeps two full 255-character public labels distinct and selects their raw keys even when the revision matches", () => {
+    const prefix = "Shared public model ".repeat(12).padEnd(254, "x")
+    const models = MODELS.map((model, index) => ({ ...model, display_name: `${prefix}${index === 0 ? "A" : "B"}` }))
+    const props = renderComposer({ models, selectedModel: models[1]!.name })
+    fireEvent.pointerDown(screen.getByRole("button", { name: `Switch model: ${models[1]!.display_name}` }))
+
+    const first = screen.getByRole("menuitemradio", { name: models[0]!.display_name })
+    const second = screen.getByRole("menuitemradio", { name: models[1]!.display_name })
+    expect(first).toHaveAttribute("aria-checked", "false")
+    expect(second).toHaveAttribute("aria-checked", "true")
+    expect(first.querySelector('[data-slot="composer-option-label"]')).toHaveTextContent(models[0]!.display_name)
+    expect(second.querySelector('[data-slot="composer-option-label"]')).toHaveTextContent(models[1]!.display_name)
+    fireEvent.click(first)
+    expect(props.onModelChange).toHaveBeenCalledExactlyOnceWith(models[0]!.name)
+    expect(props.onSubmit).not.toHaveBeenCalled()
+  })
+
+  it("retains Radix arrow navigation, committed selection and Escape return focus", async () => {
+    const props = renderComposer({ selectedModel: MODELS[1]!.name })
+    const trigger = screen.getByRole("button", { name: "Switch model: gpt-5" })
+    fireEvent.keyDown(trigger, { key: "ArrowDown" })
+    const first = await screen.findByRole("menuitemradio", { name: MODELS[0]!.display_name })
+    const selected = screen.getByRole("menuitemradio", { name: MODELS[1]!.display_name })
+    await waitFor(() => expect(first).toHaveFocus())
+    expect(selected).toHaveAttribute("aria-checked", "true")
+    expect(first).toHaveAttribute("aria-checked", "false")
+    fireEvent.keyDown(first, { key: "ArrowDown" })
+    await waitFor(() => expect(selected).toHaveFocus())
+    fireEvent.keyDown(selected, { key: "Escape" })
+    await waitFor(() => expect(trigger).toHaveFocus())
+    expect(screen.queryByRole("menu")).toBeNull()
+    expect(props.onModelChange).not.toHaveBeenCalled()
+    expect(props.onSubmit).not.toHaveBeenCalled()
+  })
+
   it("旧provider:name偏好不注入engine，旧key和其他存储保持原样", async () => {
     const old = JSON.stringify({ model: "real-provider:chat/fast" })
     window.localStorage.setItem("kokoro.web.chat-prefs", old)
@@ -160,9 +195,33 @@ describe("Composer model selector", () => {
     expect(locked).toHaveAttribute("title", expect.stringContaining("gpt-5"))
   })
 
-  it("空候选 → 不渲染模型选择器", () => {
-    renderComposer({ models: [] })
+  it("a confirmed empty catalog explains the missing selector without inventing a default or changing the draft", () => {
+    const props = renderComposer({ models: [], draft: "preserved draft" })
     expect(screen.queryByRole("button", { name: /Switch model:/ })).toBeNull()
+    const feedback = screen.getByText("No models in the current catalog.")
+    expect(feedback).toHaveAttribute("role", "status")
+    expect(feedback).not.toHaveClass("sr-only")
+    expect(screen.queryByRole("button", { name: "Retry loading" })).toBeNull()
+    expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveValue("preserved draft")
+    expect(props.onModelChange).not.toHaveBeenCalled()
+    expect(props.onSubmit).not.toHaveBeenCalled()
+  })
+
+  it.each([{ models: [] }, { models: [MODELS[0]!] }])("a locked explicit selection missing from the confirmed catalog never impersonates another default ($models.length models)", ({ models }) => {
+    const props = renderComposer({ selectedModel: "gpt-5", modelLocked: true, draft: "preserved draft", preferredModelSelector: MODELS[0]!.name })
+    expect(screen.getByRole("button", { name: "Model: gpt-5 (locked this turn)" })).toBeDisabled()
+    cleanup()
+    render(<Composer {...props} models={models} />, { wrapper: LocaleProvider })
+
+    const feedback = screen.getByText("This turn’s model is not in the current catalog.")
+    expect(feedback).toHaveAttribute("role", "status")
+    expect(feedback).not.toHaveClass("sr-only")
+    expect(screen.queryByRole("button", { name: /Model:.*locked this turn/ })).toBeNull()
+    expect(screen.queryByRole("button", { name: /Switch model:/ })).toBeNull()
+    expect(screen.queryByText("No models in the current catalog.")).toBeNull()
+    expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveValue("preserved draft")
+    expect(props.onModelChange).not.toHaveBeenCalled()
+    expect(props.onSubmit).not.toHaveBeenCalled()
   })
 
   it("单一桌面环境使用静态控件，不打开伪菜单", () => {
@@ -699,10 +758,10 @@ describe("Composer 状态契约", () => {
     expect(props.onStop).toHaveBeenCalledTimes(1)
   })
 
-  it("流式中有草稿时停止始终可达，发送动作仍独立保留", () => {
+  it("流式中默认将草稿排队，与停止动作独立", () => {
     const props = renderComposer({ draft: "补充一个例子", canSend: true, isStreaming: true })
     const stop = screen.getByRole("button", { name: "Stop generating" })
-    const send = screen.getByRole("button", { name: "Send interjection" })
+    const send = screen.getByRole("button", { name: "Add to queue" })
     expect(stop).toBeEnabled()
     expect(send).toBeEnabled()
     fireEvent.click(stop)
@@ -713,11 +772,11 @@ describe("Composer 状态契约", () => {
   })
 
   it("等待批准且有草稿时取消等待与发送动作互不替代", () => {
-    const props = renderComposer({ draft: "补充说明", canSend: true, isStreaming: true, isAwaitingApproval: true })
+    const props = renderComposer({ draft: "补充说明", canSend: true, isStreaming: true, isAwaitingApproval: true, activeDelivery: "steer" })
     fireEvent.click(screen.getByRole("button", { name: "Cancel waiting" }))
     expect(props.onStop).toHaveBeenCalledTimes(1)
     expect(props.onSubmit).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole("button", { name: "Send interjection" }))
+    fireEvent.click(screen.getByRole("button", { name: "Send without interrupting" }))
     expect(props.onSubmit).toHaveBeenCalledTimes(1)
   })
 
@@ -827,8 +886,31 @@ it("Textarea 在输入、删除和宽度改变时增高/收缩，忽略纯高度
 })
 
 
+it("shows initial model loading and lets the user retry a failed catalog without changing the draft or submitting", () => {
+  renderComposer({ models: [], modelCatalogStatus: "loading", draft: "preserved draft" })
+  expect(screen.getByText("Loading model catalog…")).toHaveAttribute("role", "status")
+  expect(screen.queryByRole("button", { name: "Retry loading" })).toBeNull()
+  cleanup()
+  const onRetryModels = vi.fn()
+  const props = renderComposer({ models: [], selectedModel: "unconfirmed-model", modelCatalogStatus: "error", onRetryModels, draft: "preserved draft", canSend: true })
+  expect(screen.getByText("Could not load the model catalog. Please retry.")).toHaveAttribute("role", "status")
+  fireEvent.click(screen.getByRole("button", { name: "Retry loading" }))
+  expect(onRetryModels).toHaveBeenCalledOnce()
+  expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveValue("preserved draft")
+  expect(screen.queryByRole("button", { name: /Switch model:/ })).toBeNull()
+  expect(props.onModelChange).not.toHaveBeenCalled()
+  expect(props.onSubmit).not.toHaveBeenCalled()
+})
+
+it.each(["loading", "error", "ready"] as const)("keeps an explicitly hidden model selector quiet during %s", modelCatalogStatus => {
+  renderComposer({ models: [], hideModelSelector: true, modelCatalogStatus, onRetryModels: vi.fn() })
+  expect(screen.queryByText("Loading model catalog…")).toBeNull()
+  expect(screen.queryByText("Could not load the model catalog. Please retry.")).toBeNull()
+  expect(screen.queryByRole("button", { name: "Retry loading" })).toBeNull()
+  expect(screen.queryByText("No models in the current catalog.")).toBeNull()
+})
+
 it.each([
-  { models: [], selectedModel: "unconfirmed-model", modelLocked: false },
   { models: MODELS, selectedModel: "gpt-5", modelLocked: false },
   { models: MODELS, selectedModel: "gpt-5", modelLocked: true },
 ])("catalog failures remain quiet without replacing confirmed choices or submitting ($modelLocked, $selectedModel)", ({ models, selectedModel, modelLocked }) => {
@@ -928,19 +1010,17 @@ it("a failed refresh retains the confirmed candidates and explicit business labe
   } finally { hook.unmount(); vi.unstubAllGlobals() }
 })
 
-it.each([{ models: [] }, { models: MODELS }])("catalog reads remain visually quiet and retain any confirmed model controls (%j)", ({ models }) => {
-  const props = renderComposer({ models, selectedModel: "gpt-5", modelCatalogStatus: "loading" })
+it("catalog refresh stays visually quiet and retains confirmed model controls", () => {
+  const props = renderComposer({ models: MODELS, selectedModel: "gpt-5", modelCatalogStatus: "loading" })
   expect(screen.queryByText("Loading model catalog…")).not.toBeInTheDocument()
   const cluster = document.querySelector('[data-slot="composer-selector-cluster"]')
   expect(cluster?.querySelector('[role="status"]')).toBeNull()
   expect(cluster).toHaveAttribute("aria-busy", "true")
   expect(props.onModelChange).not.toHaveBeenCalled()
-  if (models.length > 0) {
-    const trigger = screen.getByRole("button", { name: "Switch model: gpt-5" })
-    expect(trigger).toBeEnabled()
-    fireEvent.pointerDown(trigger)
-    expect(screen.getByRole("menuitemradio", { name: "gpt-5" })).toHaveAttribute("data-state", "checked")
-  }
+  const trigger = screen.getByRole("button", { name: "Switch model: gpt-5" })
+  expect(trigger).toBeEnabled()
+  fireEvent.pointerDown(trigger)
+  expect(screen.getByRole("menuitemradio", { name: "gpt-5" })).toHaveAttribute("data-state", "checked")
 })
 
 it("requests the resource menu for one typed slash at the caret without replacing the surrounding text", () => {

@@ -1,4 +1,3 @@
-import { mcpReauthorizationRequestSchema, mcpReauthorizationDataSchema, mcpReauthorizationMatches, mcpReauthorizationErrorAllowed, type McpReauthorizationInput, type McpReauthorization } from "./mcp-reauthorization.schema";
 import { mcpPrepareReceiptDataSchema, mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPreparePostErrorAllowed, mcpPrepareReceiptLookupOnly } from "./mcp-prepare-receipt.schema";
 import { parseMcpConnectorJson } from "./mcp-connector-json";
 import { createMcpProjectPublicationClient, type McpProjectPublicationClient } from "./mcp-project-publication-client";
@@ -628,8 +627,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     | "connector"
     | "providers"
     | "provider"
-    | "prepareReceipt"
-    | "reauthorizeServer",
+    | "prepareReceipt",
   path: string,
   schema: T,
   init?: RequestInit,
@@ -741,7 +739,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
         let raw: unknown;
         try {
           const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-          raw = operation === "prepareReceipt" || operation === "reauthorizeServer" ? parseMcpConnectorJson(text) : JSON.parse(text);
+          raw = operation === "prepareReceipt" ? parseMcpConnectorJson(text) : JSON.parse(text);
         } catch (error) {
           throw new HubClientError(
             "parse",
@@ -781,7 +779,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
             : operation === "server"
               ? "connector"
               : operation;
-        const errorAllowed = operation === "reauthorizeServer" ? mcpReauthorizationErrorAllowed(response.status, raw) : operation === "prepareReceipt" ? mcpPrepareReceiptErrorAllowed(response.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(response.status, raw) : authorizationOperation
+        const errorAllowed = operation === "prepareReceipt" ? mcpPrepareReceiptErrorAllowed(response.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(response.status, raw) : authorizationOperation
           ? mcpConnectorErrorAllowed("authorization", response.status, parsed.data)
           : mcpConnectorErrorAllowed(
               connectorOperation as
@@ -1001,7 +999,6 @@ export type HubClient = {
     signal?: AbortSignal,
   ) => Promise<void>;
   getMcpConnector?: (connectorId: string, signal?: AbortSignal) => Promise<McpConnector>;
-  reauthorizePrivateMcpServer?: (serverId: string, input: McpReauthorizationInput, key: string, signal?: AbortSignal) => Promise<McpReauthorization>;
   registerPrivateMcpServer?: (
     input: McpPrivateServerRegistrationInput,
     key: string,
@@ -1252,13 +1249,6 @@ export function createHubClient(): HubClient {
         z.object({ connector: mcpConnectorSchema }).strict(), undefined, signal);
       if (result.connector.connector_id !== id) throw new HubClientError("parse", "MCP connector locator mismatch", null, null);
       return result.connector;
-    },
-    reauthorizePrivateMcpServer: async (serverId, input, key, signal) => {
-      const id = mcpConnectorIdSchema.parse(serverId), body = mcpReauthorizationRequestSchema.parse(input);
-      const result = await requestMcpConnector("reauthorizeServer", `/mcp/servers/${encodeURIComponent(id)}/reauthorize`, mcpReauthorizationDataSchema,
-        { method: "POST", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
-      if (!mcpReauthorizationMatches(result, id, body)) throw new HubClientError("parse", "MCP new authorization ACK binding mismatch", null, null);
-      return result;
     },
     registerPrivateMcpServer: async (input, key, signal) =>
       requestMcpConnector(

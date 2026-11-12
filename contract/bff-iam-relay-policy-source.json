@@ -1,0 +1,7 @@
+{
+  "owner": "kokoro-bff",
+  "owner_commit": "34c9f997a4d86f33be2f815c43cd155ed338fe86",
+  "source_path": "contract/iam-relay-policy.json",
+  "source_sha256": "c88bab0bd1d5529573eee318e50ac2dd41349a03fc84e8b7284416af700a0ebe",
+  "version": "3.0.0"
+}

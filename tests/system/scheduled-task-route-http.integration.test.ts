@@ -1,15 +1,12 @@
 import { createServer, type RequestListener, type Server } from "node:http"
+import { setImmediate as nextTurn } from "node:timers/promises"
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-vi.mock("@/lib/server/product-session", () => ({
-  currentProductSession: vi.fn(async () => ({
-    access: "product-access",
-    accessExpiresAt: Date.now() + 60_000,
-  })),
-}))
 
-import { GET } from "@/app/api/scheduled-tasks/[[...path]]/route"
+
+
+import { GET, POST } from "@/app/api/scheduled-tasks/[[...path]]/route"
 
 type RunningServer = { server: Server; baseUrl: string }
 
@@ -45,7 +42,7 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
       response.writeHead(200, { "content-type": "application/json" })
       response.end(
         JSON.stringify({
-          data: { tasks: [] },
+          data: request.url?.startsWith("/v1/scheduled-tasks/executions") ? { executions: [], next_cursor: null } : { tasks: [] },
           meta: { request_id: "fixture-request" },
         }),
       )
@@ -68,7 +65,7 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
   it("forwards the typed collection path and sealed identity without using browser host", async () => {
     const response = await GET(
       new Request("https://first.example/api/scheduled-tasks", {
-        headers: { host: "first.example" },
+        headers: {cookie: "kokoro-issuer.session_token=fixture",  host: "first.example" },
       }),
       { params: Promise.resolve({ path: [] }) },
     )
@@ -80,11 +77,42 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
     expect(receivedUser).toBe("")
   })
 
+  it("retires a cancelled incoming task body before any BFF request", async () => {
+    receivedPath = ""
+    const controller = new AbortController()
+    let input!: ReadableStreamDefaultController<Uint8Array>
+    let cancellations = 0
+    const body = new ReadableStream<Uint8Array>({
+      start(stream) { input = stream; stream.enqueue(new TextEncoder().encode("{")) },
+      cancel() { cancellations++ },
+    })
+    const init: RequestInit & { duplex: "half" } = {
+      method: "POST", body, signal: controller.signal, duplex: "half",
+      headers: { host: "first.example", origin: "https://first.example", cookie: "kokoro-issuer.session_token=fixture", "content-type": "application/json" },
+    }
+    const result = POST(new Request("https://first.example/api/scheduled-tasks", init), { params: Promise.resolve({ path: [] }) })
+    try {
+      await nextTurn()
+      expect(body.locked).toBe(true)
+      controller.abort()
+      await nextTurn()
+      expect(cancellations).toBe(1)
+      const response = await result
+      expect(response.status).toBe(400)
+      expect(await response.json()).toEqual({ error: "request_body_unreadable" })
+      expect(body.locked).toBe(false)
+      expect(receivedPath).toBe("")
+    } finally {
+      input.error(new Error("fixture cleanup"))
+      await result
+    }
+  })
+
   it("does not cache a valid BFF error envelope even when upstream marks it public", async () => {
     publicError = true
     try {
       const response = await GET(
-        new Request("https://first.example/api/scheduled-tasks", { headers: { host: "first.example" } }),
+        new Request("https://first.example/api/scheduled-tasks", { headers: {cookie: "kokoro-issuer.session_token=fixture",  host: "first.example" } }),
         { params: Promise.resolve({ path: [] }) },
       )
       expect(response.status).toBe(403)
@@ -93,5 +121,20 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
     } finally {
       publicError = false
     }
+  })
+
+  it("forwards only the execution GET with its opaque query and rejects writes or extra execution segments", async () => {
+    const url = "https://first.example/api/scheduled-tasks/executions?project_id=project-a&cursor=opaque%2B%2F%3D"
+    const headers = { cookie: "kokoro-issuer.session_token=fixture", host: "first.example", origin: "https://first.example" }
+    const response = await GET(new Request(url, { headers }), { params: Promise.resolve({ path: ["executions"] }) })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ executions: [], next_cursor: null })
+    expect(receivedPath).toBe("/v1/scheduled-tasks/executions?project_id=project-a&cursor=opaque%2B%2F%3D")
+    receivedPath = ""
+    const write = await POST(new Request(url, { headers, method: "POST" }), { params: Promise.resolve({ path: ["executions"] }) })
+    const extra = await GET(new Request(url, { headers }), { params: Promise.resolve({ path: ["executions", "retry"] }) })
+    expect(write.status).toBe(404)
+    expect(extra.status).toBe(404)
+    expect(receivedPath).toBe("")
   })
 })

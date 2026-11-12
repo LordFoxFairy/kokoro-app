@@ -55,14 +55,16 @@ function requireRequestMeta(envelope: JsonRecord): void {
 }
 
 const baseUrl = requiredEnvironment('KOKORO_API_BASE_URL').replace(/\/$/u, '');
-const apiToken = requiredEnvironment('KOKORO_API_TOKEN');
-const userBearer = requiredEnvironment('KOKORO_USER_BEARER');
+const apiToken = requiredEnvironment('KOKORO_INTERNAL_SECRET');
+const sessionCookie = requiredEnvironment('KOKORO_SESSION_COOKIE');
+const webOrigin = requiredEnvironment('KOKORO_WEB_ORIGIN');
 const sessionId = requiredEnvironment('KOKORO_SESSION_ID');
 
 function serviceHeaders(): Record<string, string> {
   return {
     'x-kokoro-internal-secret': apiToken,
-    authorization: `Bearer ${userBearer}`,
+    cookie: sessionCookie,
+    origin: webOrigin,
     'x-kokoro-service': 'web-bff',
   };
 }

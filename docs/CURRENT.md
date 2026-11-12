@@ -1,178 +1,210 @@
-## 2026-11-03 B-03：技能目录两入口的错误恢复
+## 2026-11-12 · Task B current-main integration candidate
 
-设置的 SkillCatalogDialog 与独立 /app/skills 的 KokoroSkillsSurface 是不同组件，共用原 Manus owner 读取适配。原目录首次/搜索/分类/刷新或分页失败只有sr-only，普通用户看到空白或旧卡片。现两处沿既有本地化Alert显示错误；显式重试只读当前条件，分页保原cursor与已确认卡片，读取主体/代际/取消/迟到围栏和安装命令保持。390px设置提示框的 w-full 加左右margin会被裁，现仅在原catalogFeedback将width设为auto。
+Original PR49 history is preserved by a normal merge of main59d412c9 into d6dd3cd0 in an isolated checkout; normal3310 source/output and the dirty Admin worktree were not touched. Current released Public28.35, native session, strict BFF profile, Task A executions/frequency/time/timezone and current AG-UI/AI SDK body remain authoritative. All22 normal generators ran; canonical/vendor/generated trees equal current main byte-for-byte. Old unpublished29.3, metadata/private-reauthorize consumers, picture direct-IAM read, RSS/runs and retiredOIDC are not activated; their original commits remain history and actual owner publication is a TODO, not a fallback/false success.
 
-设置相关先3失败后通过，最终8项通过/18名称未选；独立广场先4失败/8通过，最终原文件12项全过。主方分别重跑8+12通过，受影响ESLint和最终完整非增量tsc通过，有限独审无确定P0–P2；hix-code-review缺失未冒调用。正常3314后台Playwright对两入口显式注入一次目录读503，观察可见错误、390px、点击重试后原body真实owner200与错误退场，零业务写；设置最终反馈框在父面板内。最后单次恢复设置1855ms/广场2036ms，不冒性能分位或100ms达标。故障是明确浏览器fixture，不当正常owner曾自然503；原首轮漏修广场的失败回执保留。无接口/Schema变化，未重跑无关全仓门，完整B03/Task B和main集成仍未完成。
+API/JSON confirmed creation now retains only safe locator metadata. API opens a fresh exact GET; JSON single-result opens exact Connector+Server reads and multiple results require explicit selection. Unknown keeps original key/body; current identity/window guards reject late handoff, and post-confirmation detail retry never repeats POST. Existing URL/form publication and creation lifecycles remain. Also carries supported connector read recovery, native tab-local return hints and existing account/Skills lifecycle fixes from the original PR; each still needs current native-product evidence before complete Task B acceptance.
 
-## 2026-11-03 B-06：登录失败恢复保留原页面
+Main verification: full ESLint/nonincrementalTS,22 generated checks and production build PASS. Default suite actual result6753 PASS/2 FAIL; failures were two stale UI oracles (retiredRSS triggerKind and hidden shared-package error). Corrected only those test oracles; their two files48 PASS, production inputs unchanged. Earlier rail5 failures similarly aligned trusted admission/no closed-overlay warm/visible failure and recovery with all late/key/body assertions retained; final rail295 PASS. Do not stitch these into a claimed final complete default green run. Full default includes contract/architecture tests; no duplicate whole suite. Independent scoped review CLEAR. Frozen non-document inputs verified around gates; fixture browser tests are preview-only, with no remaining owned fixture process. No new model/financial/sandbox call or normal service restart.
 
-正常原生双标签旅程已复现：退出后私有内容退休、Session匿名及资料401正确，但另一标签进入失败恢复后“重新登录”固定 /login，原 path/query/settings fragment 丢失为 /app。现仅以 tab-local 五分钟导航hint保留白名单目标，失败页不再服务端抢先跳首页；原 GET-only 严格 Session 观察与迟到/取消/次数围栏保持，显式重登重新走原签名 RP return_to，不恢复旧OAuth state或授权身份。存储缺失/非法/过期/不可读回退首页，禁用存储不保证失败恢复深链。
+Current candidate is not full Task B/main delivery. Normal native-auth create→exact detail→refresh and same-identity permissions remain to be exercised on the committed tuple. Source/PR/runtime receipts are owned by Root TODO; payment/E2B/provider boundaries remain explicit.
 
-三原文件回归先14失败/61通过，修复后75通过；受影响ESLint及完整非增量tsc通过，停写有限独审无确定P0–P2，hix-code-review仍缺未冒称调用。正常3314原生登录→两标签→显式退出→issuer确认→另一标签退休/匿名/资料401→失败文档显式重登→完整原目标恢复/资料200→另一标签再准入通过。仅后台Playwright，无Computer Use、模型或业务写；单样本退休约5秒，不冒100ms或p50/p95。无接口/Schema变化，未重跑无关全仓门，未声明完整B06/Task B或可合main。
+## 2026-11-12 · Composer menu and unnecessary startup reads
 
-## 2026-11-03 B-04：正常版本生命周期与历史读取换代
+Composer menus retain Radix anchor/top8px/collision12px and keyboard semantics. Content-sized width, viewport cap, wrapping labels and persistent checked weight replace fixed width/ellipsis; fine/coarse rows are at least36/44px. A confirmed empty model directory is visible; a missing locked explicit model never impersonates another default. Both Composer-only status keys are supplied in nine locales; selection identity, engine/draft/commands, API/schema/dependencies unchanged.
 
-正常3314本人样本完成首次导入安装、v2新包上传/扫描/校验/发布，刷新后原安装仍固定v1；取消升级零写，显式更新同一安装至v2、刷新预览与原上传ZIP摘要一致。随后取消撤回零写、显式撤回v2，历史选择v1精确正文可读；取消恢复零写，原v1 ZIP经既有链发布为新UID/v3，原安装仍是v2。再次显式更新至v3，刷新正文及下载ZIP与原v1逐字一致；最后原生系列删除与安装移除均确认，fresh安装installed=false，测试样本清理完成。原验收器重复“关闭”名称及更新按钮完整无障碍名称误定位均保留，不重发已成功的发布/升级。
+Removed only the closed overlay connector warm effect/imports. Composer still owns its existing limit50/default/restore/chips read; Settings/catalog own their opened lifecycle and existing scoped reuse. Tests explicitly seed/release their own warm fixtures to retain invalidation/pending/late/ACK/identity guarantees, not production prefetch for test convenience. No new cache/store/auth/SDK.
 
-本次修复历史窗口关闭/重新准入/同主体generation换代时旧列表和正文短暂复现：局部读取实例退休私有事实、分页和迟到响应，原未知Restore意图不重建，显式恢复仍保原body/key/CAS。历史行显示真实修订号和本地化完整日期时间。新增回归先3失败；最终history+restore16项通过，Root同范围独立重跑16项通过，定向ESLint、完整非增量tsc及diff检查通过；停写四文件限定独立只读审查无确定P0–P2，缺失的hix-code-review未声称调用。正常桌面及390px可见版本/日期已验，390窗口宽374且无横溢；该截图正文仍在读取，不冒充已加载正文的视觉对照。
+Main frozen acceptance: focused Composer/AppFrame/i18n411 PASS; full ESLint, complete nonincremental TS and production build PASS. New existing-runner preview E2E8 PASS: English/Chinese,1000/320px, fine/coarse,255-character common-prefix labels distinguishable without horizontal clipping,44px touch rows, keyboard selection/Escape and viewport bounds. First E2E run failed4 keyboard assertions because the authored driver did not await Radix async focus; sequential focus assertions fixed the driver, not production behavior. Display-only long-label fixture is not backend evidence. Seventeen source/test inputs remained hash-identical across final gates; adjacent docs added afterward. No full default/contract-generation/architecture suite or full E2E/model/financial/sandbox rerun: no wire/engine/dependency/boundary change; prior broad baseline is not claimed as a current full-suite result.
 
-本轮无接口、Schema、依赖或模型调用变化，未重跑无关全仓contract/architecture/default/build/E2E，不据此声明完整需求合并门通过。原始正常回执与截图留本机ignored，Root有效计划绑定精确版本和验收报告；跨主体/租户、Admin审核/权限、外部入口与完整B04/Task B仍未全部完成。
+Normal native-auth post-build: Context7 Settings read and original short-label menu work;232×88px menu,36px rows,600/400 checked/unchecked,aligned anchor and about8px top gap, Escape returns focus. Real paired local Next dev sample:17 baseline page API reads; candidate raw15 includes one independent session poll, comparable page reads14. Custom API limit100 and eager providers/connectors are gone; required Composer limit50 remains. First Settings open loads all three directories200; close/reopen reused existing scoped results without directory GET in that window. One existing icon404 remains separately recorded by Root, not hidden or fixed here. Models header timing77→38ms is one sample with reduced connection queue, not a p95 or stable speed claim. Task B untouched; Root owns exact source pairing/PR integration.
 
-## 2026-11-03 B-03：技能文件读取失败的可见恢复
+## 2026-11-12 · Skills content-sized actions
 
-正常项目技能验收中，首次 package 读取失败时只呈现空白骨架。现原详情 reader 在没有已确认正文时显示“技能文件暂时不可用”；仅原精确绑定仍有效时开放显式 GET 重试。保留已确认正文的临时读取故障、权限退休、主体/代际/窗口与迟到围栏不变，不重发任何写入，无接口或数据变化。
+Normal native-auth Settings reproduced Browse skills text85.45px outside a72px pointer:fine button. Skills action widths and repeated84/116px Create overrides are removed; embedded search/actions/filters no longer depend on two fixed32px grid rows. Keep the flex axis horizontal while wrapping, so the search width basis cannot become a200px vertical gap. Filters use intrinsic widths instead of breaking the French word Personnel into equal-width slots. Shared Button, callbacks, owner reads/writes and Task B unchanged; existing shared Skills action classes cover the same standalone width defect without adding a second override path.
 
-原初始失败回归先红；完整详情组件 88 项通过，定向 ESLint、完整非增量 TypeScript 与 diff 检查通过。只读独立复核未发现确定 P0–P2；指定 hix-code-review 技能在可用目录中未找到，未声称调用。按局部迭代未重跑完整 owner contract/architecture/default/build/E2E，完整需求合并门仍待。正常后台 Playwright 已完成同一项目安装/默认选择/刷新、精确预览/下载原 ZIP 一致及原生清理；该最终成功没有再次触发读取失败，不冒充正常错误重试验收。此前真实 429 和后续诊断 503 的底层原因仍未确定，未因 UI 提示修复而关闭。项目/账号安装不同，未执行 Run；项目仅已确认原生逻辑释放，不宣称物理对象清理。正常环境与精确组合由 Root 有效计划记录。
+Main: final Skills focused UI101 PASS, affected ESLint/full nonincremental TS/build PASS; final two production/test input hashes unchanged across gates. Existing content-layout E2E initially12 PASS (original Connector six plus Skills Chinese/English/French1000/320). Visual inspection then identified the French filter split; after the one-line intrinsic-size fix and word-height assertion, final Skills six PASS. Connector code/expectations unchanged and not redundantly rerun for that Skills-only refinement. Native English Browse now101.45px for85.45px text, fully contained. Independent review caught the old phone-axis rule before acceptance and final source is CLEAR.
 
-## 2026-11-03 B-14：设置导航键盘方向随实际布局（局部候选）
+Preview browser geometry is not backend integration or complete locale translation QA. No full default/model/financial/sandbox rerun. Skills INDEX/design updated; API/schema/dependencies unchanged. Root pairs the final accepted commit and keeps other owners untouched.
 
-真实桌面导航为 column、Radix 却固定 horizontal，按↓不切换；新增原浏览器旅程先失败。现由原 rail ResizeObserver/reveal 读取实际 CSS 排列，回报同一 Tabs root 的 orientation，不复制媒体断点、不换导航实例。桌面上下键、390px左右键、回桌面选择/焦点通过6.1秒；原更多菜单、可见项、缩放、回焦与侧栏旅程通过11.6秒。候选三个生产文件按原字节校验后覆盖，仍属于有登记SHA的开发overlay，正常3314未切。
+## 2026-11-12 · Screenshot defects and content-sized settings layout
 
-设置组件最终167项通过（69.76秒），受影响ESLint与完整非增量tsc通过，六路径冻结只读审查APPROVE。首跑165过/2失败、隔离1过/1失败的原模型用例在异步目录ready前点击disabled；仅补等待enabled，未放宽断言/时限。首次浏览器观察器错选嵌套tablist、旧auth状态未恢复以及私有setup载入两份Playwright的原失败保留；改观察器范围/原生登录刷新/复用同一安装后通过，未改产品认证。完整owner工程门、全TaskB及Manus视觉对照未据此声明完成。
+Root reproduced both screenshots in the normal native-auth workbench: Browse text126.74px overflowed a fixed86px button despite existing8px gap; Import memory footer was90px (button42px plus48px padding) and painted white against the Settings surface. Scoped CSS now uses content width/container wrapping and preserves search usability; footer is58px on the same desktop, matches the panel background and keeps sticky/flow/long-label behavior. Two undefined class references and unused adjacent selectors removed; no new abstraction, dependency, API, schema or business hook.
 
-## 2026-11-03 B-11：异步登录后首条请求丢失模型偏好（本地候选）
+Main focused UI454 PASS, affected ESLint and complete nonincremental TS PASS. Existing Playwright preview runner:12 PASS, comprising Chinese/English/German desktop1000px and narrow320px text containment/search/keyboard checks plus all original footer reachability/error/focus assertions at1280/876/320 and light/dark. No old assertion removed or narrowed. This is real browser geometry on the existing preview client, not real backend integration or complete translation QA. Normal logged-in English screenshots/geometry also confirmed both fixes. Production build PASS on those six frozen affected inputs. Final Git exit is bound by the accepted owner commit; Root retains exact pairing.
 
-已复现保存模型偏好但首条实际请求 model 缺失：hook 初建时绑定未准入 subject，可信 subject 后续到达时，selection 仍停在原 scope。现沿既有 selectionScope 重读本地偏好，原可信准入、目录校验、代际与撤权围栏不变，不修改发送协议。新增真实 engine 首发回归先失败，修复后 Composer 两文件 84 项通过；仅测试参数 exactOptionalPropertyTypes 修正后新用例再通过。Node22 定向 ESLint 和完整非增量 tsc 通过；完整工程门未重跑，未据此声明可合并。
+No full default/model/financial/sandbox rerun for this CSS slice. Task B same-file additions were read for overlap but not edited or merged; standalone/plaza remain outside the changed Settings rules. Other UI details are not declared finished merely because these two defects passed.
 
-本次真实验证时，候选按原文件字节校验后覆盖这一文件，属于 38d2f6cd 上的未提交开发 overlay，不冒称整个候选与已提交树完全相同。实际 UI 首条已带独立 16K raw label；上游模型一次调用 completed/用量 normalized 且已收到财务 ACK，但后续 Run 终态 internal_error，未形成个人知识成功回答，关闭对照未发送。后继加入财务调用方期限修复的新Run也失败，typed结算依赖unavailable，不能据此完成知识on/off验收。两次自有测试知识均已清理、usage 恢复；正常3314未切换。
+## 2026-11-12 · Workbench SDK projection and visible read recovery
 
-## 2026-11-03 B-08 Public29.3 容量失败消费（候选，未正常激活）
+Live AG-UI mapped text and ordered history now use the same pinned AI SDK text reader. Reducer accepts absolute text snapshots, not raw delta concatenation. The existing transport/adapter waits for adoption before cursor confirmation, terminal reads, EOF/reconnect/error; hydrate/reopen/scope/dispose retire the old reader and queue. Safe activity/interaction/delivery remain separate; no new wire, schema, dependency or fallback transport.
 
-固定正式 BFF1e6765b3230d55fa17d0f6aa989278b97d00f338 的唯一 Public29.3 原件（SHA256 4f27adbea9a63c36d8b11e95c9dde342a6e8d662cab77cb42091384f3b17e333）及同提交分享 projection；十二条原 fullsource recipe 加原分享 recipe 正规 write/check 全通过。strict tuple 仅增加 context_window_exceeded / retryable=false，原两个 true tuple 保留；原 runtime decoder 自然消费生成 tuple。其余八个有变生成文件反投影精确来源元数据后与旧版逐字相同，旧 fixtures/policy3 字节不变。
+Exact Run terminal facts neutralize unresolved historical Skill loading without inventing a Skill result or changing the action/read owner. Funding/permission denial copy covers both causes. The homepage retains its single Composer and adds only visible initial model/connector read status and the existing explicit model retry.
 
-发送前 personal_context_too_large 只提示缩减个人资料/知识后手动重试原请求；已准入的 context_window_exceeded 是终态，说明减少材料后重新发起/重新生成，不给旧冻结Run自动改材料或重发。原 Engine、pending body/key、草稿、Run及知识待接提示未改。有限 test-only inverse 精确恢复29.2全文后进入未改历史 oracle，201有序操作与原200项清单保留。
+Main verification on 57 frozen modified inputs: all default tests **6533 PASS**, full ESLint and nonincremental TypeScript, all pinned generation checks and production build PASS. Default run includes contract/architecture behavior; no duplicate full run. SDK and Composer independent reviews CLEAR. Public product guide Markdown/static build/internal links PASS (61 pages, 20402 internal links).
 
-三项新增风险先RED。首轮六原文件233 PASS/1 FAIL，仅新测试在zh界面用默认en按钮名定位；修正为显式zh断言，未改生产或放宽断言，新增两项复验2 PASS，最终完整UI/原请求恢复两文件67 PASS。另受影响28契约文件190 PASS；首轮中已通过的生成tuple/AGUI/原历史逆证/i18n保持，架构50 PASS；13 recipe write/check、scope ESLint59文件与非增量TypeScript检查均exit0。原失败及准确命令、生成字节证明、文件冻结清单保存于本机Task B证据目录。
+Normal native-auth browser reused the real report and script-delivery histories: original failure, successful body/card and hard refresh restored; old Skill shows Run ended, not Loading. Script history initially hit existing 429 admission limits; two explicit read-only message reloads succeeded after the window, and a subsequent hard refresh restored both original failed content and delivery without a retry command or new model call. The 390×844 homepage has one textarea and no horizontal overflow; Context7 menu/Escape return focus passed. No new backend/model/volume operations were needed for this App slice.
 
-未运行无关全仓default/OIDC/build/E2E；未操作真实浏览器、服务、数据库、模型或Git。正常运行/真实个人材料on-off任务与最终独审由Root接续，不据此宣称B08全目标完成。下方保留历史记录。
+The separate preview `test:e2e` suite was not rerun: the affected normal authenticated UI was exercised directly, while default transport/engine tests cover async text/terminal/cursor retirement. This is scoped App acceptance, not a new full-product or pixel-identical Manus claim. Source commit/PR and exact Root pairing follow integration; Task B and deployment untouched.
 
-## 2026-11-02 团队角色 delete_series 严格消费（候选）
+## 2026-11-12 · Public documentation clarity
 
-消费正式 BFF8ae73fde / Public29.2.0，唯一完整原件 SHA256 df5a33d4fa33662e4f70967bf5db60033f71f29511bf5975aa2395d61abb3e9c。原 Team runtime decoder 仅增加 delete_series；未知动作、权限域、空数组继续拒绝，未改 Team 面板、写请求或权限 owner。十二条 public recipe 与原分享 projection 正规再生，其余生成语义逐字保持；policy3、旧200操作清单与双父 proof 字节不变。test-only 先严格逆回完整29.1，再逆回29.0，随后承接原历史证明。
+The existing `developer-docs/` portal separates external skill-list access from first-party workbench references; product guides stay under feature directories and internal engineering documents remain outside the public build. Removed the obsolete Task Bearer quickstart, generic upload-success claim and undeclared `run.steer` instruction. The original five examples retain their lifecycle behavior with native first-party admission; a sixth covers the public Web skill-list route. Upload and skill-list response fixtures are checked against the pinned schemas.
 
-继承的原角色测试先有2 FAIL/未知动作拒绝1 PASS；本片原 client/同源 adapter 两文件79 PASS，十三条原 recipe write/check、架构50项、定向 ESLint与完整非增量类型检查通过。完整契约首轮486 PASS/7 FAIL均为新逆证的错误说明未沿用既有 drift 分类；仅修正说明，未放宽摘要或旧负控，最终493项通过。日志、逐字生成证明与冻结清单在本机 Task B 证据目录。未重跑默认全套/OIDC/build，未操作浏览器、正常服务或真实依赖；部署和真实角色读取闭环由Root接续，不称B09或Task B整体完成。
+The reference opens with a resource directory and per-tag operation links. All 209 public operations and 446 reachable schemas remain generated from the unchanged 28.35 artifact. No canonical contract, dependency or production runtime changed. The artifact's ordinary-operation authentication metadata still describes historical Bearer admission; the authentication page discloses the difference pending a versioned BFF owner correction, rather than editing generated security claims.
 
-## 2026-11-02 B-10 会话分享读回（候选，待独审与浏览器）
+Validation: portal lint/types, 55 tests, provenance, deterministic generation, six fixture examples, publication boundary, static build and links passed. Root verified real browser navigation, Chinese search with keyboard selection, operation anchors and the mobile sidebar at 390px. The light code-block background now matches Shiki light tokens; dark mode keeps its dark background; both use locked Shiki built-in high-contrast palettes. The sampled quickstart token contrast minima were 4.96 (light) and 8.93 (dark), recorded in the private browser receipt rather than assumed from CSS. Fixtures are not live IAM/API-key deployment acceptance; no product-default suite or deployment was run for this documentation-only slice.
 
-已消费正式BFF2e737cad的具名metadata投影，原Public29历史输入/12生成链/SDK保留。原ShareButton打开、重开与可见focus仅GET；权威空态才可创建，命令ACK不直接当当前链接，创建/撤销后再读。读取失败可见且只GET重试；subject/generation/admitted/session/client/scope/preview变化清旧URL、取消并丢弃迟到响应，旧链接的撤销确认不跨新share ID。预览/测试readShare仅零网络fixture，实际preview分享仍禁用。
+## A‑13 Slack workspace association
 
-新增6项行为原源码全RED（6失败/25未选），最终8个相关文件145项通过；scope ESLint通过。完整非增量TypeScript检查通过；末轮预算fixture只补显式Promise泛型，运行断言及行为不变。旧组件测试为异步GET增加等待，原单全局share替身改按session存储，保原零发布/关闭/迟到/双击/复制/撤销/精确回焦断言，不因红测试删风险。未运行无关全仓contract/default/build/E2E；正式候选浏览器与运行激活由Root负责，不能据此称B10全场景或Task B完成。
+The same Agents dialog offers official Slack authorization in the current tab. Its callback gives the one-time code to BFF through the existing authenticated boundary and redirects to the fixed Agents page. Only the admitted BFF read can show connected; personal disconnect does not uninstall Slack. Public 28.35 is pinned; real Chromium and live-provider evidence are tracked by Root.
 
-## 2026-11-02 B-04 历史恢复说明的语言回读
+## A‑13 LINE account connection
 
-历史版本恢复原有三个文案键只在中文源存在，英文等界面回落为中文。现仅在八个现有非中文 locale 补齐恢复、确认标题与说明，明确保存为新版本且不自动升级安装；中文源、合成机制、生命周期和权限不变。原 resolver 29 项由实现方与主方分别通过，精确 ESLint、非增量 TypeScript 检查通过；主方逐项复核八文件差异，无新增业务契约或运行依赖。语言浏览器回读另行核验，不称全部 Skills 管理权限完成。
+The existing Agents dialog accepts the private bot return only for its signed-in owner, removes the fragment, and requires an explicit approval. The one-time official continuation lives only in memory. Setup reads and disconnect still use the same owner route. BFF Public 28.34 is pinned; real Chromium pairing and provider acceptance are tracked by Root.
 
-## 2026-11-02 B-07 设备列表的可见读取错误
+## A‑10 process files
 
-首次设备读取失败和分页失败现在复用共享 Alert / 原本地化文案显示，分页失败保留已确认会话，显式重读成功后清错。原 hook、身份代际、分页 cursor 与未知移除的核对围栏不变，不自动重放 DELETE，无 API / Schema 变化。新增行为原源码复现 2 失败 / 5 通过；最终设备组件及原 hook 两文件 19 项通过，精确 ESLint、完整非增量 TypeScript 检查与 diff-check 通过；两个实现 / 测试文件冻结后独立只读审查无确定 P0–P2。
+The private Process card opens the existing Canvas Files view. Rows select the original Run and immutable version, even if two outputs have the same path. Preview and download use the same-origin exact-version route; the unused by-path reader and fake file fallback are gone. Web pins BFF Public 28.33 (`5d5b409`). Component, contract and TypeScript checks passed; Root owns the authenticated Worker/Storage browser acceptance.
 
-这是局部修复，未重跑此前无关全仓门，原完整测试失败仍保留；候选浏览器及正式运行源激活尚待核验，不以组件测试声明真实设备服务或 B-07 全部完成。
+## 2026-11-10 · Telegram connection lifecycle (Public 28.32)
 
-## 2026-11-02 已确认退出的跨标签数据退役
+The existing Agents dialog consumes the exact BFF owner. Open reads only;
+explicit start shows the owner link, a private code confirms, and the owner
+state remains after reload until explicit disconnect. Unknown writes are only
+read back. Synthetic Agent connection tickets have been removed. The native
+browser journey and real provider acceptance are tracked in Root.
 
-Product 客户端仅在正式 200/signed_out 或 503/browser_cookie_cleared ACK 后删除原 browser subject hint，唤醒已有 storage → Session 重核；marker 不提供认证。原主体更换、已观察到的 ABA 和 caller AbortSignal 退休旧结果；stale_session、未知或不匹配 ACK 不广播、不导航，无自动重试。存储不可用仍允许已确认退出的受限 issuer handoff。没有新增 HTTP/Schema/登录协议；同主体未产生 marker 变化或尚未交付的事件不被冒称成强 session fencing。
+## 2026-11-10 A‑06 Project website references
 
-真实候选双标签验证了原私有 MCP 卡片在另一标签退出后退场，原缺陷保留的卡片为 1、修复后为 0；此证据仅覆盖 Product 本地退出通知。issuer 原生确认、自动重新登录及刷新竞争恢复仍待完整验收，不能据此称 B-06 完成。正式 ACK fixture 保留原取消与 503 超时/导航断言，未把错误结果改成成功。
+This Project slice was delivered on byte-exact Public 28.31 from BFF `7f10938`.
+Project website references are an owned list with a versioned save. The existing
+Project dialog searches the list and stages additions or removals; Cancel never
+writes. There is no synthetic site catalog, external fetch, or publishing action.
+Root records the authenticated browser evidence separately.
 
-## 2026-11-02 管理入口会话生命周期（局部候选）
+## 2026-11-10 A‑11 creation scene drafts
 
-基于075e的原侧栏账户组件修复管理入口仅挂载读取一次的问题：等现有可信 ProductReadBoundary 准入后读取 `/api/admin-access`；subject/generation/preview 变化立即撤下旧投影，取消旧请求，A-B-A 不复用原授权。正例必须精确当前 user_id、非空tenant、platform_admin=true和内部 `/manage`；仅真实HTTP401报告原 ProductReadRecheck，403/503不冒登录过期。后端/IAM角色与接口没有变化；不声称同一boundary下外部撤权有即时推送。
+An explicit presentation range or website category is part of the same visible,
+editable draft as the rest of the task. The existing template/idea controls retain
+that constraint, and the existing draft store, attachment identities and Chat send
+path are unchanged. A selection that would exceed the current limit leaves the
+draft intact. This is ordinary task creation, not website publication.
 
-新增8项风险回归先6FAIL/2PASS，最终原侧栏与admin-access两文件118PASS；完整回归初次3项失败为新spy继承既有全局mock累计calls，隔离mock后保持所有断言复跑通过。受影响ESLint、完整非增量typecheck和独立只读评审限定通过。未重跑完整contract/default/build/E2E，之前完整门的历史失败不因此消失。
+## 2026-11-10 A‑10 delivered Artifact directories
 
-固定候选真实IAM浏览器验证：admin-access200且当前platform_admin=false，普通账号无后台入口，Escape回账户按钮，390px无横溢；Provider普通目录200真实空表、管理接口403、匿名401。管理员正例仅组件fixture，原Admin源码本机空目录、当前HTTPS与SSH身份均不可读，管理GUI与写入正例仍OPEN；不提升角色或生成假后台。正常3314未切换，此片不关闭B01/B13或TaskB。
+The current Product snapshot is byte-exact Public 28.30 from BFF `0c6be20`.
+The Canvas Files view groups attested virtual paths, keeps versions with the same
+path separate, and leaves old unproven deliveries flat. The same Files/Preview
+control works at narrow widths. The displayed path grants no content access;
+reads still use the existing exact Artifact identity. Undelivered workspace files
+remain a separate product gap. Root records authenticated browser evidence.
 
-## 2026-11-02 Task B：图标真实上传及最终响应隐私
+## 2026-11-10 A‑09 upload cancellation and A‑10 Canvas reopening
 
-基线fe0bb696；只在原Proxy的精确binary GET闭集中加入无query、小写UUID的MCP服务器图标路径，保最终no-referrer，不改变其它路径、方法或生产CSP。真实浏览器先证实Begin200后本地HTTP上传被CSP拦截，按既有development-only精确origin配置恢复；随后真实S3版本PUT、ClamAV扫描Complete、intent回读、保存绑定及刷新卡片同源图片全部200。补验发现Next最终Proxy覆盖route的no-referrer，原最终边界回归先1FAIL/7PASS，再由本片修复。
+Cancel clears an unsubmitted personal selection without POST. After dispatch it
+aborts only the browser wait, retains the File and command key for explicit
+recovery, and prevents a late result from refreshing or replacing a newer
+attempt. No BFF/Storage contract changed. A newer Canvas open intent wins over
+a pending exit timer and its focus callback, including reopening the same
+Artifact. Regular keyboard close and focus return use the existing path.
+Root records the scoped real browser evidence.
 
-限定独审APPROVE；原Proxy、图标adapter真实HTTP及安全头3文件130PASS，scope ESLint与完整typecheck通过。最终真实IAM补验图标bytes SHA、no-store/no-referrer/nosniff通过；另上传新draft后取消200、仅释放新intent、原图标绑定与server版本保持、零server PATCH，390px窄屏通过（补验20.483秒，非性能分位数）。第一轮验收脚本把no-store误当完整header值的失败保留并纠正；不是放宽私密响应要求。未重跑原完整default/contract/build/E2E，本次不改变既有全仓门状态。
+## 2026-11-10 A‑09/A‑10 owner-backed content preview
 
-候选固定Storage4a990617/P2cf63945/BFFe3b5fb75，正式owner安装独立kokoro_storage（九表，邻居326 catalog entries未变），复用受管PG/Redis/MinIO/ClamAV与本次独立版本桶；源码、秘密和运行收据保持各自边界，正常3314未切。此前图标503只代表旧候选阶段，现本次上传/保存/读取/取消子链已实证；Provider OAuth、完整B01/B02及整个Task B仍未关闭。
+Personal Library files, Artifact detail and Canvas Delivery use the same bounded
+content verification and read-only UTF-8 renderer. Personal and Artifact previews
+are explicit; Canvas verifies its exact Asset and source Run before requesting bytes.
+The existing BFF Public 28.29 contract is unchanged. The Web exact Library attachment
+response prevents compression from dropping its verified original length; Project
+download and ordinary traffic are unchanged. Root owns the authenticated browser proof.
 
-## 2026-11-02 Task B：已断开私有 MCP 的新授权（候选）
+## 2026-11-10 A‑09 persistent Artifact commands
 
-基线6cdbb090，正式 Platform2cf63945 / BFFe3b5fb75 私有 profile1.0.0 精确消费，Public29、Prepare/receipt及其它独立 pin 保持。原只读配置新增独立“创建新授权”：Management 冻结原 source/双 CAS/key，未知结果只重发原 POST；严格 ACK 只交新 locator，新窗口必须 fresh exact connector/private-server GET 后显式 Connect。旧身份不复活、旧窗口终身只读，无自动 Prepare/OAuth；既有同 actor RAM 恢复不冒浏览器刷新持久恢复。
+The current Product contract is byte-exact Public 28.29 from BFF `9a0c45c`.
+Artifact favorites reflect the confirmed owner value; the favorite-only URL view
+filters in the owner before pagination. Single-item retirement uses the original
+key on uncertain results and removes only the acknowledged item; stale pages
+cannot restore it. The native Session and existing source navigation are unchanged.
+Root records the authenticated browser/Worker result separately.
 
-真实 RED-v2 复现缺入口（2失败/15通过）；新增关窗/source404负控又发现等待页漏接原命令恢复 status，已修到原 pending 分支。最终固定源8文件744项通过（43.673秒，文件串行、原预算），含原key/body重试、双CAS、重复单击、严格ACK、active/旧身份/错绑定、actor-generation-window退休、source404恢复与fresh GET失败不Prepare。Root按同freeze独立artifact复验原3文件314项通过（10.25秒，输入SHA前后不变），生产freeze33路径独审APPROVE。
+## 2026-11-10 A‑09 Artifact source navigation
 
-固定Node22.22.2/pnpm11.25：完整ESLint、typecheck与生产build通过；新profile正规generator check及10项contract通过。architecture首次49通过/1失败为旧脚本闭集未包含新增正式check，批准后原治理测试仅增5行且保18原项，26项与该文件ESLint通过。完整contract首次485通过/4条原5秒父字节证明超时，原输入195文件逐字等于基线，仍不称完整contract通过；后续全套复跑按Root收窄指令中止(-15)，无预算/断言放宽。完整default/E2E未在本片重跑，原OIDC97未验和历史失败继续保留。
+Public 28.28 (`c9c0782`) can establish the current source Project on the exact
+Artifact detail. The list shortcut reads that detail; the detail dialog reuses
+its matched result. A canonical Project uses the same scoped navigation as the
+rail, while explicit null keeps the direct-chat route. An unconfirmed destination
+never falls back to direct, and retired actor/route reads do not navigate.
+Library list, binary download and favorites are otherwise unchanged.
 
-Root隔离真实IAM页面已完成新授权旅程：真实owner提交后故意丢失首响应，原key/body/双CAS回放同一个新Connector且replayed=true；新窗口exact两GET200后，只有显式点击才发一次DeepWiki Prepare并返回200，成功后原详情按既有流程关闭。新浏览器context、刷新、390px窄屏三次均显示已连接，Escape回焦，补验MCP零写；三旅程共11.060秒，不是接口延迟或性能达标。首两个脚本分别误等已关闭的详情及连接概览中不存在的URL，失败原件保留；后继只读补验修正脚本假设，没有重放业务命令。
+## 2026-11-10 A‑09 personal Library server search
 
-34路径冻结、逐字历史后缀保护、命令/日志SHA及真实截图在本机Task B证据目录。原数据演进归Platform，BFF SQL不变；候选connections GET已恢复200，Storage icon仍503，正常3314不切。当前只关闭本次新授权切片，不称整个B01/B02、完整设置或全产品验收。
+Files use the existing URL filters and same-origin list endpoint with BFF Public 28.27
+(`e52952d`). The server, not the loaded page, filters before pagination. A new filter retires
+old data/cursors immediately; the surrounding actions keep the same owner scope and an
+uncertain deletion can still resume with its original key. The Composer's unfiltered list
+and Artifact search are unchanged. Root records the exact authenticated browser evidence.
 
-## 2026-11-02 Task B：已断开 MCP 配置只读入口（候选，正常源未切换）
+## 2026-11-09 A‑08 最近任务最终答复（未提交候选）
 
-基线 cbef49c9。三个显示过滤入口只为真实 revoked/disabled 且有 server_id 的 MCP 配置保定位卡片；点击仍先 exact connector GET 校验冻结身份/版本，再沿 private-server GET 核本人归属。已确认删除优先，旧 active≤撤销版本及低版本 revoked 不恢复，ACK 不生成配置；返回 active 或错误绑定不得将只读窗口变为命令窗口。原详情只展示保存事实，卡片/详情统一“已断开”并说明仅供查看、重连暂不可用，不误用 availability 或“已停用”；九语言仅新增相关两键。编辑/保存/Prepare/OAuth/启停/删除/发布/试用与恢复命令在 UI 和父回调双拒，执行消费面及公共协议未改。
+基线 `311535e7`。唯一 Public28.25 固定 BFF `8d7892c8`，最近任务复用当前 scope 的私有 snapshot 识别无交付且具有 owner durable 标记的最终答复；只选择 assistant Message ID，不读取正文。草稿恢复与实时／持久正文链保持。真实 native Chromium／BFF／Agent 组合验收归 Root。
 
-实际 RED-v2 为 7 失败/152 通过；修复后三个原 UI 文件 160 项通过，含直接调用父级命令回调零写、Provider/global 排除、精确绑定与撤销版本负控。后继状态语义另有 3 失败/93 通过 RED，修正后同三原文件 160 项通过（25.35 秒），19 文件 scope ESLint 与完整 tsc 通过；首次 tsc 指出新增测试的可选名称类型，改用同一 fixture 必填名称后该原文件 81 项通过，原失败日志保留。
+## 2026-11-09 A-08 Composer 资源选择（Public28.24 历史候选）
 
-Root 独审与最终小差分复核通过；固定 Node22.22.2 重跑原三文件 160 项通过（34.38 秒）、scope ESLint 与生产 build 通过。隔离候选源采用 cbef49c9 加本片停写文件，真实 IAM 登录下桌面、刷新与 390px 窄屏均可回读已断开配置，exact connector/server GET 200，关闭后焦点返回原卡片，MCP 写入请求为零。开发态三次详情旅程约 6–8 秒，不代表性能目标达标；全局 connections 与依赖 Storage 的图标仍 503。正常3314未切换，重新授权与整个 B01/B02 未完成；此前默认全套失败、OIDC readiness 阻点及 preview 与真实 owner 的证据边界继续保留。日志、截图和停写 manifest 存本机 Task B 证据目录。
+基线 `001d901c`；唯一 Public28.24 原件固定 BFF `534ace39`，13 条既有生成链正规配对，资源 decoder 来自 owner schema，删除手写重复定义。现有＋菜单支持本地上传、Library 与最近任务 FINAL；仅提交 opaque refs。Project 新 Conversation 分配后移交原选择；取消/移除不发送，unknown 保留原 File/key 或原 Message 意图。最近任务复用已加载 owner 列表，无产物答案引用与发送前选择硬刷新保持仍 OPEN。
 
-## 2026-11-02 Task B：Public29 正式消费者与既有自动化承接（候选，正常源未切换）
+停写输入上完整 lint、非增量 types、contract/architecture、默认测试与 build 均通过；主控另复验新资源 UI/原 engine 两文件 17 PASS，独审当前最小片 CLEAR。真实 native IAM/Chromium/BFF/Storage/Scanner/Agent Worker 旅程待 Root 精确配对后验收；不把静态门或测试数量当 A-08 产品闭环。各仓沿原 PR，未合并、未部署。
 
-正式输入固定 BFF7e4ab1cee8f8d45a34902176cd15a10f3c4b22cb 的 Public29.0.0 / SHA258bde9c39f785667cb205976e1547d1cf2c9662a5a2d7f356c4b11e807fcaf7；12public入口正规生成，另5private/profile入口保持原固定来源。test-only有限inverse先验证完整200有序操作和新原件，再恢复approved28.17及RSS20两父完整字节，旧父链原oracle不重签，测试不导入owner SQL。
+## A‑03：发送但不中断（App 候选）
 
-沿既有正常1f700功能逐文件承接 calendar/RSS 定义、编辑/取消/unknown、详情回读、列表/日历分流及运行记录同源GET/分页/取消/主体代际边界。首页workflow只补既有导航/空态/header选择，不触A engine/Run/display。项目preview沿旧normal的calendar-only显式拒绝保护，UI仍只有日历；原localStorage日历缺triggerKind时在本地读时补判别并经现guard，读不写storage、不猜RSS或poll事实，真实owner请求仍严格显式trigger_kind。
+固定 BFF #18 `99f946e` Public 28.22 公开原件。现真实设置选择同 Run 补充，默认发送继续显示队列，不把排队称为插话；预览不生效。浏览器同源 control 对精确 scope、202、原 Run/key 和 canonical Message 做严格验证；现会话快照承接已接纳消息。明确未接纳可恢复原稿，终态未确认不引导重发。定向 transport、设置和输入按钮通过；浏览器丢回执、同一 Run 真实 Worker／最终组合由 Root 另验。
 
-当前正式contract17check及49文件479项通过（76.57秒），architecture50项通过，typecheck通过；最终相关功能13文件321项通过（91.60秒）、现真实Node HTTP契约fixture另2项通过（1.97秒），最终完整ESLint通过（88.36秒）。后继完整default/build/E2E统一门由Root收口。相关迭代首次缺trigger_kind/RSS分支两条业务RED与旧preview隐藏一条RED均保留。首轮Vite将JSON newURL改成HTTP资产导致fixture读取失败、历史父链误进29桥、旧calendar-only断言、初次冷模块导入超5秒及旧空态入口测试假设等已逐项更正；没有增加timeout、删原风险或改历史hash。实际入口test模块改静态加载，项目/首页workflow行为已通过；preview25项绿，保零feed网络与不造poll事实。
+## A‑03：打断并发送（App 候选）
 
-本片是候选组件/同源替身与契约验收，Root另在独立候选端口做真实owner浏览器验收。正常3314未由本writer修改；此前全量default22个既有UI失败和OIDC前置失败的历史证据继续保留，不以本片局部绿冒整个Task B或全量交付完成。
+Public 28.21 固定已推 BFF `2cf1c14` 原件。对话设置默认排队；所选打断只对当前已启动 Run 生效，未启动时继续排队。现有发送记录冻结目标 Run 和原键，恢复不换目标、不新增控制 POST；BFF 明确拒绝后可把原文恢复到空闲输入框，不覆盖新草稿。仍不声称支持不中断地向原 Run 注入。定向引擎、草稿和设置通过；原生真 Worker 组合由 Root 另验。
 
-Root后继复核：139全路径/77生产与生成物停写SHA相同，独审无确定P0–P2；正式canonical与owner原blob相同，五独立源未漂移。Root相关九文件232项通过（24.95秒），正式build通过。本轮完整默认实际为374文件、6973通过/48失败/181跳过（400.99秒）；当时Root只提供TEST_REDIS而漏WEB_REDIS，6文件随后同时指定受管测试Redis正式串行复验130项全部通过（133.90秒），含真实HTTP边界。原失败保留，不将补环境复验改写为首轮全绿。其余UI/视觉/展示失败及OIDC97前置仍各自核验，不把全部失败统称既有，不把跳过冒通过；PR继续Draft，最终Public29候选浏览器由Root继续。
+## A‑03：运行中排队与原回执恢复（候选）
 
-后继原16项UI失败按正式交互迁移：合法非空导入ACK、创建后exact GET详情、分域可见错误与仅失败GET重试；保缓存/主体/代际/迟到/清稿/不重放/CAS断言，另补非法空ACK未知原key/body重试负控及保missing无重试负控。两原UI文件writer与Root独立复验各303通过，生产未改，三测试文件scoped ESLint与完整tsc通过。OIDC只补有限脱敏失败诊断，原55/60/5秒预算与断言不变；一次诊断实跑仍前置失败，/app9轮无headers/0bytes、97项未验。Next成功本来不打印Compiled，不能仅凭最后Compiling断定编译未结束。当前Public29生产源的桌面/手机preview E2E120项通过（5.0分钟），不代表真实owner全链或全default已绿。
+现有 FIFO 和首发共用一个按会话绑定的未决提交记录；保存失败不 POST，刷新不重发，显式重试沿原请求。等待期间不覆盖下一份草稿，不动当前 Run 的进度、审批或 SSE。断流重连可吸收已知回执；页面切换后旧按钮不发送。无 BFF / IAM / Schema 或 OpenAPI 变更。已有引擎、审批与失败定向通过；真实原生验收由 Root 固定候选后记录。此项不等于已支持运行中注入或打断并发送。
 
-Root独立MCP/API候选（8f607+原7个详情冻结生产路径，尚非完整Public29源）已实际新OIDC登录/授权/回跳，真实IAM→BFF→Platform链的API创建201、修改/详情/列表200、取消不写、刷新保留、删除200及刷新空列表通过；保存密钥不回显。私有HTTP MCP实际公开服务声明创建201、Prepare200后已连接，修改/刷新保持新名称与状态。断开连接后DELETE200/列表GET200为空，已证配置恢复入口缺口，另沿owner撤权事实收敛，不以这些成功冒整个B01/B02完成。受管Redis复用且正常源未改；Storage图标、SMTP、其它未配置owner和外部OAuth/E2B末端不算已接通。开发服务并发检查下的少量耗时样本保留为观察，不冒生产SLO或100毫秒目标达标。
+## A‑07：Project Todo（源码候选，待原生浏览器验收）
 
-Root后继已启动精确629ac5db archive候选，原1545输入摘要一致、仅替换自有候选Web组。真实IAM独立context复验MCP设置、scheduled-tasks GET200及确认空态、RSS表单打开；无自动化业务写入。断开后的同源server/connector精确GET均200，server registered、connector revoked且enabled=false，现已真实证保存配置存在而入口不可达；不得把旧授权直接复活。正常3314及其服务/数据仍未切换。
+本候选从已推 BFF `846821ae1b46f66663669d20fd5340bb7fa58b87` 的 Public 28.20 原始 Git blob 正规生成 Project Task 类型／校验（无第二 fetch SDK），保持旧父链精确逆证。Project Overview 接手动待办；同源只保 Hub 唯一入口，强版本条件和原键恢复。BFF 真 PG/Nest、App 定向与生成检查已过；原生浏览器、最终组合与 A/B 实际登记尚待，不提前闭环。
 
-## 2026-11-02 Task B：精确详情读取失败恢复（候选，正常源未切换）
+## T‑09 当前消费者候选（2026-11-04）
 
-API / Provider / private MCP exact GET 失败现就近可见，并只显式重读失败 reader；创建 handoff 禁用列表读的原边界保持，成功创建不冒详情已就绪。原按钮等待中禁用、失败保原焦点所有权，用户已移焦不抢回；同 scope 同步去重，窗口/主体/准入代/修订退休后迟到不更新新窗。API 当前 typed401 补接现 ProductReadRecheck，命令 Create / Save / Prepare、unknown 原 key/body 均不重放。
+Public 28.19 唯一快照逐字固定 BFF `d166a51`，只新增 `context_window_exceeded / false`。现有 AG‑UI、快照与失败卡承接；保留正文且不出现重发动作。12 个既有生成入口、定向与 `pnpm check` 通过。正式跨仓浏览器和发布配对仍待。
 
-先保留原生产码3条业务 RED（另有误用Node26导致localStorage环境失败，未冒产品RED），最终相关6文件211 PASS；完整 ESLint、typecheck与diff-check通过。旧 Provider 隐藏错误/无重试断言按可见精确 GET 恢复迁移，原 drift/撤权/分页风险不删；icon Save 仍只create/Done各一次，改验 fresh详情后显式关闭。保存失败恢复仍验证 secrets清退、CAS及原body/key，重试不多发Save。记录 `B01-exact-detail-read-{red,focused-v1,focused-v2,focused-v3,lint,types}.log`。
+## I24 原生退出上游 JSON 规范化（2026-11-01，本地候选，待真实复验）
 
-本片纯组件/替身验收不代表正常IAM或真实owner浏览器闭环；未为此小片重跑全套。Root将在Public29正式消费者配对后统一独审及完整门，现3314正常源未更新，本条不声称整个B-01或Task B完成。
+Root 在精确 App `1d54`／Root `325d` 组合实测：冷登录 303、session/project 200，但实际 App sign-out 415，旧 cookie replay 仍 200；原 minimal 四检查及 cleanup 通过未覆盖此缺口。首轮零字节上游修补只证明 transport 接受请求，不证明 IAM 接受媒体类型；其工程门与 RED 记录在下方保留历史。本轮依据锁定 IAM HTTP parser 及既有 owner 退出测试，浏览器入站仍严格零体，adapter 独自构造固定 `Content-Type: application/json` 与 UTF-8 `{}`，上游 `maxRequestBytes` 精确为 2。既不透传浏览器 body/Content-Type，也不放宽 transport、IAM 或原 Origin/cookie/取消规则，无新协议/helper。
 
-## 2026-11-01 B-14 Manifest 客户端总期限（候选，未正常激活）
+原两 loopback 用例现按 owner 媒体类型与精确两字节正文接受请求，错误分别返回 415/400：旧实现实测 2 失败／17 原例通过，均为 415／上游请求 1。修正后 Node22.23.4 定向 5 文件 204 通过／0 跳过，包含新增非空浏览器 `{}`、异 Origin、重复 issuer cookie、预取消四例零上游负控及原 Product auth/Settings 回归；定向 ESLint、`pnpm typecheck` 通过。loopback 不是实际 IAM 撤销证明，真实 App logout/旧 cookie replay、异 tenant 恢复及独立撤权仍交 Root。未运行完整 check、业务服务、PG/Redis、浏览器或 Git 操作。
 
-原hook缺client总期限且一律忽略AbortError，确定性RTL假时钟新增用例在原source复现6条业务失败（共30条，原风险正控24通过）；不是collection错误或正常pending根因结论。现原scope内单一20秒绝对预算覆盖fetch/body，超时退休/abort并source:error、清retrying；精确截止复核、显式GET retry、成功/cleanup清timer与外来AbortError区分均由原hook测试承接。theme/locale/空导航/preview与原SET31生命周期不变，无新wire/pin/owner或正常3314改动。
+Root JSON规范化验收：独审CLEAR，Node22.23.4完整pnpm check exit0，contract452/architecture50/full354files6407pass/0skip、lint/types/build；1494输入hash保持。真实退出与旧cookie重放待精确组合复验，不以此静态门覆盖上轮415。
 
-首轮30 PASS（2.34秒），最终相关4文件57 PASS（9.78秒，0跳过），精确ESLint与官方 `pnpm typecheck`均0；输入manifest、原source摘要及RED/GREEN日志存本轮本机测试证据目录。独审/完整工程门和最终交付由Root接续；不称真实System服务、正常配置503或历史持续pending已经解决。
+## I24 首轮空体传输修补（2026-11-01，历史候选；已由后续真实 415 证据纠正）
 
-Root交付复核（2026-11-02）：7文件候选独审无确定P0–P2，Root相关57项通过；正式contract、architecture、lint、typecheck、build与桌面/手机预览E2E120项通过。完整test首轮仍红：13文件45失败/6745通过/189前置阻断；当时漏配Redis的QA环境错误保留，正确受管测试DB复验6文件130通过，但OIDC97项仍因/app编译就绪前置失败而未执行，单独复验亦失败，根因未定。5个纯UI文件候选与HEAD同条件均22失败/361通过，失败集合完全相同；已知3项视觉差异保留，未删断言或扩大超时。恢复Next dev自动生成路径噪声，不提交该生成变更。原失败日志与对照证据均保留，PR维持Draft；上述结果不称全量通过、正常3314已激活或整个Task B完成。
+基线 App `727cd674`；Root 已在精确 Root `4fdb2ede` 组合实测空 Chromium context 的冷登录表单 303、session/project 200，无 cookie 注入，此证据不代替退出或撤权。退出旧 route 以 POST 调既有 relay 时未传 body，真实 transport 按现约束拒绝；原 route mock 未覆盖这条接缝。新增现 transport 套件 loopback 两例分别覆盖实际 client 无 body 和确认 form 空 urlencoded：修复前均 503／零上游请求，原 17 例通过；生产仅补 `body: new Uint8Array(0)`，保零字节 wire、原 Origin/Host/cookie/body/取消规则，不放宽 transport、不增加协议或 helper。
 
-后继状态（2026-11-01 B-06）：已恢复明确断线的显式重连，旧孤立类型断言由当前安全活动回归承接；完整 lint/typecheck/build 已通过，下文更早阶段的类型/build 阻断为当时记录。Root 冻结后重跑完整 engine 与核心/UI风险23文件517项通过（14.33秒），独立审查无确定 P0–P2；writer另有25文件542项通过，范围分开记录。正常运行源尚未切换，整个 B-06 仍待完整身份旅程。
+Node22.23.4 定向 5 文件 200 通过／0 跳过，含现 IAM route、native session route、Product auth client 与 Settings modal 回归；定向 ESLint 和 `pnpm typecheck` 通过。loopback 验证 POST 实际到达、body 为零、issuer cookie 过滤与删除 cookie 透传，不冒称真实 IAM session 已撤销。未执行完整 check、业务服务、PG/Redis、浏览器或 Git 操作；Root 完整门、真实 App logout、异 tenant 恢复及独立 session/membership 撤权仍待。
 
-## 2026-11-01 Task B：局部读取错误与显式 GET 恢复（已独审候选，未激活正常源）
+Root验收：独审CLEAR，Node22.23.4完整pnpm check exit0；contract452、architecture50、full354files/6403pass/0skip，lint/types/build通过，1494输入前后hash一致。真实App退出和旧cookie重放在精确组合提交后另验，不以loopback替代IAM撤销。
 
-Root 最终复验八文件 90 项通过（11.37 秒），独立审查原焦点 P2 已关闭，无新增确定 P0–P2。首次 Root 复验 89 通过/1 个 hydrated fixture 挂载超时保留；后续受控诊断证实不同 Vite fixture 争用默认优化缓存可使模块返回504，但没有原失败资源日志，不能据此确认该次根因。现浏览器 fixture 使用独有临时 cacheDir，创建/关闭失败亦在 finally 回收自身目录，保留错误诊断、全部断言和原40秒门禁，隔离后 writer 与 Root 各一轮90项通过。不将测试环境修复写成生产登录问题已解决。
+## T-05 冷登录固定 tenant 接线（2026-11-01，本地候选，待 Root 真实验收）
 
-独审发现 Provider 目录/关系显式 retry 清除 error 后使反馈卸载、失败新按钮丢失原键盘焦点。4 条具名 RED 后增加 scope 绑定的 retrying 与实际 settlement，沿原共享 scan/request/401 边界保留同按钮 pending；失败只在焦点所有权未被用户交出时恢复。另补真实 coordinator/目录弹窗接线及用户已移焦后不抢焦负控。390/1280 实际组件静态 DOM 加生产 CSS 均无横向溢出，原生 Tab 可达可用按钮、跳过 disabled；截图明确不是 React 事件、正常运行源或真实 owner 旅程。
+基线 App `9ba653433c75dd3919bcc3de3cafc778fda4b975`。Root 空 Chromium context 经真实登录表单收到 303 后 `/api/auth/session` 与项目读取仍 401；签入新 IAM session 缺 activeOrganizationId，既有提前 set-active fixture 掩盖缺口。本片仅现 sign-in route 顺序补固定 `KOKORO_TENANT_ID` set-active 和既有在线 admission，三阶段共 5 秒预算；准入成功才进入产品，失败不写新 issuer cookie、不破坏旧会话、不重发密码，退休本次 flow/CSRF。新未交付 session 由 IAM TTL 回收。配置词法沿 native admission 固定 tenant credential，保持 opaque ID，不限定 UUID。详见本仓技术设计 T-05 小节。
 
-最终8文件90 PASS，涵盖前述行为及独立 hydrated Chromium：确认原生 disabled 会把焦点移到 BODY，失败后未移焦的原按钮恢复；输入框移焦后 blur、其它处指针点击、Tab 均不抢焦。仅实际反馈组件事件，不代表正常 App/owner 旅程；自有随机 localhost Vite 和浏览器在 finally 回收。完整 ESLint（浏览器测试前）与新增文件精确 ESLint 均0；最终 typecheck 仍仅 A 区原3条诊断，未跨区修改。证据 `B01-read-focus-{red,complete,complete-lint,complete-types,browser}.log`、`mcp-read-retry-hydrated-chromium.json` 与两张 `mcp-read-feedback-static-*.png`，没有修改门禁或阈值。
+定向 RED 17 失败/3 原安全行为通过；补合并 header 超限负控另见 1 失败。Node22.23.4 定向 4 文件 55 通过（0 跳过），`pnpm typecheck` 与定向 ESLint 通过。首次 typecheck 捕获新增测试的 exact optional signal 与参数化数组形状问题，已修正并重跑；原失败记录保留。最终停写结果由本轮交付记录绑定文件哈希；无服务/PG/Redis/浏览器/Git 操作，没有执行完整 check。Root 负责完整门和真实四旅程；此候选不代表 T-05 或 C-1.3 全部完成。
 
-连接器设置/广场与目录弹窗现在就近显示 API、连接器页、Provider 目录和关系的实际读取错误，按钮分别进入现有 reader 的 GET；保留已知卡片，当前未知/失败不再沿旧空状态显示全空或无匹配。API 尾页继续使用原 cursor，重复 cursor 停止后提供显式首页重读；非 all 分类不受无关 API 错误影响。没有重发创建、Prepare、连接或其它写命令，没有新增协议/存储/登录 owner。
+Root接收：独立规格/质量审查CLEAR；Node22.23.4/pnpm11.25.0完整`pnpm check` exit0，contract452、architecture50、full354文件6401pass/0skip、lint/types/build通过；1494tracked输入前后hash一致。未运行默认preview Playwright作为认证证据，真实冷登录GREEN和四旅程仍待精确组合验证。
 
-API 与 MCP projection 的本地 owner/attempt 围栏同步阻止重击，原 promise settlement 释放匹配 attempt；换主体、准入代际或请求寿命后不让旧回执改写新状态。初始4条行为 RED 保留，最终5文件81 PASS（包括 Provider401原回归）；新增 connector 重试再失败解锁与 API 重试后主体/代际迟到负控均通过。精确 ESLint 与 diff-check 通过；完整 typecheck 仍仅 A 区原有两处3条诊断（onReconnect、legacySteps、step 隐式 any），没有修改 A 展示区。
+## T-07 Public28.18 provenance修复（2026-11-01，本地工程门通过，待Root集成）
 
-首次新增测试误用旧按钮文案、一次命令 glob 无对应路径退出，均保留日志并更正为现有合法文案/具名文件；未改产品文案、门禁或行为断言凑绿。证据 `B01-read-red.log`、`B01-read-resumed-focused-v3.log`、`B01-read-resumed-lint.log`、`B01-read-resumed-types.log`。独立审查、全门及正常浏览器/窄屏对照由 Root 接续，不把组件验证当真实 IAM/正常页面验收。
+基线App `f5d122bb41beb3e141015b758411dbcc0afc583b`。此前账户资料切片已把唯一完整snapshot更新到BFF `091cd5022cf517d243a6390b933f9dded7e3b4a9`／Public28.18.0，却遗漏其余11条public生成链与current pin assertions；本轮只同步这些来源，12个原generator均执行 `--write`，实际7份generated仅provenance变化。snapshot SHA256 `35a86f91e44beb1aeb6b17eca41d3bfdc79f11a43633662113a1778b4fab6082` 与owner Git blob逐字一致且本轮未改。独立private artifacts、download policy3及policy_owner_commit保持；无运行时、依赖、Schema或服务变化。
 
-## 2026-11-01 Task B：API / JSON 创建详情（候选，未激活正常源）
+新test-only inverse先核完整28.18 child SHA，仅逆账户资料GET、AccountProfileReadResponse和版本，再核完整28.17 parent SHA `ea0031103488daa1fcc0cca45fdd13f4d4061546ac4525c745ec47105649f7e7`；旧父链只有链首委派，历史hash／逆差逻辑不改。回归证明200→199操作原顺序、原PATCH保持，并拒绝新增GET/schema、旧PATCH、无关操作、版本及额外字节漂移。四处当前版本负控改为真实28.18→28.19，不把no-op替换算作负控；无第二snapshot或运行时降级。
 
-API 创建成功后以唯一 profileId 进入现 exact GET 详情；JSON 单项进入 exact connector/server 详情，多项按原 ACK 顺序列出全部结果，由用户明确选择，同名展示各自 connectorId。详情返回结果列表并恢复原项焦点，API 关闭或已确认删除结束父窗口。创建/导入 ACK 不作为详情、版本或已连接事实，不新增 Prepare、POST、持久化或网络契约。
-
-原命令在 actor RAM 中只追加安全 locator 完成投影；原 key/body 与 unknown 显式重试保持，换 actor 退役、同 actor 新代仅保 locator，旧事实重新读取。form 在 finish 前捕获完成 locator，回调前后检查窗口；回调失败只重试 UI，不重新创建；ACK 清除实际凭据/JSON 草稿。undefined/空 imports 不兼容为成功，既有模拟成功夹具已改成严格合法 receipt，并保原取消/迟到/原请求风险断言。
-
-具名 RED 5 FAIL 后新增 locator / 实际组件行为与既有命令、JSON 表单、API 广场、详情交接共6文件130 PASS，Root 停写后同6文件重跑130 PASS；完整 ESLint 与 diff-check 0，独立只读审查无确定 P0–P2。契约444 PASS/1既有生成器5秒超时，原文件单跑23 PASS，未放宽门禁。全量 typecheck 仍只有已知 A 区两处（3条诊断）：AppFrame 的 onReconnect 多余 prop、Segment.legacySteps 及其隐式 any；正式 build 编译成功但被前者类型错误阻断，不能合并或称构建成功。本片测试 fixture 的 exact-optional / ACK transport 类型问题已修，没有跨写区改 A。首次新 Dialog 测试的旧按钮文案假设已纠正，未改变产品按钮文案。证据在 `B01-create-*.log`；正常浏览器/owner旅程仍待配对，不据这130项声称 B-01 已完成或正常3314已更新。
-
-## 2026-11-01 Task B：Provider 读取会话恢复（候选）
-
-目录筛选/续页、独立 Provider 详情和连接关系尾页的当前 typed HTTP401 现接已有 ProductReadRecheck，原 subject/generation/signal 不变；旧主体/代际/已取消/卸载迟到不报告。403、依赖、parse/network 保原失败，GET 由重新准入重读，创建/授权/Prepare 不重放。新增28行为回归先4真实RED，再与原相关/Session/配置保存6文件257通过；独立只读审查未发现确定P0–P2，未冒称缺失的hix-code-review已调用。新测试类型错误已修，定向ESLint及diff-check通过。
-
-扩大MCP/API回归50文件885通过/3失败，失败均在未修改的视觉夹具：本机滚动条导致输入宽545而参考560，两个按钮宽差1.0703125超旧1px阈值；原视觉文件单跑同3失败，保留断言和日志，不改阈值凑绿。完整contract445、architecture50通过；全量lint另记。typecheck仍有当前HEAD既有AppFrameConnectionStatus的onReconnect多余prop与Segment.legacySteps两处展示错误；本片不跨A展示写区修复。正常IAM自然过期/浏览器尚未补证，3314仍旧运行源，不称本候选已激活或B-01完成。
+Node22.23.4实际验证：先focused3文件4失败／12通过，定位pin/父链失配；新7回归先全部失败，再focused4文件23通过。最终 `pnpm contract` 48文件452通过、`pnpm test:architecture` 4文件50通过、`pnpm typecheck`、`pnpm lint`、`pnpm test` 354文件6373通过／0跳过、`pnpm build` 与 `git diff --check` 均exit0。default保留原jsdom navigation提示，不影响退出结果。未注入或启动PG/Redis，未运行独立Playwright／正常页面与真实owner组合；这些由Root另行验收。Root已在同一56路径冻结基线上以Node22.23.4/pnpm11.25.0重跑完整pnpm check，contract452、architecture50、full6373及lint/typecheck/build均exit0，前后SHA无漂移；本候选沿独立Task A分支/PR交付，未合并main，Root组合与真实旅程仍待，不将本轮静态契约治理门当作正常产品验收；下方版本及运行记录保留历史语境。
 
 ## 2026-10-29 连接器菜单固定列表优先（正常页面已验）
 
@@ -3766,15 +3798,3 @@ App36dacf0基线私有详情/配置只有Prepare，创建窗关闭后needs_oauth
 原切片同一冻结的相关108、lint/types/build、契约和架构已通过；正常授权版本旅程与 main 集成预览分别保留证据。此次 main 原有六套相关测试91 PASS；集成后定向7套108 PASS、七项生成检查、lint、typegen/types、webpack build/post-types通过，独立桌面／移动预览2 PASS并回收自有预览进程。
 
 完整门早先两轮均4450 PASS／1 FAIL／0SKIP，在 pending refresh GET 预期409处收到Next HTML500／JSON解析异常；空manifest观察没有捕获相应空读取，原因仍未查明。只新增5行失败分支元数据诊断，409成功路径无新增IO，不改断言、超时、重试或skip。随后同Node22／4GiB／2workers的无observer配对完整运行：原 main 232文件／4434 PASS，候选233文件／4451 PASS，均0FAIL／0SKIP。1051份冻结输入中只有上述诊断测试改变，生产输入无漂移；只读最终审查通过。独立 Skills UI 切片可以进入PR收尾，但这些通过不证明间歇500已修复，也不等于正常服务、历史／替换／删除、Admin和外部身份映射已闭环。
-## 2026-11-01 B-06：已确认断线的显式恢复（候选，未激活正常源）
-
-恢复状态组件必填 `onReconnect`，直接消费既有 AppFrame→engine.reconnect 回调。仅 unavailable 显示原语义样式/本地化状态与 type=button 的“重新连接”；暂时 reconnecting 仍 sr-only、不新增按钮，connected 沿原父级卸载。不显示 raw reason，不将连接中断伪作 Run 失败，不改 engine、Run/control、wire、renderer 或其它展示。
-
-原 `Segment.legacySteps` 断言与未落地旧设计不一致，沿当前正式单轨 activity 迁移；原 segment 首次出现顺序、thinking 拼接及 tool 身份断言保留。新增 typed tool→subagent→tool 混排、状态更新保持原序、groupSegments 不改输入验证。先保留2文件5 FAIL/25 PASS 基线，再恢复相关UI/core与原 snapshot-first、active 身份、提交不重发及未知提交恢复回归，首轮9文件243 PASS，完整 typecheck 与 ESLint 均0。完整 engine 与 build 另记最终结果，不以该窄修关闭整个 B-06 或声明正常运行源已更新。
-
-最终完整 engine 目录加相关UI/core共25文件542 PASS（35.89秒），完整 ESLint/typecheck/build 均exit0，原两处3条类型阻断由本窄修消除；Turbopack编译29.4秒，随后类型及页面构建均成功。证据 `B06-read-recover-{red,focused,engine-full,lint,types,build}.log`。仅状态组件与测试/INDEX/CURRENT五文件；未改变引擎、接口、正常服务或重放写命令，独立审查和正常页面配对由Root接续。
-## 2026-11-03 B-07 账户头像读取局部修复
-
-原 IAM 锁定 oauth-provider 1.7.3 已将 `user.image` 作为 `profile` scope 的标准 `picture` 发布，Web 的白名单先前丢弃该字段。本次沿原本人资料同源读取补可选 HTTPS 图片，保姓名 CAS 与主体/准入代退休；非法/无图片或加载失败回落首字母。只在浏览器匿名且无 referrer 加载，不新增服务端 URL 请求、上传、scope、表或 owner API。
-
-新增回归先红（2 失败/73 通过），修复后原 adapter/client/AccountCard 三文件 100 项通过；定向 ESLint 和完整非增量 tsc 通过。后台 headless Playwright 验证当前原生登录资料 GET200（该 QA 账号无 picture），并以明确的浏览器 fixture 验证图片实际加载、匿名/no-referrer、失败 fallback、390px 无横溢；账户写请求为零。fixture 成功不是该账号真实头像或上传成功，尚未声称整个账户、全部设置或全 Task B 完成。候选 60256 是四文件开发 overlay，正常 3314/main 未切换；审查和最终 SHA 由 Root 交付记录绑定。
