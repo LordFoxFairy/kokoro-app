@@ -1,3 +1,7 @@
+## 操作区按内容排版
+
+Skills池的Browse／Create共享动作类不再锁72／84／116px，嵌入设置也不锁两行32px；搜索保可用宽度，动作自然增高／换行，范围筛选独立占一行并按文案宽度分配。窄屏不再改变toolbar主轴或强制等宽拆单词；长文案超过单行容器才自然折行。不改共享Button／业务hook／创建或导入协议。正常英文测量与代表语言的浏览器范围见CURRENT，不冒全部翻译完整或全站视觉验收。
+
 ## Project Skill 精确内容消费者
 
 `ManusSkillDetailDialog` 的 Project installation variant 只读当前 Project 的 metadata／package／download；resource identity 含 Project 与安装 pin，沿原 actor/generation/abort 围栏，不暴露个人写动作、分享或试用。

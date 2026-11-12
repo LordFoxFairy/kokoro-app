@@ -1,3 +1,11 @@
+## 2026-11-12 · Skills content-sized actions
+
+Normal native-auth Settings reproduced Browse skills text85.45px outside a72px pointer:fine button. Skills action widths and repeated84/116px Create overrides are removed; embedded search/actions/filters no longer depend on two fixed32px grid rows. Keep the flex axis horizontal while wrapping, so the search width basis cannot become a200px vertical gap. Filters use intrinsic widths instead of breaking the French word Personnel into equal-width slots. Shared Button, callbacks, owner reads/writes and Task B unchanged; existing shared Skills action classes cover the same standalone width defect without adding a second override path.
+
+Main: final Skills focused UI101 PASS, affected ESLint/full nonincremental TS/build PASS; final two production/test input hashes unchanged across gates. Existing content-layout E2E initially12 PASS (original Connector six plus Skills Chinese/English/French1000/320). Visual inspection then identified the French filter split; after the one-line intrinsic-size fix and word-height assertion, final Skills six PASS. Connector code/expectations unchanged and not redundantly rerun for that Skills-only refinement. Native English Browse now101.45px for85.45px text, fully contained. Independent review caught the old phone-axis rule before acceptance and final source is CLEAR.
+
+Preview browser geometry is not backend integration or complete locale translation QA. No full default/model/financial/sandbox rerun. Skills INDEX/design updated; API/schema/dependencies unchanged. Root pairs the final accepted commit and keeps other owners untouched.
+
 ## 2026-11-12 · Screenshot defects and content-sized settings layout
 
 Root reproduced both screenshots in the normal native-auth workbench: Browse text126.74px overflowed a fixed86px button despite existing8px gap; Import memory footer was90px (button42px plus48px padding) and painted white against the Settings surface. Scoped CSS now uses content width/container wrapping and preserves search usability; footer is58px on the same desktop, matches the panel background and keeps sticky/flow/long-label behavior. Two undefined class references and unused adjacent selectors removed; no new abstraction, dependency, API, schema or business hook.
