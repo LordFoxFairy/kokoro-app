@@ -830,6 +830,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.errDuplicateUrl": "이 서버 URL은 이미 추가되어 있습니다. 기존 커넥터를 편집하거나 다른 URL을 사용하세요.",
   "mcp.errGeneric": "작업이 실패했습니다. 나중에 다시 시도해 주세요.",
   "composer.modelSwitch": "모델 전환",
+  "composer.modelCatalogEmpty": "현재 카탈로그에 모델이 없습니다.",
+  "composer.modelNotInCatalog": "이번 턴의 모델이 현재 카탈로그에 없습니다.",
   "composer.modelLocked": "모델: {model}(이 라운드에 고정됨)",
   "composer.modelLockedTitle": "이번 라운드에서는 모델이 잠겨 있습니다. 새 대화를 열어 대체할 수 있습니다.",
   "rail.navLibrary": "작품",

@@ -1,3 +1,9 @@
+## Composer 菜单与读取职责（2026-11-12）
+
+沿现 Radix 菜单定位／碰撞／焦点语义，只在 Composer 局部 CSS 保内容宽度、视口上限、完整标签换行与 checked 常驻强调；触屏不缩小点击行。当前目录成功为空有明确状态；锁定的显式选择缺席时不回退冒显示另一个默认模型。选择身份／engine／草稿／命令与九语言原解析／fallback 机制保持。
+
+关闭的 AppFrame overlay 不再拥有 connector 预读；Composer 原读取仍承接默认／恢复／chips，Settings 和目录只在真实打开时拥有自身读生命周期。已有 scope 复用、失效、迟到响应与 ACK 风险保留，不加 cache/store／SDK／认证层。测试以显式自有 warm fixture 承接 pending 风险，不为旧测试保无用生产 I/O。无 wire、数据模型或 owner 边界变化。
+
 ## 设置局部布局：内容约束优先
 
 Skills搜索、操作、范围筛选按容器分行，不为参考截图锁固定行高；手机端也保持横轴换行，避免宽度basis变成空白高度。筛选不强制等宽拆分本可完整显示的单词。

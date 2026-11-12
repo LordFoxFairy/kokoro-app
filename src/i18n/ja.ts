@@ -907,6 +907,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mcp.errDuplicateUrl": "このサーバー URL はすでに追加されています。既存のコネクタを編集するか、別の URL を使用してください。",
   "mcp.errGeneric": "操作は失敗しました。後でもう一度試してください。",
   "composer.modelSwitch": "スイッチモデル",
+  "composer.modelCatalogEmpty": "現在のカタログにモデルはありません。",
+  "composer.modelNotInCatalog": "このターンのモデルは現在のカタログにありません。",
   "composer.modelLocked": "モデル: {model} (このラウンドでロック)",
   "composer.modelLockedTitle": "モデルはこのラウンドではロックされています。新しい会話を開いて置き換えることができます",
   "rail.navLibrary": "作品",

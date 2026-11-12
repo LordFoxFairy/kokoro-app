@@ -1,3 +1,7 @@
+## 2026-11-12 · Composer menu and lazy overlay reads
+
+[TECHNICAL_DESIGN](TECHNICAL_DESIGN.md) 记录内容约束与现读取 owner；[CURRENT](CURRENT.md) 记录代表语言／真实正常页与测量边界。API／Schema 无变化，不改 canonical 或 generated artifact。
+
 ## T-07 当前 Public28.18 provenance（2026-11-01）
 
 [TECHNICAL_DESIGN](TECHNICAL_DESIGN.md) 与 [API_CONTRACT](API_CONTRACT.md) 文首说明单一完整 owner artifact、12 条原生成链及新增 test-only 完整父字节证明；[DATA_MODEL](DATA_MODEL.md) 说明无持久模型变化。[CURRENT](CURRENT.md) 记录本轮实际验证，不从历史28.17段推断当前pin，也不将本轮静态治理修复视为正常页面／全产品验收。

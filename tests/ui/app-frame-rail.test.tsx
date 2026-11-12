@@ -3126,6 +3126,45 @@ it("catalog local import recheck retires an acknowledged result rather than redi
 })
 
 
+it.each(["settings", "catalog"] as const)("closed overlays defer connector reads until the %s surface opens", async (entry) => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const hub = { ...createHubClient(),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    listSkills: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+  }
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
+  const boundary = { admitted: true, subject: "overlay-read-actor", generation: 1 }
+  function Shell() {
+    const [settings, setSettings] = useState<"mcp" | null>(null)
+    const [catalog, setCatalog] = useState(false)
+    const shell = useRef<HTMLDivElement | null>(null), trigger = useRef<HTMLElement | null>(null)
+    return <div ref={shell}>
+      <button onClick={() => entry === "settings" ? setSettings("mcp") : setCatalog(true)}>Open connector surface</button>
+      <AppFrameOverlaySurfaces mounted settingsTab={settings} preview={false} readBoundary={boundary}
+        mcpCatalog={{ open: catalog, onOpenChange: setCatalog, returnFocusRef: trigger, onCreate: vi.fn() }}
+        brandName="Kokoro" onCloseSettings={() => setSettings(null)} onTabChange={tab => setSettings(tab === "mcp" ? "mcp" : null)}
+        onCreateSkillWithAi={vi.fn()} onTrySkill={() => false} settingsReturnFocusRef={trigger} shellRef={shell}
+        mcpCreateMode={null} setMcpCreateMode={vi.fn()} mcpCreateReturnFocusRef={trigger}
+        commandMenu={() => null} commandProps={{ onNewChat: vi.fn(), onOpenSettings: vi.fn() }}
+        commandOpen={false} onCommandOpenChange={vi.fn()} />
+    </div>
+  }
+  render(<StrictMode><LocaleProvider><Shell /></LocaleProvider></StrictMode>)
+  await act(async () => { await Promise.resolve() })
+  expect(hub.listMcpConnectors).not.toHaveBeenCalled()
+  expect(hub.listMcpConnectorProviders).not.toHaveBeenCalled()
+  expect(hub.listCustomApis).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "Open connector surface" }))
+  expect(await screen.findByRole("dialog")).toBeVisible()
+  await waitFor(() => {
+    expect(hub.listMcpConnectors).toHaveBeenCalled()
+    expect(hub.listMcpConnectorProviders).toHaveBeenCalled()
+    expect(hub.listCustomApis).toHaveBeenCalled()
+  })
+})
+
 it.each([false, true])("a global MCP import invalidates Settings before it opens (old warm pending: %s)", async (pendingWarm) => {
   const pageClients = await import("@/ui/shell/page-clients")
   const { warmMcpProjection, useMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
@@ -3149,6 +3188,8 @@ it.each([false, true])("a global MCP import invalidates Settings before it opens
   const otherRelease = warmMcpProjection({ client: otherHub, identity: "other-actor" })
   const other = renderHook(() => useMcpProjection({ client: otherHub, identity: "other-actor", cursor: null, view: "connections" }))
   const settingsClosed = vi.fn()
+  // Keep the pending-read invalidation risk explicit; closed overlays no longer prefetch.
+  const ownRelease = warmMcpProjection({ client: hub, identity: "preview", readGeneration: 0 })
   function Shell() {
     const [mode, setMode] = useState<import("@/ui/mcp/mcp-panel-model").McpCreateMode | null>(null)
     const [settings, setSettings] = useState<"mcp" | null>(null)
@@ -3183,7 +3224,7 @@ it.each([false, true])("a global MCP import invalidates Settings before it opens
   expect(list).toHaveBeenCalledTimes(2)
   expect(other.result.current.connectorProjection?.items).toEqual([])
   expect(otherHub.listMcpConnectors).toHaveBeenCalledTimes(1)
-  otherRelease(); other.unmount()
+  ownRelease(); otherRelease(); other.unmount()
 })
 
 
@@ -3194,6 +3235,7 @@ it.each([
   const pageClients = await import("@/ui/shell/page-clients")
   const { ConnectorsSettingsSection } = await import("@/ui/settings/sections/connectors-settings-section")
   const { warmCustomApiProjection, useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
+  const { warmMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
   const empty = { items: [], page: { next_cursor: null } }
   const profile = { profile_id: "created-api", name: "New shared API", state_version: "1",
     created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
@@ -3218,6 +3260,8 @@ it.each([
   const other = renderHook(() => useCustomApiProjection({ client: hub, identity: "preview-other", refreshKey: 0 }))
   const otherHub = { ...hub, listCustomApis: vi.fn().mockResolvedValue(empty) }
   const independent = renderHook(() => useCustomApiProjection({ client: otherHub, identity: "preview", refreshKey: 0 }))
+  // Seed unrelated MCP facts explicitly so only the API mutation's invalidation is measured.
+  const releaseMcp = warmMcpProjection({ client: hub, identity: "preview", readGeneration: 0 })
   await waitFor(() => expect(other.result.current.loading).toBe(false))
   await waitFor(() => expect(independent.result.current.loading).toBe(false))
   function Shell() {
@@ -3267,7 +3311,7 @@ it.each([
   expect(other.result.current.data.items).toEqual([])
   expect(independent.result.current.data.items).toEqual([])
   expect(otherHub.listCustomApis).toHaveBeenCalledOnce()
-  release(); otherRelease(); reopened.unmount(); other.unmount(); independent.unmount()
+  releaseMcp(); release(); otherRelease(); reopened.unmount(); other.unmount(); independent.unmount()
 })
 
 it.each(["global", "settings"] as const)("%s creation ACK cannot close a newer creation window", async (entry) => {

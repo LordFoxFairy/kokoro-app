@@ -830,6 +830,8 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "mcp.errDuplicateUrl": "Этот URL сервера уже добавлен. Измените существующий коннектор или используйте другой URL.",
   "mcp.errGeneric": "Операция не удалась, повторите попытку позже.",
   "composer.modelSwitch": "Модель переключения",
+  "composer.modelCatalogEmpty": "В текущем каталоге нет моделей.",
+  "composer.modelNotInCatalog": "Модель этого хода отсутствует в текущем каталоге.",
   "composer.modelLocked": "Модель: {model} (заблокировано в этом раунде)",
   "composer.modelLockedTitle": "Модель заблокирована для этого раунда; его можно заменить, открыв новый разговор",
   "rail.navLibrary": "Библиотека",
