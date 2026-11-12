@@ -827,8 +827,30 @@ it("Textarea 在输入、删除和宽度改变时增高/收缩，忽略纯高度
 })
 
 
+it("shows initial model loading and lets the user retry a failed catalog without changing the draft or submitting", () => {
+  renderComposer({ models: [], modelCatalogStatus: "loading", draft: "preserved draft" })
+  expect(screen.getByText("Loading model catalog…")).toHaveAttribute("role", "status")
+  expect(screen.queryByRole("button", { name: "Retry loading" })).toBeNull()
+  cleanup()
+  const onRetryModels = vi.fn()
+  const props = renderComposer({ models: [], selectedModel: "unconfirmed-model", modelCatalogStatus: "error", onRetryModels, draft: "preserved draft", canSend: true })
+  expect(screen.getByText("Could not load the model catalog. Please retry.")).toHaveAttribute("role", "status")
+  fireEvent.click(screen.getByRole("button", { name: "Retry loading" }))
+  expect(onRetryModels).toHaveBeenCalledOnce()
+  expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveValue("preserved draft")
+  expect(screen.queryByRole("button", { name: /Switch model:/ })).toBeNull()
+  expect(props.onModelChange).not.toHaveBeenCalled()
+  expect(props.onSubmit).not.toHaveBeenCalled()
+})
+
+it.each(["loading", "error"] as const)("keeps an explicitly hidden model selector quiet during %s", modelCatalogStatus => {
+  renderComposer({ models: [], hideModelSelector: true, modelCatalogStatus, onRetryModels: vi.fn() })
+  expect(screen.queryByText("Loading model catalog…")).toBeNull()
+  expect(screen.queryByText("Could not load the model catalog. Please retry.")).toBeNull()
+  expect(screen.queryByRole("button", { name: "Retry loading" })).toBeNull()
+})
+
 it.each([
-  { models: [], selectedModel: "unconfirmed-model", modelLocked: false },
   { models: MODELS, selectedModel: "gpt-5", modelLocked: false },
   { models: MODELS, selectedModel: "gpt-5", modelLocked: true },
 ])("catalog failures remain quiet without replacing confirmed choices or submitting ($modelLocked, $selectedModel)", ({ models, selectedModel, modelLocked }) => {
@@ -928,19 +950,17 @@ it("a failed refresh retains the confirmed candidates and explicit business labe
   } finally { hook.unmount(); vi.unstubAllGlobals() }
 })
 
-it.each([{ models: [] }, { models: MODELS }])("catalog reads remain visually quiet and retain any confirmed model controls (%j)", ({ models }) => {
-  const props = renderComposer({ models, selectedModel: "gpt-5", modelCatalogStatus: "loading" })
+it("catalog refresh stays visually quiet and retains confirmed model controls", () => {
+  const props = renderComposer({ models: MODELS, selectedModel: "gpt-5", modelCatalogStatus: "loading" })
   expect(screen.queryByText("Loading model catalog…")).not.toBeInTheDocument()
   const cluster = document.querySelector('[data-slot="composer-selector-cluster"]')
   expect(cluster?.querySelector('[role="status"]')).toBeNull()
   expect(cluster).toHaveAttribute("aria-busy", "true")
   expect(props.onModelChange).not.toHaveBeenCalled()
-  if (models.length > 0) {
-    const trigger = screen.getByRole("button", { name: "Switch model: gpt-5" })
-    expect(trigger).toBeEnabled()
-    fireEvent.pointerDown(trigger)
-    expect(screen.getByRole("menuitemradio", { name: "gpt-5" })).toHaveAttribute("data-state", "checked")
-  }
+  const trigger = screen.getByRole("button", { name: "Switch model: gpt-5" })
+  expect(trigger).toBeEnabled()
+  fireEvent.pointerDown(trigger)
+  expect(screen.getByRole("menuitemradio", { name: "gpt-5" })).toHaveAttribute("data-state", "checked")
 })
 
 it("requests the resource menu for one typed slash at the caret without replacing the surrounding text", () => {

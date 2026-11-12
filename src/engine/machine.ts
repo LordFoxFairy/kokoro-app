@@ -1,11 +1,12 @@
 import { freezeCustomApiSelection, type CustomApiSelection, type CustomApiSelectionRestore } from "./custom-api-selection"
 import type { McpSelectionRestore } from "./engine-types"
-import { readMessageParts, type MessagePartsRead } from "./message-parts-reader"
+import { createSdkTextProjector, projectMessagePartsReplay, readMessageParts, type MessagePartsRead } from "./message-parts-reader"
 import { mergeMessageParts, preserveMessageParts } from "@/core/reducer"
 import { selectedMcpConnectionIdsSchema, selectedResourceRefsSchema, type SelectedResourceRef } from "@/contract/chat"
 // 显式会话状态机 + 引擎：snapshot-first 水合 / 流句柄 / in-flight 守卫 / runId 锚定收束单点持有。
 
-import type { ChatProjectionEvent } from "@/core/chat-projection-event"
+import type { ChatProjectionEvent, ReducerProjectionEvent, TextProjectionInput } from "@/core/chat-projection-event"
+import type { AgUiTransportFrame } from "./agui-chat-transport"
 import type { EventCursor } from "@/contract/agui-events"
 import { resumeDecisionSchema } from "@/contract/control"
 import type { ResumeRunArgs } from "./execution-adapter"
@@ -29,6 +30,7 @@ import {
 import { deliveryFromSnapshot, stateFromSnapshot } from "@/core/hydration"
 import {
   appendUserMessage,
+  applyChatProjectionEvents,
   markRunCancelled,
 } from "@/core/reducer"
 import { sameInteractionState, createSessionStreamState, type SessionStreamState, type SessionMessage } from "@/core/state"
@@ -199,6 +201,15 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const partsReads = new Map<string, { controller: AbortController; fresh: boolean }>()
   const queuedPartsReads = new Map<string, { fresh: boolean; sessionId: string; generation: number; retainJournal?: boolean }>()
   const partsJournals = new Map<string, { events: ChatProjectionEvent[]; bytes: number; overflow: boolean }>()
+  // Live SDK reads and owner-baseline adoption share one ordered local projection queue.
+  let projectionQueue: Promise<void> = Promise.resolve()
+  let textGeneration = 0
+  let closeTextReader = () => {}
+  function enqueueProjection(work: () => void | Promise<void>): Promise<void> {
+    const next = projectionQueue.then(work)
+    projectionQueue = next.catch(() => {})
+    return next
+  }
   const endedPartsRuns = new Set<string>()
   const cancelledPartsRuns = new Set<string>()
   let cancelIntent: { sessionId: string; runId: string; generation: number; commandId: string; inFlight: boolean } | null = null
@@ -283,11 +294,20 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const recoverUnauthorized = deps.captureMessagePartsReadRecheck?.()
     const current = () => !disposed && messagePartsReadable(sessionId) && !controller.signal.aborted && partsReads.get(messageId)?.controller === controller && hydrateGeneration === generation && store?.activeId === sessionId && thread.messageParts?.[messageId]?.runId === known.runId
     setPartsStatus(messageId, "loading")
-    const merge = (read: MessagePartsRead, complete: boolean) => {
+    const merge = (read: MessagePartsRead, complete: boolean) => enqueueProjection(async () => {
       if (!current()) return
       if (journal.overflow) { controller.abort(); partsReads.delete(messageId); setPartsStatus(messageId, "partial"); drainPartsQueue(); readSnapshotParts(); notify(); return }
-      thread = mergeMessageParts(thread, read, journal.events, complete)
+      const replay = await projectMessagePartsReplay(read, journal.events, () => {
+        if (!current()) throw new SessionClientError("network", "Message parts projection retired")
+      })
+      if (!current()) return
+      thread = mergeMessageParts(thread, read, replay, complete)
       if (!complete) setPartsStatus(messageId, "loading")
+      notify()
+    })
+    const readFailed = (error: unknown) => {
+      if (!current()) return
+      setPartsStatus(messageId, error instanceof SessionClientError && error.status === 409 && error.code === "message_parts_changed" ? "changed" : "failed")
       notify()
     }
     void readMessageParts({ client: deps.client, sessionId, messageId, runId: known.runId, scope,
@@ -295,12 +315,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       minimumRevision: known.revision,
       ...(known.partIds === undefined ? {} : { retainedPartIds: known.partIds }),
       ...(fresh || known.cursor === undefined ? {} : { cursor: known.cursor, ...(known.watermark === undefined ? {} : { expected: { revision: known.revision, event_watermark: known.watermark, ...(known.finalSegmentId === undefined ? {} : { final_segment_id: known.finalSegmentId }) } }) }), signal: controller.signal,
-      onProgress: (read) => merge(read, false),
-    }).then((read) => merge(read, true)).catch((error: unknown) => {
-      if (!current()) return
-      setPartsStatus(messageId, error instanceof SessionClientError && error.status === 409 && error.code === "message_parts_changed" ? "changed" : "failed")
-      notify()
-    }).finally(() => {
+      onProgress: read => { void merge(read, false).catch(readFailed) },
+    }).then(read => merge(read, true)).catch(readFailed).finally(() => {
       if (partsReads.get(messageId)?.controller === controller) { partsReads.delete(messageId); drainPartsQueue(); readSnapshotParts() }
     })
   }
@@ -476,23 +492,20 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function closeStream(): void {
+    textGeneration++
+    closeTextReader()
+    // A retired/non-cooperative SDK read must not hold the next scope's queue.
+    projectionQueue = Promise.resolve()
     execution.closeStream()
   }
 
-  function handleStreamEvents(events: readonly ChatProjectionEvent[]): void {
+  function handleStreamEvents(events: readonly ReducerProjectionEvent[], cursor: EventCursor): void {
     if (disposed) {
       return
     }
     const completedTextRuns = new Set<string>()
     for (const event of events) {
-      if (event.kind === "message.delta" && event.payload.text_boundary === "end") { completedTextRuns.add(event.run_id); endedPartsRuns.add(event.run_id) }
-      if (event.kind !== "message.delta" && event.kind !== "message.completed" && event.kind !== "activity.updated") continue
-      const journal = partsJournals.get(event.run_id)
-      if (!journal) continue
-      if (event.publicSequence === undefined) { journal.overflow = true; continue }
-      const bytes = new TextEncoder().encode(JSON.stringify(event)).byteLength
-      if (journal.bytes + bytes > 1_048_576) journal.overflow = true
-      else { journal.events.push(event); journal.bytes += bytes }
+      if (event.kind === "message.text_snapshot" && event.payload.text_boundary === "end") { completedTextRuns.add(event.run_id); endedPartsRuns.add(event.run_id) }
     }
     const optimisticUserIds = new Set<string>()
     if (pendingSubmission && pendingSubmission.kind !== "steer") optimisticUserIds.add(pendingSubmission.optimisticUserId)
@@ -518,7 +531,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         resumeAttempts.delete(event.run_id)
       }
     }
-    thread = reduction.thread
+    // Commit the adopted frame's cursor with its projection, before terminal RR reads
+    // capture their baseline. Network receipt alone never advances this cursor.
+    thread = { ...reduction.thread, resumeCursor: cursor }
+    cursorResetAttempts = 0
     machine = reduction.machine
     for (const event of events) {
       if (event.kind !== "run.completed" || event.payload.status !== "cancelled") continue
@@ -561,18 +577,71 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function openStream(sessionId: string, resumeCursor: EventCursor | null): void {
+    // Every replacement, including same-session receipt/hydrate recovery, retires
+    // the previous SDK queue rather than waiting for a non-cooperative reader.
+    closeStream()
+    const generation = textGeneration
+    const current = () => !disposed && generation === textGeneration && store?.activeId === sessionId
+    const requireCurrent = () => { if (!current()) throw new SessionClientError("network", "SDK text projection retired") }
+    const text = createSdkTextProjector(requireCurrent)
+    closeTextReader = text.close
+    const textPrefix = (state: SessionStreamState, event: TextProjectionInput): string => {
+      if (event.payload.text_boundary === "start") return ""
+      const exact = state.messages.find(message => message.role === "assistant" && message.runId === event.run_id && !message.orderedContainer && message.id === event.payload.segment_id)
+      if (exact) return exact.content
+      const prefixes = state.activeRunId === event.run_id ? state.messages.filter(message => message.role === "assistant" && message.runId === event.run_id && message.awaitingTextSegment) : []
+      return prefixes.length === 1 ? prefixes[0]!.content : ""
+    }
+    const consume = async (frames: readonly AgUiTransportFrame[]) => {
+      const events: ReducerProjectionEvent[] = []
+      let staged = thread
+      for (const frame of frames) {
+        if (!current()) return
+        const event = frame.projectionEvent
+        if (event === null) continue // Private tool/reasoning chunks are not answer text.
+        if (event.kind === "message.delta" || event.kind === "message.completed" || event.kind === "activity.updated") {
+          const journal = partsJournals.get(event.run_id)
+          if (journal) {
+            if (event.publicSequence === undefined) journal.overflow = true
+            else {
+              const bytes = new TextEncoder().encode(JSON.stringify(event)).byteLength
+              if (journal.bytes + bytes > 1_048_576) journal.overflow = true
+              else { journal.events.push(event); journal.bytes += bytes }
+            }
+          }
+        }
+        const projected = event.kind === "message.delta" ? await text.project(event, frame.uiMessageChunks, textPrefix(staged, event)) : event
+        if (!current()) return
+        events.push(projected)
+        staged = applyChatProjectionEvents(staged, [projected])
+        if (frame.terminal) text.close()
+      }
+      const last = frames.at(-1)
+      if (last && current()) {
+        if (events.length) handleStreamEvents(events, last.cursor)
+        else thread = { ...thread, resumeCursor: last.cursor }
+      }
+    }
+    const streamError = (error: SessionClientError) => {
+      if (!current()) return
+      clearReattachTimer()
+      if (error.code === "event_cursor_expired" && cursorResetAttempts < 2 && store?.activeId === sessionId) {
+        cursorResetAttempts++
+        recoveringExpiredCursor = true
+        connection = { status: "reconnecting" }
+        notify()
+        hydrate(sessionId, true)
+        return
+      }
+      closeStream()
+      connection = connectionFailure(error)
+      notify()
+    }
     execution.openStream(sessionId, resumeCursor, {
       interactionBaselines: thread.interactionsByRun,
-      onCursor: (cursor) => {
-        if (disposed) {
-          return
-        }
-        // Cursor belongs to the durable AG-UI ledger, not to the reducer seq.
-        // Preserve it even when a partial tool-args frame has no projection.
-        thread = { ...thread, resumeCursor: cursor }
-        cursorResetAttempts = 0
-      },
-      onEvents: handleStreamEvents,
+      onEvents: frames => enqueueProjection(() => consume(frames)).catch(error => {
+        throw error instanceof SessionClientError ? error : new SessionClientError("parse", "Invalid SDK text projection")
+      }),
       onReconnecting: () => {
         if (disposed || store?.activeId !== sessionId) {
           return
@@ -592,22 +661,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         }
         notify()
       },
-      onStreamError: (error) => {
-        if (disposed) {
-          return
-        }
-        clearReattachTimer()
-        if (error.code === "event_cursor_expired" && cursorResetAttempts < 2 && store?.activeId === sessionId) {
-          cursorResetAttempts += 1
-          recoveringExpiredCursor = true
-          connection = { status: "reconnecting" }
-          notify()
-          hydrate(sessionId, true)
-          return
-        }
-        connection = connectionFailure(error)
-        notify()
-      },
+      onStreamError: streamError,
     })
   }
 
@@ -808,6 +862,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   // snapshot-first 水合：GET /sessions/:sid → 当前读模型 + opaque AG-UI watermark 续流。
   function hydrate(sessionId: string, afterExpiredCursor = false, receiptConfirmedBeforeRead = false): void {
+    closeStream()
     missingSessionId = undefined
     taskNotifications.select(sessionId)
     const notificationGeneration = taskNotifications.generation()

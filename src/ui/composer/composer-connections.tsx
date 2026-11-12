@@ -58,9 +58,9 @@ export function ComposerConnections({ controller, onAdd, onManage }: {
           {apiItems.map(item => <ConnectionRow key={`api:${item.id}`} name={item.name} icon={item.icon} checked={selectedApis.has(item.id)} disabled={!selectedApis.has(item.id) && (item.selectable === false || selectedApis.size >= 32)} onToggle={() => controller.toggleCustomApi?.(item.id)} />)}
           {missingApis.map(id => <ConnectionRow key={`api:${id}`} name={id} checked onToggle={() => controller.toggleCustomApi?.(id)} />)}
           {missing.map(id => <button type="button" role="switch" aria-checked="true" aria-label={id} className={styles.row} key={`mcp:${id}`} onClick={() => controller.toggle(id)}><Cable aria-hidden="true" /><span className={styles.name}>{id}</span><span className={styles.switch} data-checked="true" aria-hidden="true"><span /></span></button>)}
-          {(controller.status === "loading" || controller.customApiStatus === "loading") && controller.items.length === 0 && apiItems.length === 0 ? <span className="sr-only" role="status">{t("mcp.loading")}</span> : null}
+          {(controller.status === "loading" || controller.customApiStatus === "loading") && controller.items.length === 0 && apiItems.length === 0 ? <p className={styles.feedback} role="status">{t("mcp.loading")}</p> : null}
           {controller.status === "ready" && controller.items.length === 0 && !missing.length && apiItems.length === 0 && !missingApis.length && (controller.customApiStatus === undefined || controller.customApiStatus === "ready" || controller.customApiStatus === "disabled") ? <p className={styles.empty}>{t("firstSite.noConnectors")}</p> : null}
-          {(controller.status === "error" || controller.customApiStatus === "error") ? <span className="sr-only" role="status">{t("mcp.loadError")}</span> : null}
+          {(controller.status === "error" || controller.customApiStatus === "error") ? <p className={styles.feedback} role="status">{t("mcp.loadError")}</p> : null}
           {((controller.nextCursor && controller.status === "ready") || (controller.customApiNextCursor && controller.customApiStatus === "ready")) ? <button type="button" className={styles.row} onClick={controller.loadMore}>{t("data.more")}</button> : null}
         </div>
         {footer}

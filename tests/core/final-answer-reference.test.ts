@@ -40,7 +40,7 @@ const history = (revision: string, final?: string) => stateFromSnapshot(parseSes
 it("keeps live final identity through unrelated frames and an older snapshot/page", () => {
   let state = history("4")
   state = applyChatProjectionEvents(state, [makeEvent("run.completed", { status: "completed", final_segment_id: "answer" }, { run_id: "run", publicSequence: "9" })])
-  state = applyChatProjectionEvents(state, [makeEvent("message.delta", { segment_id: "other", delta: "later unrelated turn" }, { run_id: "other", publicSequence: "10" })])
+  state = applyChatProjectionEvents(state, [makeEvent("message.text_snapshot", { segment_id: "other", content: "later unrelated turn" }, { run_id: "other", publicSequence: "10" })])
   expect(state.finalAnswersByRun?.run).toEqual({ segmentId: "answer", revision: "9" })
   state = mergeMessageParts(state, { message_id: "owner", run_id: "run", revision: "4", items: [] }, [], true)
   expect(state.finalAnswersByRun?.run).toEqual({ segmentId: "answer", revision: "9" })

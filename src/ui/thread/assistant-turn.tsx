@@ -236,6 +236,7 @@ export function AssistantTurn({
           {...(onOpenActivity ? { onOpenActivity: (activityId: string) => { setProcessInspected(true); display.inspect(); onOpenActivity(activityId) } } : {})}
           {...(answerActionBoundary && displayRunId && display.facts === null ? { onInspect: display.inspect } : {})}
           activities={segment.activities}
+          terminal={terminal}
           live={liveProcessSegment}
           continueProcessing={liveProcessSegment && !tailHasText && phaseLabel === null && !reconnecting && !hitlActive}
           {...(mode === undefined ? {} : { mode })}

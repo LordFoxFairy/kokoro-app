@@ -37,7 +37,7 @@ type PreviewSession = {
   subscriber: {
     generation: number
     onCursor: OpenEventsArgs["onCursor"]
-    onEvent: OpenEventsArgs["onEvent"]
+    onFrame: OpenEventsArgs["onFrame"]
   } | null
   streamGeneration: number
   // 清单展示用：首条消息内容充当标题 + 最近活动时间（切走后会话仍留在侧栏，供 HITL 徽标走查）。
@@ -244,8 +244,17 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     }
     const event = session.queued.shift()
     if (event) {
-      subscriber.onCursor(previewCursor(previewSequence(event)))
-      subscriber.onEvent(event)
+      const cursor = previewCursor(previewSequence(event))
+      const payload = event.kind === "message.delta" ? event.payload : null
+      const accepted = subscriber.onFrame({ cursor, projectionEvent: event,
+        terminal: event.kind === "run.completed" || event.kind === "run.failed" || event.kind === "run.dispatch_failed",
+        uiMessageChunks: payload === null ? [] : payload.text_boundary === "start"
+          ? [{ type: "text-start", id: payload.segment_id }]
+          : payload.text_boundary === "end" ? [{ type: "text-end", id: payload.segment_id }]
+            : [{ type: "text-delta", id: payload.segment_id, delta: payload.delta }],
+      })
+      if (accepted) void accepted.then(() => subscriber.onCursor(cursor), () => {})
+      else subscriber.onCursor(cursor)
     }
     const timer = setTimeout(() => {
       timers.delete(timer)
@@ -538,7 +547,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     renameSession: () => Promise.resolve({ ok: true as const }),
     moveSession: () => Promise.reject(new ConversationMoveError({ kind: "unsupported" })),
 
-    openEvents: ({ sessionId, resumeCursor, onCursor, onEvent, onStreamError }): EventStreamHandle => {
+    openEvents: ({ sessionId, resumeCursor, onCursor, onFrame, onStreamError }): EventStreamHandle => {
       let closed = false
       let session: PreviewSession | null = null
       let generation: number | null = null
@@ -547,7 +556,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         session = sessionFor(sessionId)
         generation = session.streamGeneration + 1
         session.streamGeneration = generation
-        session.subscriber = { generation, onCursor, onEvent }
+        session.subscriber = { generation, onCursor, onFrame }
         // Rebuild pending delivery from persisted history. This lets a refreshed
         // project deep link replay the same reducer path instead of rendering an
         // empty shell after the in-memory preview client was recreated. The

@@ -6,7 +6,7 @@ import { applyChatProjectionEvent } from "@/core/reducer"
 import { createSessionStreamState, type SessionDelivery, type SessionStreamState } from "@/core/state"
 import { LocaleProvider } from "@/i18n/context"
 import { ConversationThread, type ConversationThreadProps } from "@/ui/thread/conversation-thread"
-import { makeDeliveryPayload, makeEvent, makeSnapshot, makeSnapshotDelivery } from "../core/fixtures"
+import { AGENT_FAILURE_PROFILES, makeDeliveryPayload, makeEvent, makeSnapshot, makeSnapshotDelivery } from "../core/fixtures"
 
 afterEach(cleanup)
 
@@ -101,4 +101,32 @@ it("never renders another conversation's title/actions or exposes its existence 
   expect(screen.queryByText("private.md")).not.toBeInTheDocument()
   expect(screen.queryByRole("link", { name: "View all creations" })).not.toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "Download" })).not.toBeInTheDocument()
+})
+
+
+it("settles every old Run passage without hiding its failure or borrowing another Run terminal", () => {
+  const profile = AGENT_FAILURE_PROFILES.find(value => value.code === "assembly_failed" && !value.retryable)
+  if (!profile) throw new Error("missing owner assembly failure profile")
+  const skill = (hex: string, phase: "loading" | "ready") => ({ kind: "activity" as const, seq: 1, segmentId: `seg_${hex.repeat(64)}`,
+    activity: { activity: "skill" as const, activity_id: `act_${hex.repeat(64)}`, preflight_id: `spf_${hex.repeat(64)}`, source_refs: ["skill:report"], phase } })
+  const thread: SessionStreamState = { ...threadWithRuns("old_failed", "old_failed", "new_completed", "unconfirmed"),
+    stepsByRun: { old_failed: [skill("a", "loading")], new_completed: [skill("b", "ready")], unconfirmed: [skill("c", "loading")] },
+    runTerminalsById: { old_failed: "failed", new_completed: "completed" },
+    runFailuresById: { old_failed: { failedRunId: "old_failed", kind: "agent", profile } },
+    deliveries: [delivery("new_completed", "verified.md")],
+  }
+  render(threadElement(thread))
+  for (const text of ["answer 0", "answer 1"]) {
+    const turn = owningTurn(screen.getByText(text))
+    expect(turn).not.toBeNull()
+    expect(within(turn! as HTMLElement).getByText("Run ended")).toBeVisible()
+    expect(within(turn! as HTMLElement).queryByText("Loading")).toBeNull()
+  }
+  expect(screen.getAllByText(/This turn could not start/u)).toHaveLength(1)
+  expect(screen.getByRole("button", { name: "Open delivery verified.md" })).toBeVisible()
+  const ready = owningTurn(screen.getByText("answer 2"))
+  expect(within(ready! as HTMLElement).getByText("Ready")).toBeVisible()
+  const unknown = owningTurn(screen.getByText("answer 3"))
+  expect(within(unknown! as HTMLElement).getByText("Loading")).toBeVisible()
+  expect(within(unknown! as HTMLElement).queryByText("Run ended")).toBeNull()
 })

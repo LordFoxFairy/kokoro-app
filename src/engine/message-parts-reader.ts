@@ -1,6 +1,7 @@
 // One bounded read episode; no command recovery, background polling, or cursor arithmetic.
-import type { UIMessageChunk } from "ai"
-import { messagePartsPageSchema, type MessagePart, type MessagePartsPage, type MessageTextPartSlice } from "@/contract/chat"
+import { readUIMessageStream, type UIMessageChunk } from "ai"
+import type { ChatProjectionEvent, ReducerProjectionEvent, TextProjectionInput } from "@/core/chat-projection-event"
+import { messagePartsPageSchema, type MessagePart, type MessagePartsPage } from "@/contract/chat"
 import type { SessionClient } from "./client"
 import { SessionClientError } from "./client-error"
 import type { SessionScope } from "./session-scope"
@@ -47,7 +48,7 @@ export type MessagePartsRead = Omit<MessagePartsPage, "items" | "next_cursor"> &
 export type MessagePartsReadRecheck = (signal: AbortSignal) => Promise<boolean>
 
 // One local SDK stream per validated owner text slot, never a network transport.
-function openTextSlot(readUIMessageStream: typeof import("ai").readUIMessageStream, requireCurrent: () => void) {
+function openSdkTextSlot(requireCurrent: () => void) {
   let input!: ReadableStreamDefaultController<UIMessageChunk>
   let inputOpen = true
   const stream = new ReadableStream<UIMessageChunk>({
@@ -71,22 +72,22 @@ function openTextSlot(readUIMessageStream: typeof import("ai").readUIMessageStre
   }
   let started = false, reachedEof = false, closing = false
   return {
-    async append(slice: MessageTextPartSlice): Promise<string> {
+    async append(delta: string, complete = false): Promise<string> {
       try {
         if (!started) {
           await readText()
           started = true
         }
-        input.enqueue({ type: "text-delta", id, delta: slice.text })
+        input.enqueue({ type: "text-delta", id, delta })
         const text = await readText()
-        if (slice.end !== slice.total_scalars) return text
+        if (!complete) return text
         input.enqueue({ type: "text-end", id })
         closeInput()
-        const complete = await readText()
+        const completedText = await readText()
         if (!(await reader.read()).done) throw new Error("Expected SDK text EOF")
         reachedEof = true
         requireCurrent()
-        return complete
+        return completedText
       } catch {
         requireCurrent()
         throw new SessionClientError("parse", "Invalid SDK message text projection")
@@ -108,6 +109,58 @@ function openTextSlot(readUIMessageStream: typeof import("ai").readUIMessageStre
   }
 }
 
+/** One local SDK reader per current text slot; no tool/reasoning chunks enter it. */
+export function createSdkTextProjector(requireCurrent: () => void) {
+  const slots = new Map<string, { reader: ReturnType<typeof openSdkTextSlot>; text: string }>()
+  const close = () => { for (const slot of slots.values()) slot.reader.close(); slots.clear() }
+  return {
+    close,
+    async project(event: TextProjectionInput, chunks: readonly UIMessageChunk[], prefix: string): Promise<Extract<ReducerProjectionEvent, { kind: "message.text_snapshot" }>> {
+      requireCurrent()
+      const { segment_id: segmentId, text_boundary: boundary } = event.payload
+      const chunk = chunks[0]
+      const expected = boundary === "start" ? "text-start" : boundary === "end" ? "text-end" : "text-delta"
+      if (chunks.length !== 1 || !chunk || chunk.type !== expected || !("id" in chunk) || chunk.id !== segmentId ||
+        (chunk.type === "text-delta" && chunk.delta !== event.payload.delta)) throw new SessionClientError("parse", "Invalid SDK text input binding")
+      const key = JSON.stringify([event.run_id, segmentId])
+      let slot = slots.get(key)
+      const seed = boundary === "start" ? "" : prefix
+      if (!slot || slot.text !== seed || boundary === "start") {
+        slot?.reader.close()
+        slot = { reader: openSdkTextSlot(requireCurrent), text: "" }
+        slots.set(key, slot)
+        if (seed.length > 0) slot.text = await slot.reader.append(seed)
+      }
+      slot.text = await slot.reader.append(chunk.type === "text-delta" ? chunk.delta : "", boundary === "end")
+      requireCurrent()
+      const content = slot.text
+      if (boundary === "end") { slot.reader.close(); slots.delete(key) }
+      return { ...event, kind: "message.text_snapshot", payload: { segment_id: segmentId, content,
+        ...(boundary === undefined ? {} : { text_boundary: boundary }) } }
+    },
+  }
+}
+
+/** Replay original, bounded inputs after an owner baseline using the same SDK rule. */
+export async function projectMessagePartsReplay(read: MessagePartsRead, events: readonly ChatProjectionEvent[], requireCurrent: () => void): Promise<ReducerProjectionEvent[]> {
+  const projector = createSdkTextProjector(requireCurrent)
+  const prefixes = new Map(read.items.flatMap(part => part.kind === "text" && part.end === part.total_scalars ? [[part.segment_id, part.text] as const] : []))
+  const projected: ReducerProjectionEvent[] = []
+  try {
+    for (const event of events) {
+      requireCurrent()
+      if (event.run_id !== read.run_id || !("publicSequence" in event) || event.publicSequence === undefined || BigInt(event.publicSequence) <= BigInt(read.revision)) continue
+      if (event.kind !== "message.delta") { projected.push(event); continue }
+      const { segment_id: id, text_boundary: boundary, delta } = event.payload
+      const chunk: UIMessageChunk = boundary === "start" ? { type: "text-start", id } : boundary === "end" ? { type: "text-end", id } : { type: "text-delta", id, delta }
+      const snapshot = await projector.project(event, [chunk], prefixes.get(id) ?? "")
+      prefixes.set(id, snapshot.payload.content)
+      projected.push(snapshot)
+    }
+    return projected
+  } finally { projector.close() }
+}
+
 export async function readMessageParts(args: {
   client: SessionClient; sessionId: string; messageId: string; runId: string; scope: SessionScope;
   recoverUnauthorized?: MessagePartsReadRecheck;
@@ -125,7 +178,7 @@ export async function readMessageParts(args: {
     if (performance.now() >= deadline) abort()
     if (controller.signal.aborted) throw retiredError()
   }
-  let activeText: ReturnType<typeof openTextSlot> | null = null
+  let activeText: ReturnType<typeof openSdkTextSlot> | null = null
   const closeTextSlot = () => {
     activeText?.close()
     activeText = null
@@ -135,7 +188,6 @@ export async function readMessageParts(args: {
     const read = async (): Promise<MessagePartsRead> => {
       let cursor = args.cursor, baseline: MessagePartsRead | undefined
       let recoverySpent = false
-      let loadSdk: Promise<typeof import("ai")> | undefined
       const cursors = new Set<string>(), identities = new Set<string>()
       const slots = new Map<string, MessagePart>()
       let last: MessagePart | undefined
@@ -181,11 +233,9 @@ export async function readMessageParts(args: {
           }
           if (part.kind === "text") {
             if (activeText === null) {
-              const { readUIMessageStream } = await (loadSdk ??= import("ai"))
-              requireCurrent()
-              activeText = openTextSlot(readUIMessageStream, requireCurrent)
+              activeText = openSdkTextSlot(requireCurrent)
             }
-            last = { ...part, text: await activeText.append(part), offset: "0" }
+            last = { ...part, text: await activeText.append(part.text, part.end === part.total_scalars), offset: "0" }
             requireCurrent()
             if (part.end === part.total_scalars) closeTextSlot()
           } else last = part

@@ -427,3 +427,21 @@ it("keeps only an exact message's supplementary read error quiet until keyboard 
     expect(retry).toHaveBeenCalledTimes(3)
   } finally { style.remove() }
 })
+
+
+it("stops group continuation only for an exact terminal, not simply because the passage is non-live", () => {
+  const activities: RunProcessActivity[] = [
+    { activity: "skill", activity_id: `act_${"9".repeat(64)}`, preflight_id: `spf_${"8".repeat(64)}`, source_refs: ["skill:unfinished"], phase: "loading" },
+    { activity: "tool", activity_id: `act_${"7".repeat(64)}`, segment_id: `seg_${"6".repeat(64)}`, status: "completed", display_code: "tool.execution" },
+  ]
+  const props = { segmentId: "terminal-process-passage", activities, live: false }
+  const { rerender } = render(<LocaleProvider><SegmentProcess {...props} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button"))
+  expect(screen.getByText("Loading")).toBeVisible()
+  expect(screen.getByText("Running")).toBeVisible()
+  rerender(<LocaleProvider><SegmentProcess {...props} terminal continueProcessing /></LocaleProvider>)
+  expect(screen.getByRole("button")).toHaveTextContent("Run ended")
+  expect(screen.queryByText("Loading")).toBeNull()
+  expect(screen.queryByText("Running")).toBeNull()
+  expect(screen.queryByText("Continuing…")).toBeNull()
+})

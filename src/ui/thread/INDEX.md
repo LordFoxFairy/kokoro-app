@@ -1,3 +1,5 @@
+2026-11-12：exact `runTerminalsById` 的事实传给同 Run 全部 passage；未决 resolving/loading Skill 中性显示 Run 已结束，不从非 live／超时推断，不改 ready/failed 原结果。actions／owner读取仍只归控制 passage，失败footer／成功交付保持。model_access_denied 文案覆盖积分与模型权限，不加错误协议或恢复命令。
+
 2026-11-04 T‑09：ConversationThread 显示 Public 28.19 的非重试超窗终态，保留已生成正文，不重发原请求。
 
 2026-10-28：`use-run-display.ts` 在同scope终态补读被卸载取消后解除读取占用，保留既有事实并允许重新可见时读取；不重置终态补读资格、不重试HTTP失败。`tool-action-presentation.ts` 同时拥有行动行与Canvas状态文案，MCP completed仅表述“调用已结束”，业务失败仍优先显示。

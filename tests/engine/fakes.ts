@@ -8,10 +8,22 @@ import type {
   RunControlReceipt,
 } from "@/contract/http"
 import { eventCursorSchema, type EventCursor } from "@/contract/agui-events"
+import type { AgUiTransportFrame } from "@/engine/agui-chat-transport"
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import type { OpenEventsArgs, SessionClient, SessionClientError } from "@/engine/client"
 import { ConversationMoveError } from "@/engine/conversation-move-error"
 import type { PersistedStore } from "@/lib/persisted-store"
+
+export function projectionFrame(event: ChatProjectionEvent, cursor: EventCursor): AgUiTransportFrame {
+  const payload = event.kind === "message.delta" ? event.payload : null
+  return { cursor, projectionEvent: event,
+              terminal: event.kind === "run.completed" || event.kind === "run.failed" || event.kind === "run.dispatch_failed",
+              uiMessageChunks: payload === null ? [] : payload.text_boundary === "start"
+                ? [{ type: "text-start", id: payload.segment_id }]
+                : payload.text_boundary === "end" ? [{ type: "text-end", id: payload.segment_id }]
+                  : [{ type: "text-delta", id: payload.segment_id, delta: payload.delta }],
+  }
+}
 
 export type FakeStream = {
   sessionId: string
@@ -138,8 +150,9 @@ export function createFakeClient(): FakeClient {
               }
               cursor = cursorForSequence(event.seq)
             }
-            args.onCursor(cursor)
-            args.onEvent(event)
+            const accepted = args.onFrame(projectionFrame(event, cursor))
+            if (accepted) void accepted.then(() => args.onCursor(cursor), args.onStreamError)
+            else args.onCursor(cursor)
           }
         },
         reconnecting: () => {

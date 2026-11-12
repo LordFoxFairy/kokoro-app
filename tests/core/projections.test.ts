@@ -14,8 +14,8 @@ describe("buildThreadItems", () => {
   it("用户消息单独成项，连续同 run assistant 段归并为一个 turn", () => {
     let state = appendUserMessage(createSessionStreamState(), { id: "usr_1", content: "hi" })
     state = applyChatProjectionEvents(state, [
-      makeEvent("message.delta", { segment_id: "seg_1", delta: "a" }, { run_id: "run_1" }),
-      makeEvent("message.delta", { segment_id: "seg_2", delta: "b" }, { run_id: "run_1" }),
+      makeEvent("message.text_snapshot", { segment_id: "seg_1", content: "a" }, { run_id: "run_1" }),
+      makeEvent("message.text_snapshot", { segment_id: "seg_2", content: "b" }, { run_id: "run_1" }),
     ])
     const items = buildThreadItems(state)
     expect(items.map((item) => item.kind)).toEqual(["user", "assistant-turn"])
@@ -110,13 +110,13 @@ describe("groupSegments", () => {
     const subagent = { activity: "subagent" as const, activity_id: `act_${"7".repeat(64)}`, segment_id: `seg_${"8".repeat(64)}`, status: "running" as const, display_code: "subagent.execution" as const }
     const first = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("run.created", { run_id: "run_1" }, { seq: 1 }),
-      makeEvent("message.delta", { segment_id: "text_a", delta: "A" }, { seq: 2 }),
+      makeEvent("message.text_snapshot", { segment_id: "text_a", content: "A" }, { seq: 2 }),
       makeEvent("activity.updated", tool, { seq: 3 }),
       makeEvent("activity.updated", nextTool, { seq: 4 }),
-      makeEvent("message.delta", { segment_id: "text_b", delta: "B" }, { seq: 5 }),
+      makeEvent("message.text_snapshot", { segment_id: "text_b", content: "B" }, { seq: 5 }),
       makeEvent("activity.updated", skill, { seq: 6 }),
       makeEvent("activity.updated", subagent, { seq: 7 }),
-      makeEvent("message.delta", { segment_id: "text_c", delta: "C" }, { seq: 8 }),
+      makeEvent("message.text_snapshot", { segment_id: "text_c", content: "C" }, { seq: 8 }),
     ])
     const updated = applyChatProjectionEvents(first, [
       makeEvent("activity.updated", { ...tool, status: "completed" }, { seq: 9 }),
@@ -171,8 +171,8 @@ it("keeps snapshot text then post-watermark tool and new text segments in real o
   }))
   const state = applyChatProjectionEvents(initial, [
     makeEvent("tool.invoked", { segment_id: "tool_seg", tool_id: "tool", name: "search", args: {} }, { seq: 11 }),
-    makeEvent("message.delta", { segment_id: "new_seg", delta: "", text_boundary: "start" }, { seq: 12 }),
-    makeEvent("message.delta", { segment_id: "new_seg", delta: "later" }, { seq: 13 }),
+    makeEvent("message.text_snapshot", { segment_id: "new_seg", content: "", text_boundary: "start" }, { seq: 12 }),
+    makeEvent("message.text_snapshot", { segment_id: "new_seg", content: "later" }, { seq: 13 }),
     makeEvent("tool.returned", { segment_id: "tool_seg", tool_id: "tool", name: "search", result: "done", is_error: false }, { seq: 14 }),
   ])
   const turn = buildThreadItems(state)[0]
@@ -283,8 +283,8 @@ describe("native tool rounds and authoritative empty text boundaries", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("run.created", { run_id: "run" }, { run_id: "run" }),
       makeEvent("activity.updated", activity("a"), { run_id: "run" }),
-      makeEvent("message.delta", { segment_id: "empty", delta: "", text_boundary: "start" }, { run_id: "run" }),
-      makeEvent("message.delta", { segment_id: "empty", delta: "", text_boundary: "end" }, { run_id: "run" }),
+      makeEvent("message.text_snapshot", { segment_id: "empty", content: "", text_boundary: "start" }, { run_id: "run" }),
+      makeEvent("message.text_snapshot", { segment_id: "empty", content: "", text_boundary: "end" }, { run_id: "run" }),
       makeEvent("activity.updated", activity("b"), { run_id: "run" }),
     ])
     expect(groups(state).map((segment) => segment.activities.length)).toEqual([1, 0, 1])
@@ -297,7 +297,7 @@ describe("native tool rounds and authoritative empty text boundaries", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("run.created", { run_id: "run" }, { run_id: "run" }),
       makeEvent("activity.updated", activity("a"), { run_id: "run" }),
-      makeEvent("message.delta", { segment_id: "empty", delta: "", text_boundary: "end" }, { run_id: "run" }),
+      makeEvent("message.text_snapshot", { segment_id: "empty", content: "", text_boundary: "end" }, { run_id: "run" }),
       makeEvent("activity.updated", activity("b"), { run_id: "run" }),
     ])
     expect(groups(state).map((segment) => segment.activities.length)).toEqual([1, 0, 1])

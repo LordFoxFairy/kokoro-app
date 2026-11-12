@@ -1,4 +1,6 @@
 .cluster { display: flex; align-items: center; gap: 0.3rem; }
+.catalogFeedback { display: flex; min-width: 0; max-width: 100%; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; color: var(--muted-foreground); font-size: 0.75rem; overflow-wrap: anywhere; }
+.catalogRetry { height: auto; min-height: 2rem; max-width: 100%; white-space: normal; }
 .modeSelect { min-width: 0; }
 .send, .mode { flex-shrink: 0; }
 .mode:focus-visible, .send:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

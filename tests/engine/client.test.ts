@@ -1238,3 +1238,24 @@ it.each([
     expect(fetchMock).toHaveBeenCalledOnce()
   } finally { vi.unstubAllGlobals() }
 })
+it("adopts a valid frame before confirming its cursor and reporting a later parse error in the same SSE chunk", async () => {
+  const cursor = "agui_00000000000000000000000000000001"
+  const event = { type: "TEXT_MESSAGE_CONTENT", messageId: "segment", delta: "kept", timestamp: 1,
+    metadata: { kokoro: { public_sequence: "1", event_id: "e1", seq: 1, session_id: "s", run_id: "r", timestamp: "2026-11-12T00:00:00Z" } } }
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(`id: ${cursor}\ndata: ${JSON.stringify(event)}\n\nid: agui_00000000000000000000000000000002\ndata: {bad\n\n`, { headers: { "content-type": "text/event-stream" } })))
+  let release!: () => void, enter!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const entered = new Promise<void>(resolve => { enter = resolve })
+  const order: string[] = []
+  const handle = createSessionClient({ baseUrl: "/api/session" }).openEvents({ sessionId: "s", resumeCursor: null,
+    onFrame: async frame => { enter(); await gate; expect(frame.uiMessageChunks).toEqual([{ type: "text-delta", id: "segment", delta: "kept" }]); order.push("body") },
+    onCursor: value => { expect(value).toBe(cursor); order.push("cursor") },
+    onStreamError: error => { expect(error.reason).toBe("parse"); order.push("error") },
+  })
+  try {
+    await entered
+    expect(order).toEqual([])
+    release()
+    await vi.waitFor(() => expect(order).toEqual(["body", "cursor", "error"]))
+  } finally { release(); handle.close() }
+})

@@ -16,9 +16,9 @@ describe("owner message ordered projection", () => {
   })
   it("uses ledger positions, stable segment identity, and a cursor-independent newer live suffix", () => {
     const initial = stateFromSnapshot(snapshot())
-    const live = makeEvent("message.delta", { segment_id: "a", delta: "!" }, { run_id: "r", seq: 2, publicSequence: "9007199254740994" })
+    const live = makeEvent("message.text_snapshot", { segment_id: "a", content: "!" }, { run_id: "r", seq: 2, publicSequence: "9007199254740994" })
     const current = applyChatProjectionEvents(initial, [live])
-    const state = mergeMessageParts(current, { message_id: "owner", run_id: "r", revision: "9007199254740993", items: [text("a", "before", "9007199254740991"), activity, text("b", "after", "9007199254740993")] }, [live], true)
+    const state = mergeMessageParts(current, { message_id: "owner", run_id: "r", revision: "9007199254740993", items: [text("a", "before", "9007199254740991"), activity, text("b", "after", "9007199254740993")] }, [{ ...live, payload: { ...live.payload, content: "before!" } }], true)
     expect(state.messages.filter((item) => !item.orderedContainer).map((item) => [item.id, item.content])).toEqual([["a", "before!"], ["b", "after"]])
     expect(state.resumeCursor).toBe(current.resumeCursor)
     expect(groupSegments(state.stepsByRun.r ?? []).map((segment) => segment.activities.length ? "process" : segment.segmentId)).toEqual(["a", "process", "b"])
@@ -35,8 +35,8 @@ describe("owner message ordered projection", () => {
 
 it("does not let a huge legacy Agent seq override or order an already confirmed public slot", () => {
   const restored = mergeMessageParts(stateFromSnapshot(snapshot()), { message_id: "owner", run_id: "r", revision: "9007199254740993", items: [text("a", "confirmed", "1")] }, [], true)
-  const noCoordinate = makeEvent("message.delta", { segment_id: "a", delta: "wrong" }, { run_id: "r", seq: Number.MAX_SAFE_INTEGER })
-  const duplicateBaseline = makeEvent("message.delta", { segment_id: "a", delta: "duplicate" }, { run_id: "r", seq: 1, publicSequence: "9007199254740993" })
+  const noCoordinate = makeEvent("message.text_snapshot", { segment_id: "a", content: "wrong" }, { run_id: "r", seq: Number.MAX_SAFE_INTEGER })
+  const duplicateBaseline = makeEvent("message.text_snapshot", { segment_id: "a", content: "duplicate" }, { run_id: "r", seq: 1, publicSequence: "9007199254740993" })
   const after = applyChatProjectionEvents(restored, [noCoordinate, duplicateBaseline])
   expect(after.messages.filter((item) => !item.orderedContainer).map((item) => item.content)).toEqual(["confirmed"])
   expect(after.stepsByRun.r?.map((step) => step.seq)).toEqual(["1"])
@@ -44,7 +44,7 @@ it("does not let a huge legacy Agent seq override or order an already confirmed 
 
 it("does not confuse an owner Message marker with an equal public segment ID", () => {
   const restored = mergeMessageParts(stateFromSnapshot(snapshot()), { message_id: "owner", run_id: "r", revision: "9007199254740993", items: [text("owner", "body", "1")] }, [], true)
-  const after = applyChatProjectionEvents(restored, [makeEvent("message.delta", { segment_id: "owner", delta: "!" }, { run_id: "r", seq: 1, publicSequence: "9007199254740994" })])
+  const after = applyChatProjectionEvents(restored, [makeEvent("message.text_snapshot", { segment_id: "owner", content: "body!" }, { run_id: "r", seq: 1, publicSequence: "9007199254740994" })])
   expect(after.messages.find((message) => message.orderedContainer)?.content).toBe("")
   expect(after.messages.find((message) => !message.orderedContainer)?.content).toBe("body!")
   const item = buildThreadItems(after)[0]
@@ -55,7 +55,7 @@ it("never replays a live suffix twice while a large text slot remains partial", 
   const initial = stateFromSnapshot(parseSessionSnapshot({ ...snapshot(), messages: [{ ...snapshot().messages![0], rendering: { mode: "ordered", format_version: 1, revision: "10", event_watermark: null, parts_cursor: "c" } }] }))
   const part = (body: string): MessagePart => ({ ...text("a", body, "1", "10"), kind: "text", end: String(body.length), total_scalars: "12288", completed: true })
   let state = mergeMessageParts(initial, { message_id: "owner", run_id: "r", revision: "10", items: [part("x".repeat(4096))] }, [], false)
-  const live = makeEvent("message.delta", { segment_id: "a", delta: "!" }, { run_id: "r", seq: 1, publicSequence: "11" })
+  const live = makeEvent("message.text_snapshot", { segment_id: "a", content: "!" }, { run_id: "r", seq: 1, publicSequence: "11" })
   state = applyChatProjectionEvents(state, [live])
   state = mergeMessageParts(state, { message_id: "owner", run_id: "r", revision: "10", items: [part("x".repeat(8192))] }, [live], false)
   expect(state.messages.find((message) => message.id === "a")?.content).toBe("!")
@@ -77,13 +77,13 @@ it("does not suppress an unread B slot while a leading R20 A text is only partia
   const initial = stateFromSnapshot(parseSessionSnapshot({ ...snapshot(), messages: [{ ...snapshot().messages![0], rendering: { mode: "ordered", format_version: 1, revision: "10", event_watermark: null, parts_cursor: "c" } }] }))
   let state = mergeMessageParts(initial, { message_id: "owner", run_id: "r", revision: "20", items: [{ ...text("a", "prefix", "11", "18"), end: "6", total_scalars: "10000" }] }, [], false)
   expect(state.messageParts?.owner?.confirmedRevision).toBeUndefined()
-  state = applyChatProjectionEvents(state, [makeEvent("message.delta", { segment_id: "b", delta: "visible unread B" }, { run_id: "r", seq: 2, publicSequence: "16" })])
+  state = applyChatProjectionEvents(state, [makeEvent("message.text_snapshot", { segment_id: "b", content: "visible unread B" }, { run_id: "r", seq: 2, publicSequence: "16" })])
   expect(state.messages.some((message) => message.id === "b" && message.content === "visible unread B")).toBe(true)
   expect(state.messageParts?.owner?.status).toBe("partial")
   // A fully obtained slot can suppress its own duplicate frames without
   // suppressing other slots that have not yet been read.
   state = mergeMessageParts(state, { message_id: "owner", run_id: "r", revision: "20", items: [text("a", "complete A", "11", "18")] }, [], false)
-  state = applyChatProjectionEvents(state, [makeEvent("message.delta", { segment_id: "a", delta: "duplicate", }, { run_id: "r", seq: 3, publicSequence: "18" })])
+  state = applyChatProjectionEvents(state, [makeEvent("message.text_snapshot", { segment_id: "a", content: "duplicate", }, { run_id: "r", seq: 3, publicSequence: "18" })])
   expect(state.messages.find((message) => message.id === "a")?.content).toBe("complete A")
   expect(state.messages.find((message) => message.id === "b")?.content).toBe("visible unread B")
 })

@@ -59,6 +59,13 @@ const messageCompletedPayload = z
   })
   .strict()
 
+// Local SDK output only. Raw message.delta remains replay input, never reducer text.
+const messageTextSnapshotPayload = z.object({
+  segment_id: z.string().min(1),
+  content: z.string(),
+  text_boundary: z.enum(["start", "end"]).optional(),
+}).strict()
+
 const thinkingDeltaPayload = z
   .object({
     segment_id: z.string().min(1),
@@ -232,6 +239,7 @@ export const chatProjectionEventSchema = z.discriminatedUnion("kind", [
   envelope.extend({ kind: z.literal("interaction.state"), payload: interactionStateSchema }),
   envelope.extend({ kind: z.literal("message.user"), payload: messageUserPayload }),
   envelope.extend({ kind: z.literal("message.delta"), payload: messageDeltaPayload }),
+  envelope.extend({ kind: z.literal("message.text_snapshot"), payload: messageTextSnapshotPayload }),
   envelope.extend({ kind: z.literal("message.completed"), payload: messageCompletedPayload }),
   envelope.extend({ kind: z.literal("thinking.delta"), payload: thinkingDeltaPayload }),
   envelope.extend({ kind: z.literal("tool.invoked"), payload: toolInvokedPayload }),
@@ -267,6 +275,8 @@ export const chatProjectionEventSchema = z.discriminatedUnion("kind", [
 
 export type ChatProjectionEvent = z.infer<typeof chatProjectionEventSchema>
 export type ChatProjectionEventKind = ChatProjectionEvent["kind"]
+export type TextProjectionInput = Extract<ChatProjectionEvent, { kind: "message.delta" }>
+export type ReducerProjectionEvent = Exclude<ChatProjectionEvent, TextProjectionInput>
 
 export function parseChatProjectionEvent(input: unknown): ChatProjectionEvent {
   return chatProjectionEventSchema.parse(input)

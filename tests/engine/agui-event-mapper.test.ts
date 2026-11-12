@@ -415,7 +415,7 @@ describe("R66 public4 queued/START/full-state mapper", () => {
     expect(queued.projectionEvent).not.toHaveProperty("seq")
     expect(queued.uiMessageChunks).toContainEqual(expect.objectContaining({ type: "data-kokoro" }))
     const events = [start.projectionEvent, queued.projectionEvent].filter(
-      (event): event is NonNullable<typeof event> => event !== null,
+      (event): event is Exclude<NonNullable<typeof event>, { kind: "message.delta" }> => event !== null && event.kind !== "message.delta",
     )
     expect(r66Fold(r66EmptyState(), events).lastSeq).toBe(7)
   })
