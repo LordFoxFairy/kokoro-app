@@ -1,6 +1,6 @@
 ## 2026-11-12 Skills 当前语言展示修正
 
-正常英文页复现 scope radio 两词条回退中文、日期固定 zh。仅补 en 两已有 key（其他八语言原本齐备），installed/catalog 两日期调用显式使用当前 locale，保 UTC／Unix秒与旧毫秒值；不改筛选／启停／详情行为、CSS、认证或契约。writer 7 RED 后修复，主控冻结5输入：两相关文件41 PASS／types／production build，writer scoped lint零警告，两独审输入核等／CLEAR。英／中／德及动态切语言由现实际组件承接；正常浏览器复验待主控，不冒九语言全站QA或完整默认全绿。沿原#49继续，未部署。
+正常英文页复现 scope radio 两词条回退中文、日期固定 zh。仅补 en 两已有 key（其他八语言原本齐备），installed/catalog 两日期调用显式使用当前 locale，保 UTC／Unix秒与旧毫秒值；不改筛选／启停／详情行为、CSS、认证或契约。writer 7 RED 后修复，主控冻结5输入：两相关文件41 PASS／types／production build，writer scoped lint零警告，独审输入核等／CLEAR。英／中／德及动态切语言由现实际组件承接；正常native英文页已复验4筛选与日期，320px实测document宽320、每radio文本内收、Third-party整词自然换行，恢复原视口。不冒九语言全站QA或完整默认全绿。沿原#49继续，未部署。
 
 ## 2026-11-12 · Task B Share／MCP正式消费者候选
 
