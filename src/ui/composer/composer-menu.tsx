@@ -52,18 +52,18 @@ export function ComposerMenu({
 
   const content = options.map((option) => (
     selectedKey !== undefined ? (
-      <DropdownMenuRadioItem key={option.key} value={option.key}>
+      <DropdownMenuRadioItem key={option.key} value={option.key} className={styles.menuItem}>
         {option.icon ? <span className={styles.menuItemIcon} aria-hidden>{option.icon}</span> : null}
         <span className={styles.menuItemLabel}>
-          <span>{option.label}</span>
+          <span data-slot="composer-option-label">{option.label}</span>
           {option.hint ? <span className={styles.menuItemHint} title={option.hint}>{option.hint}</span> : null}
         </span>
       </DropdownMenuRadioItem>
     ) : (
-      <DropdownMenuItem key={option.key} onSelect={() => onSelect(option.key)}>
+      <DropdownMenuItem key={option.key} className={styles.menuItem} onSelect={() => onSelect(option.key)}>
         {option.icon ? <span className={styles.menuItemIcon} aria-hidden>{option.icon}</span> : null}
         <span className={styles.menuItemLabel}>
-          <span>{option.label}</span>
+          <span data-slot="composer-option-label">{option.label}</span>
           {option.hint ? <span className={styles.menuItemHint} title={option.hint}>{option.hint}</span> : null}
         </span>
       </DropdownMenuItem>

@@ -1459,6 +1459,8 @@ export const zh = {
   "connectorCatalog.geminiDescription": "处理文本、图片和代码等多模态内容",
   // 输入框模型选择器（MODEL-UX）
   "composer.modelSwitch": "切换模型",
+  "composer.modelCatalogEmpty": "当前目录暂无模型。",
+  "composer.modelNotInCatalog": "本轮模型未在当前目录中。",
   "composer.modelLocked": "模型：{model}（本轮锁定）",
   "composer.modelLockedTitle": "模型在本轮已锁定；开新对话可更换",
   // 作品库（ARTIFACT-LIB）

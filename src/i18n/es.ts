@@ -830,6 +830,8 @@ export const es: Partial<Record<MessageKey, string>> = {
   "mcp.errDuplicateUrl": "Esta URL de servidor ya está añadida. Edite el conector existente o use otra URL.",
   "mcp.errGeneric": "La operación falló, inténtelo nuevamente más tarde.",
   "composer.modelSwitch": "Cambiar modelo",
+  "composer.modelCatalogEmpty": "No hay modelos en el catálogo actual.",
+  "composer.modelNotInCatalog": "El modelo de esta ronda no está en el catálogo actual.",
   "composer.modelLocked": "Modelo: {model} (bloqueado en esta ronda)",
   "composer.modelLockedTitle": "El modelo está bloqueado para esta ronda; se puede reemplazar abriendo una nueva conversación",
   "rail.navLibrary": "Biblioteca",

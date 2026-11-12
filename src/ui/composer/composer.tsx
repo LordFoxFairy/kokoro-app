@@ -80,7 +80,10 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
   const creationIntentLabel = creationLabel(t, creationIntent)
   const voiceInput = useVoiceInput({ draft, onDraftChange, preview: voicePreview, previewTranscript: t("composer.voicePreviewTranscript"), ...(voiceDraftScope === undefined ? {} : { scope: voiceDraftScope }) })
   const defaultModel = models.find((model) => model.is_default) ?? models[0]
-  const currentModel = models.find((model) => modelSelector(model) === selectedModel) ?? models.find((model) => modelSelector(model) === preferredModelSelector) ?? defaultModel
+  const selectedCandidate = models.find((model) => modelSelector(model) === selectedModel)
+  // A catalog default is a draft fallback, not evidence about a locked turn.
+  const lockedModelMissing = modelLocked && selectedModel !== null && selectedCandidate === undefined
+  const currentModel = lockedModelMissing ? undefined : selectedCandidate ?? models.find((model) => modelSelector(model) === preferredModelSelector) ?? defaultModel
   const currentSelector = currentModel ? modelSelector(currentModel) : undefined
   const currentModelTriggerLabel = currentModel ? modelTriggerLabel(currentModel) : ""
   const currentModelNewBadgeLabel = currentModel ? modelNewBadgeLabel(currentModel) : null
@@ -156,7 +159,7 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
           {selectedSkill && onRemoveSelectedSkill ? <SelectedSkillPill skill={selectedSkill} onRemove={onRemoveSelectedSkill} /> : null}
           {(emptyWorkspace || models.length === 0) && environmentSelectorPlacement === "controls" ? <ComposerEnvironment label={environmentLabel} /> : null}
           {creationIntent ? <CreationIntentPill intent={creationIntent} label={creationIntentLabel ?? ""} dismissLabel={t("composer.dismissCreationIntent", { label: creationIntentLabel ?? "" })} onDismiss={onCreationIntentDismiss} /> : null}
-          <ComposerSelectors modelCatalogStatus={modelCatalogStatus} onRetryModels={onRetryModels} mode={mode} modeLabel={modeLabel} onModeChange={onModeChange} modeLocked={modeLocked} models={models} hideModelSelector={hideModelSelector} currentModel={currentModel} currentSelector={currentSelector} currentModelTriggerLabel={currentModelTriggerLabel} currentModelNewBadgeLabel={currentModelNewBadgeLabel} currentModelTriggerTitle={currentModelTriggerTitle} onModelChange={onModelChange} modelLocked={modelLocked} />
+          <ComposerSelectors modelCatalogStatus={modelCatalogStatus} onRetryModels={onRetryModels} mode={mode} modeLabel={modeLabel} onModeChange={onModeChange} modeLocked={modeLocked} models={models} hideModelSelector={hideModelSelector} lockedModelMissing={lockedModelMissing} currentModel={currentModel} currentSelector={currentSelector} currentModelTriggerLabel={currentModelTriggerLabel} currentModelNewBadgeLabel={currentModelNewBadgeLabel} currentModelTriggerTitle={currentModelTriggerTitle} onModelChange={onModelChange} modelLocked={modelLocked} />
           <ComposerVoiceActions emptyWorkspace={emptyWorkspace} projectWorkspace={projectWorkspace} creationIntent={creationIntent} state={voiceInput.state} error={voiceInput.error} onToggle={voiceInput.toggle} />
           <ComposerSubmitAction isStreaming={isStreaming} isAwaitingApproval={isAwaitingApproval} showSend={showSend} activeDelivery={activeDelivery} canSend={canSend && !exceedsLimit} onStop={onStop} />
         </div>

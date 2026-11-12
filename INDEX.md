@@ -1,3 +1,5 @@
+2026-11-12：Composer 菜单按内容／视口布局、完整长名与持久选中态；成功空目录／锁定缺席不冒默认模型。关闭 overlay 不再预读 connector 目录，真实打开仍归 Settings／目录自身，Composer 原 reader 不变。验证与范围见 docs/CURRENT.md；无 API／Schema／依赖变化。
+
 2026-11-12：实时与历史正文收敛为同一 AI SDK reader；命令／cursor／恢复仍由现 engine 拥有，安全过程与成果不变。首页仅补读取反馈和既有重试。当前本地验证／真实浏览器范围见 docs/CURRENT.md，网络边界见 docs/API_CONTRACT.md；无新增公开协议或执行框架。
 
 ### A‑08 当前消息资源接线（2026‑11‑09，未提交候选）

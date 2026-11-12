@@ -1,3 +1,5 @@
+2026-11-12：模型／模式附属菜单保原 Radix top8px／collision12px／键盘回焦；菜单按内容定宽并受视口上限约束，完整标签自然换行，checked 常驻字重，触屏行至少44px。目录成功为空可见提示；锁定显式模型缺席不冒显示另一个默认项，不改 engine 选择／草稿／命令。两个反馈键九语言齐备；代表语言／长名布局不等于全部译文质量验收。
+
 `composer-connections.tsx` uses one switch-row presentation for distinct MCP and Custom API choices. Identity keys and limits stay separate (16 MCP/32 APIs); stable list→add→management order for both placements, existing36px rows and200–400px panel budget stay unchanged. Initial pending and failed reads display lightweight status in the existing list; neither impersonates empty success.
 
 ## 语音预览边界（2026-10-28）

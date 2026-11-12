@@ -10,8 +10,6 @@ import type { SettingsSkillsView } from "@/ui/settings/settings-location";
 import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserHubClient } from "@/ui/shell/page-clients";
-import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
-import { warmMcpProjection } from "@/ui/mcp/use-mcp-projection";
 import { createManusSkillHubClient, retainManusSkillHubClient } from "@/ui/skills/manus-skill-client";
 import { warmSkillsPool } from "@/ui/skills/skills-panel";
 
@@ -65,34 +63,6 @@ export function AppFrameOverlaySurfaces({
   commandOpen,
   onCommandOpenChange,
 }: AppFrameOverlaySurfacesProps) {
-  // Start the small, read-only connector projections with the admitted app
-  // session rather than when the Settings dialog first mounts. The Settings
-  // section still joins this exact client/identity flight, but opening it no
-  // longer has to show a transient placeholder before its known list appears.
-  const connectorIdentity = preview
-    ? "preview"
-    : readBoundary?.admitted === true
-      ? readBoundary.subject
-      : null;
-  useEffect(() => {
-    if (!mounted || connectorIdentity === null) return undefined;
-    const client = browserHubClient({ preview });
-    const releaseMcp = warmMcpProjection({
-      client,
-      identity: connectorIdentity,
-      readGeneration: preview ? 0 : readBoundary?.generation ?? 0,
-    });
-    const releaseCustomApi = warmCustomApiProjection({
-      client,
-      identity: connectorIdentity,
-      readGeneration: preview ? 0 : readBoundary?.generation ?? 0,
-    });
-    return () => {
-      releaseMcp();
-      releaseCustomApi();
-    };
-  }, [connectorIdentity, mounted, preview, readBoundary?.generation]);
-
   useEffect(() => {
     if (!mounted) return undefined;
     const base = browserHubClient({ preview });

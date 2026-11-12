@@ -1368,6 +1368,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "connectorCatalog.mailchimpDescription": "Manage audiences, campaigns, and email performance",
   "connectorCatalog.geminiDescription": "Process multimodal text, images, and code",
   "composer.modelSwitch": "Switch model",
+  "composer.modelCatalogEmpty": "No models in the current catalog.",
+  "composer.modelNotInCatalog": "This turn’s model is not in the current catalog.",
   "composer.modelLocked": "Model: {model} (locked this turn)",
   "composer.modelLockedTitle": "Model is locked for this turn; start a new chat to change it",
   "rail.navLibrary": "Library",
