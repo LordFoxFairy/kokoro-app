@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http"
 
 import { afterEach, describe, expect, it } from "vitest"
+import { setImmediate as nextTurn } from "node:timers/promises"
 
 import {
   fetchWithDomain,
@@ -326,6 +327,41 @@ describe("server upstream transport", () => {
       method: "GET",
       timeoutMs: 20,
     })).rejects.toBeInstanceOf(UpstreamTimeoutError)
+  })
+
+  it("inherits an already-aborted request signal while preserving an explicit override", async () => {
+    const controller = new AbortController()
+    const request = new Request("http://web.local", { method: "POST", body: "{}", signal: controller.signal })
+    controller.abort()
+    await expect(readBoundedRequestBody(request)).rejects.toMatchObject({ name: "AbortError" })
+    expect(request.body?.locked).toBe(false)
+    const bytes = await readBoundedRequestBody(request, 4, new AbortController().signal)
+    expect(new TextDecoder().decode(bytes)).toBe("{}")
+  })
+
+  it("cancels a pending incoming read and releases its lock when the request aborts", async () => {
+    const controller = new AbortController()
+    let input!: ReadableStreamDefaultController<Uint8Array>
+    let cancellations = 0
+    const body = new ReadableStream<Uint8Array>({
+      start(stream) { input = stream; stream.enqueue(new TextEncoder().encode("{")) },
+      cancel() { cancellations++ },
+    })
+    const init: RequestInit & { duplex: "half" } = { method: "POST", body, signal: controller.signal, duplex: "half" }
+    const request = new Request("http://web.local", init)
+    const result = readBoundedRequestBody(request).then(() => null, (error: unknown) => error)
+    try {
+      await nextTurn()
+      expect(body.locked).toBe(true)
+      controller.abort()
+      await nextTurn()
+      expect(cancellations).toBe(1)
+      expect(await result).toMatchObject({ name: "AbortError" })
+      expect(body.locked).toBe(false)
+    } finally {
+      input.error(new Error("fixture cleanup"))
+      await result
+    }
   })
 
   it("bounds a streamed incoming request body", async () => {

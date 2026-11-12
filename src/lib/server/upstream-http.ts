@@ -371,7 +371,7 @@ export function requestWithDomain(
 export async function readBoundedRequestBody(
   request: Request,
   maxBytes = DEFAULT_UPSTREAM_MAX_REQUEST_BYTES,
-  signal?: AbortSignal,
+  signal: AbortSignal = request.signal,
 ): Promise<ArrayBuffer> {
   signal?.throwIfAborted()
   const declared = request.headers.get("content-length")
