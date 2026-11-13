@@ -108,7 +108,7 @@ async function handle(request: Request, context: Context): Promise<Response> {
   const uuid=/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffffffffffff)$/iu
   const modelDiscovery = request.method === "GET" && path.length === 3 && path[0] === "model-providers" && uuid.test(path[1] ?? "") && path[2] === "upstream-models"
   const modelPublish=request.method === "POST" && path.length===3 && path[0]==="model-revisions" && uuid.test(path[1]??"") && path[2]==="publish"
-  const modelWrite = modelPublish || (path.length===1 && request.method==="POST" && ["model-providers","model-definitions","model-revisions","model-labels"].includes(path[0]??"")) || (path.length===2 && uuid.test(path[1]??"") && ((request.method==="PUT" && path[0]==="model-routing") || (request.method==="PATCH" && path[0]==="model-labels")))
+  const modelWrite = modelPublish || (path.length===1 && request.method==="POST" && ["model-providers","model-definitions","model-revisions","model-labels"].includes(path[0]??"")) || (path.length===2 && uuid.test(path[1]??"") && ((request.method==="PUT" && path[0]==="model-routing") || (request.method==="PATCH" && ["model-labels","model-revisions"].includes(path[0]??""))))
   if (
     path.length === 0 ||
     (!["mcp", "skills"].includes(path[0] ?? "") && !modelRead && !modelWrite && !modelDiscovery) ||

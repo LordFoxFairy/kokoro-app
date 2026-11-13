@@ -137,6 +137,69 @@ describe("/api/admin/[...path] native session adapter", () => {
     expect(fetchWithDomain).toHaveBeenCalledTimes(1)
   })
 
+  it.each([200, 409, 428])("forwards a draft revision PATCH and its original owner response (%i)", async (status) => {
+    const id = "6ea106a4-031f-460b-9ab3-a3c8cd5f4c92"
+    const receipt = status === 200
+      ? { data: { id, state: "draft", version: 4, context_window: 8192, max_output_tokens: 1024 } }
+      : { error: { code: status === 409 ? "admin_model_revision_version_conflict" : "precondition_required", message: "Owner precondition", retryable: false } }
+    vi.mocked(fetchWithDomain).mockImplementation(async (_url, _domain, init) => Response.json(receipt, {
+      status, headers: { "cache-control": "no-store", "x-request-id": new Headers(init?.headers).get("x-kokoro-request-id")! },
+    }))
+    const { PATCH } = await import("@/app/api/admin/[...path]/route")
+    const body = '{ "context_window": 8192, "max_output_tokens": 1024 }'
+    const request = new Request(`http://localhost/api/admin/model-revisions/${id}`, {
+      method: "PATCH",
+      headers: {
+        cookie: "kokoro-issuer.session_token=fixture; unrelated=not-forwarded",
+        origin: "http://localhost", "content-type": "application/json", "content-length": String(new TextEncoder().encode(body).length),
+        "idempotency-key": "frozen-draft-command", ...(status === 428 ? {} : { "if-match": '\"3\"' }), "x-kokoro-request-id": "draft-patch-request",
+      },
+      body,
+    })
+    const response = await PATCH(request, params(["model-revisions", id]))
+    expect(response.status).toBe(status)
+    expect(await response.json()).toEqual(receipt)
+    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(response.headers.get("x-request-id")).toBe("draft-patch-request")
+    expect(fetchWithDomain).toHaveBeenCalledExactlyOnceWith(
+      `http://bff.test/v1/admin/model-revisions/${id}`, "dev.kokoro.localhost",
+      expect.objectContaining({ method: "PATCH", cache: "no-store", signal: request.signal }),
+    )
+    const init = vi.mocked(fetchWithDomain).mock.calls[0]![2]!
+    const headers = new Headers(init.headers)
+    expect(headers.get("idempotency-key")).toBe("frozen-draft-command")
+    expect(headers.get("if-match")).toBe(status === 428 ? null : '\"3\"')
+    expect(headers.get("if-none-match")).toBeNull()
+    expect(headers.get("cookie")).toBe("kokoro-issuer.session_token=fixture")
+    expect(headers.get("origin")).toBe("http://localhost")
+    expect(headers.get("authorization")).toBeNull()
+    expect(new TextDecoder().decode(init.body as ArrayBuffer)).toBe(body)
+  })
+
+  it("keeps draft PATCH body bounds and exact operation routing before BFF I/O", async () => {
+    const { PATCH, PUT, DELETE } = await import("@/app/api/admin/[...path]/route")
+    const id = "6ea106a4-031f-460b-9ab3-a3c8cd5f4c92"
+    for (const [handler, method, path] of [
+      [PATCH, "PATCH", ["model-revisions", "not-a-uuid"]],
+      [PATCH, "PATCH", ["model-revisions", id, "publish"]],
+      [PATCH, "PATCH", ["model-providers", id]],
+      [PUT, "PUT", ["model-revisions", id]],
+      [DELETE, "DELETE", ["model-revisions", id]],
+    ] as const) {
+      const response = await handler(new Request(`http://localhost/api/admin/${path.join("/")}`, {
+        method, headers: { cookie: "kokoro-issuer.session_token=fixture" },
+      }), params([...path]))
+      expect(response.status).toBe(404)
+    }
+    for (const length of ["65537", "1"]) {
+      const response = await PATCH(new Request(`http://localhost/api/admin/model-revisions/${id}`, {
+        method: "PATCH", headers: { cookie: "kokoro-issuer.session_token=fixture", "content-type": "application/json", "content-length": length }, body: "{}",
+      }), params(["model-revisions", id]))
+      expect(response.status).toBe(400)
+    }
+    expect(fetchWithDomain).not.toHaveBeenCalled()
+  })
+
   it("rejects model prefix expansion, unsupported methods and command headers on reads before BFF I/O", async () => {
     const { GET, POST, PUT } = await import("@/app/api/admin/[...path]/route")
     for (const [handler, method, path] of [[GET, "GET", ["model-provider-secrets"]], [GET, "GET", ["model-revisions", "publish"]], [POST, "POST", ["model-labels", "unexpected"]], [PUT, "PUT", ["model-routing", "not-a-label-id"]]] as const) {

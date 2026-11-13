@@ -1,3 +1,13 @@
+## 2026-11-13 B13 同源草稿PATCH主控复验
+
+只在原Admin薄桥精确开放model-revisions/{UUID} PATCH；原64KiB/raw body、native Cookie/固定Origin、key/CAS/有界signal保持。四输入冻结主控四相关文件56 PASS、正常工作区production build通过，writer相关ESLint/完整非增量TS通过。App Public28.37子集pin/生成链不变；消费者须配BFF396897b8新具名操作与Admin本片，不将薄桥测试当真实owner/native闭环。正常App的dev只由主控短停用于build，原配置/数据保留，无副本/依赖复制；沿原#49，Root负责组合与恢复。
+
+## 2026-11-13 · B13 模型草稿 PATCH 同源网关补口（本地候选）
+
+基线00334cbe；仅现Admin adapter的精确UUID `model-revisions` PATCH加入既有modelWrite allowlist，不扩其它方法／路径，不改Public28.37原件或生成链。草稿JSON由owner解析，Web沿原64KiB请求长度、原生Cookie／固定Origin、body／key／If-Match、取消与响应关联透传；缺失CAS、冲突等仍由BFF裁决，不改认证或UI。
+
+现原测试先复现四项本地404，再13 PASS；连既有discovery／metering／credit薄适配器四文件56 PASS。新增证据包括200／409／428原响应、exact body／key／CAS／signal，以及非法路径／方法和长度拒绝；测试替身不冒真实BFF／System或浏览器成功。主控继续配对BFF、build与正常页面验收，未执行资源／安装／发布操作。
+
 ## 2026-11-13 · Task B 侧栏有限多语言修复验收
 
 沿原 #49，基线 bf8ef938；15 文件只承接实际侧栏既有文案与必要 ARIA。32 个 key × 9 语言自有译文，补118条缺译并纠正7条英文占位，不改 locale resolver、导航资格、排序/权限/焦点/迟到逻辑或用户标题。拖动 hook 只接必需展示字符串，两个真实 caller 通过现 t 传入；不加新 locale 层。
