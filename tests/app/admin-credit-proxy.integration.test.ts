@@ -121,6 +121,37 @@ it("rejects malformed mutation framing/key/CAS/query before session or BFF IO", 
   expect(calls).toHaveLength(0)
 })
 
+it("forwards only the named IAM audit read with its opaque cursor and no caller-supplied authority", async () => {
+  const data = { items: [], next_cursor: "owner-cursor" }
+  peer = (req, res) => reply(req, res, 200, JSON.stringify({ data, meta: { request_id: "audit-bridge-1" } }))
+  const result = await GET(new Request("http://web.test/api/admin/identity/audit-events?limit=25&cursor=opaque%2Fnext", {
+    headers: { cookie: "kokoro-issuer.session_token=fixture", "x-kokoro-request-id": "audit-bridge-1", "x-kokoro-tenant-id": "forged", "x-kokoro-actor-id": "forged", authorization: "Bearer forged" },
+  }), context(["identity", "audit-events"]))
+  expect(result.status).toBe(200)
+  expect(await result.json()).toEqual({ data, meta: { request_id: "audit-bridge-1" } })
+  expect(calls).toHaveLength(1)
+  expect(calls[0]!.url).toBe("/v1/admin/identity/audit-events?limit=25&cursor=opaque%2Fnext")
+  expect(calls[0]!.headers["x-kokoro-tenant-id"]).toBeUndefined()
+  expect(calls[0]!.headers["x-kokoro-actor-id"]).toBeUndefined()
+  expect(calls[0]!.headers.authorization).toBeUndefined()
+  expect(calls[0]!.headers["content-type"]).toBeUndefined()
+  expect(calls[0]!.headers["idempotency-key"]).toBeUndefined()
+})
+
+it("rejects malformed or retired audit reads without forwarding to the BFF", async () => {
+  const audit = context(["identity", "audit-events"])
+  for (const query of ["?tenant_id=other", "?siteId=other", "?limit=0", "?limit=101", "?limit=1&limit=2", "?cursor=", "?cursor=" + "x".repeat(2049)]) {
+    expect((await GET(new Request(`http://web.test/api/admin/identity/audit-events${query}`), audit)).status).toBe(400)
+  }
+  for (const name of ["content-length", "transfer-encoding", "content-type", "content-encoding", "if-match", "if-none-match", "idempotency-key"]) {
+    expect((await GET(new Request("http://web.test/api/admin/identity/audit-events", { headers: { [name]: name === "content-length" ? "0" : "arbitrary" } }), audit)).status).toBe(400)
+  }
+  const retired = new AbortController()
+  retired.abort()
+  expect((await GET(new Request("http://web.test/api/admin/identity/audit-events", { signal: retired.signal }), audit)).status).toBe(503)
+  expect(calls).toHaveLength(0)
+})
+
 it("rejects member query and write framing before any session inspection", async () => {
   const contexts = context(["identity", "members"])
   for (const query of ["?tenant_id=other", "?limit=0", "?limit=101", "?limit=1&limit=2", "?cursor=", "?cursor=" + "x".repeat(2049)])

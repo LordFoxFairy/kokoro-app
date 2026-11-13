@@ -1,3 +1,9 @@
+## 2026-11-13 B13：Admin IAM 审计具名桥（源码阶段已验，正常配对待完成）
+
+保当前 Browser→Admin 同源→App Product bridge→BFF→IAM 边界。仅现 /api/admin/[...path] 增加 exact GET identity/audit-events，并在原有有界 Admin proxy 复用 limit/cursor 读传输；不开放 identity 任意前缀。原 native Cookie/固定Origin/service envelope/request-id/10秒入站至响应预算、原字节上限/取消/无自动重试保持。Web 不直连 IAM、读审计库或作权限决定，不新增OAuth/token/SDK/缓存/事件协议。
+
+桥只转正式BFF读，不持有审计正文事实或进行内部auth。Public29.1正式发行后沿现固定artifact正规消费；原52项Admin消费由Admin独立pin，App通用业务生成器与browser-private来源不因一个透明Admin GET机械迁移。公开API门户仅原catalog/正规reference增量，内部工程文档不混入产品门户。
+
 ## 2026-11-13 Task B：Project 协作消费设计（候选，正常未激活）
 
 唯一边界仍为Browser→同源adapter→BFF→owner。Project管理使用当前canonical Project Access；route slug不充当授权事实，viewer只读，editor只控制实际属于自身的执行。分享改为团队成员显式Grant，不保留“复制私人URL等于共享”的旧产品入口。

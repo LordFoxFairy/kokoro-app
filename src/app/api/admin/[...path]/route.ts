@@ -96,7 +96,9 @@ async function handle(request: Request, context: Context): Promise<Response> {
   const config = productBffConfig()
   if (config === null) return failure(503, "admin_gateway_unavailable", requestId)
   const { path } = await context.params
-  const creditKind = path.length === 2 && path[0] === "identity" && path[1] === "members" && request.method === "GET" ? "members" : path.length === 2 && path[0] === "billing" && path[1] === "credit-grants" && request.method === "POST" ? "grant" : null
+  const creditKind = path.length === 2 && path[0] === "identity" && request.method === "GET"
+    ? path[1] === "members" ? "members" : path[1] === "audit-events" ? "audit" : null
+    : path.length === 2 && path[0] === "billing" && path[1] === "credit-grants" && request.method === "POST" ? "grant" : null
   if (creditKind !== null) return proxyAdminBilling(request, config, creditKind, requestId, discoveryDeadline)
   const meteringKind = path.length === 3 && path[0] === "billing" && path[1] === "metering"
     ? request.method === "GET" && path[2] === "pricing" ? "pricing"

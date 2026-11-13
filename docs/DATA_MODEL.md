@@ -1,3 +1,7 @@
+## 2026-11-13 B13：审计桥不新增状态（源码阶段已验）
+
+App不持久化审计事件、权限、cursor或正文，不新增store/cache/Session事实。读取只活在原HTTP预算中，迟到/中止响应丢弃；状态归Admin UI lifetime与IAM owner，原聊天/AI SDK/草稿/财务未知命令不受本片影响。
+
 ## 2026-11-13 Task B：Project 协作本地视图与待确认命令（候选）
 
 Web没有新增数据库、owner Schema、权限镜像或服务凭据。Project Access、viewer/editor、access_version、当前消息再生成/Run控制与Scheduled revision/execution_actor_id均是BFF当前只读事实；immutable ACK允许历史省略字段，不补造executor/revision，不将私有asset_id要求加到正式共享详情。

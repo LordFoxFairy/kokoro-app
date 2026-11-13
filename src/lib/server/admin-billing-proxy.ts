@@ -8,11 +8,11 @@ function failure(status: number, code: string, requestId: string): Response {
     { status, headers: { "cache-control": "no-store", "x-request-id": requestId } },
   )
 }
-/** Named member/funding/pricing operations only; no prefix proxy or business retry. */
+/** Named identity/funding/pricing operations only; no prefix proxy or business retry. */
 export async function proxyAdminBilling(
   request: Request,
   config: ProductBffConfig,
-  kind: "members" | "grant" | "pricing" | "rate" | "policy",
+  kind: "members" | "audit" | "grant" | "pricing" | "rate" | "policy",
   requestId: string,
   deadlineAt: number,
 ): Promise<Response> {
@@ -22,17 +22,17 @@ export async function proxyAdminBilling(
   const path =
     kind === "grant"
       ? "billing/credit-grants"
-      : kind === "members"
-        ? "identity/members"
+      : kind === "members" || kind === "audit"
+        ? "identity/" + (kind === "members" ? "members" : "audit-events")
         : "billing/metering/" + (kind === "pricing" ? "pricing" : kind + "-revisions")
   const url = new URL(request.url)
   const query = url.searchParams
-  if (metering && url.pathname !== "/api/admin/" + path) return failure(400, "invalid_admin_request", requestId)
+  if ((metering || kind === "audit") && url.pathname !== "/api/admin/" + path) return failure(400, "invalid_admin_request", requestId)
   const forbidden = [
     "if-match",
     "if-none-match",
     ...(mutation ? ["transfer-encoding"] : ["idempotency-key", "content-type", "content-length", "transfer-encoding"]),
-    ...(metering ? ["content-encoding"] : []),
+    ...(metering || kind === "audit" ? ["content-encoding"] : []),
   ]
   if (forbidden.some((name) => request.headers.has(name))) return failure(400, "invalid_admin_request", requestId)
   if (!mutation) {
@@ -41,7 +41,7 @@ export async function proxyAdminBilling(
     for (const [key, value] of query) {
       if (
         query.getAll(key).length !== 1 ||
-        (key === "limit" ? !/^(?:[1-9]|[1-9][0-9]|100)$/u.test(value) : key !== "cursor" || !value || [...value].length > 2048 || value.includes("\0"))
+        (key === "limit" ? !/^(?:[1-9]|[1-9][0-9]|100)$/u.test(value) : key !== "cursor" || !value || (kind === "audit" ? value.length : [...value].length) > 2048 || value.includes("\0"))
       )
         return failure(400, "invalid_admin_request", requestId)
     }
@@ -98,7 +98,7 @@ export async function proxyAdminBilling(
       headers.set("idempotency-key", request.headers.get("idempotency-key")!)
     }
     const upstream = await requestWithDomain(
-      `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/admin/${path}${kind === "members" ? new URL(request.url).search : ""}`,
+      `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/admin/${path}${kind === "members" || kind === "audit" ? new URL(request.url).search : ""}`,
       config.domain,
       {
         method: mutation ? "POST" : "GET",

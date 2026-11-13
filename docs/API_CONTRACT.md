@@ -1,3 +1,7 @@
+## 2026-11-13 B13：Admin 审计桥输入边界（源码阶段已验）
+
+仅 GET /api/admin/identity/audit-events → BFF GET /v1/admin/identity/audit-events。只允许 limit=1–100 与非空≤2048 opaque cursor；重复/未知query、tenant/site selector、GET body、命令/CAS/编码/framing头拒绝。原 request-id、no-store、有限body/response与取消边界保持；不把坏/失败响应替换成成功空数据，不增加generic prefix或任意upstream URL。安全字段及data.items/next_cursor归BFF canonical，App只是具名透明传输；Admin的正式contract检查承担页面schema消费证明。
+
 ## 2026-11-13 Task B：Public29 消费与同源接线（候选）
 
 固定BFF `38d47c958cecdc072ee60d5a96ad17c48ac691c6`／29.0.0，完整SHA256 `45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509`。原正式生成器重出，新增Project Access窄codec；独立auth-session/reauthorization来源不机械升级。build/test叶逆证精确还原已发行28.37的完整Git bytes，原封存父hash不改；不存在runtime旧协议fallback。

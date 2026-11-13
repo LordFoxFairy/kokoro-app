@@ -1,3 +1,9 @@
+## 2026-11-13 B13：Admin IAM 审计具名桥（源码阶段已验）
+
+仅现 Product Admin adapter 增加 exact GET identity/audit-events，复用原 bounded proxy 的 limit/cursor、native Cookie/固定Origin/服务envelope、request-id/no-store、10秒总预算及取消；不开放 identity prefix、不直连IAM或新增schema/parser/SDK/认证/缓存。Admin 是这项公开响应的正式raw contract消费者；App是透明传输，原通用业务及browser-private pins不机械升级。
+
+真实loopback HTTP新回归先RED404，最终相关三文件52 PASS/0skip；非增量types/scopedlint、真实Next生产build通过，三源码输入SHA保持，独审CLEAR。此为App source adapter，不冒IAM/BFF配对或正常审计页native；完整消费者pin/门户与Root精确组合由主控串行续接。原资金写/metadata恢复语义保持；next-env.d.ts是正常Next自动生成输入，不纳入交付。
+
 ## 2026-11-13 Project Skills 词条组九语言统一收口
 
 正常法语同一弹窗继续发现标题／说明／查看我的技能仍英语、emptyHint中文，因此不再逐个key补丁：只将现35个 projectSkills.* 连同已修 emptyState 在九现有locale各自补齐。仅8词典／overlays／现resolver测试10路径；中文源及原emptyState行保持，删除仅此34项旧projectSkillsFallback与8处spread，其它产品fallback、合并顺序、组件/业务请求/状态机不变。
