@@ -25,7 +25,7 @@ Kokoro 把一次工作放在同一个会话里：描述目标、补充资料、�
 
 - [任务与对话](tasks/index.md)：发送、过程、停止和刷新恢复。
 - [文件与结果](files/index.md)：附件、历史引用、资料库、Canvas 和预览限制。
-- [项目](projects/index.md)：组织会话、保存指令与管理手工 Todo。
+- [项目](projects/index.md)：组织会话、保存指令、管理手工 Todo，以及向团队成员授予只读或编辑访问。
 - [定时任务](scheduled-tasks/index.md)：设置时间、暂停恢复及查看执行结果。
 - [连接与语音](connections/index.md)：适用入口、授权与浏览器识别限制。
 - [个性化与个人知识](settings/personalization.md)：编辑个人资料、维护知识及控制后续新消息的使用。

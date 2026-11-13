@@ -1,5 +1,12 @@
 # 变更记录
 
+## 2026-11-13 · Public29
+
+- 固定 BFF `509597f935519cd1d4ac81e6db397794bc43d25d` 的 Public29 原始契约，沿现生成链发布 API v1 参考；完整 owner artifact 的 227 项操作中，221 项 public 进入门户，6 项 browser-private 保持排除。
+- 新增 Project 当前访问、授权列表、设置与撤销授权，以及六项 Custom API 管理操作。项目 owner、Conversation creator、Run actor 与当前读取者分别判定，项目角色不替代执行资格或管理员资格。
+- Scheduled task 更新与 retry 现在要求当前 revision 对应的 `If-Match`；当前详情与不可变命令回执分别读取。跨成员修改执行配置后的暂停与明确启用规则见[定时任务](concepts/scheduled-tasks.md)。这是消费者需要承接的条件写入变化，不是自动重试或旧写入的宽容分支。
+- 普通原生 Session、独立 `skill.list` Key/OpenApp 与 Share／提供方回调等例外不变。门户固定来源不改 App 业务 client，也不代表所有共享执行、结果或后台管理旅程已完成真实环境验收。
+
 ## 2026-11-13 · Public28.38
 
 - 固定 BFF `396897b8e5a97cbb546fe265f93bc2b1b80ad7d2` 已发布的 Public28.38，正规生成同一 API v1 参考。新增模型草稿修订的条件 PATCH；只修改未发布修订，不自动发布或重选版本。

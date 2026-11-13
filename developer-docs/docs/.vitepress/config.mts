@@ -94,7 +94,7 @@ export default defineConfig({
             { text: '快速开始', link: '/product/' },
             { text: '任务与对话', items: [{ text: '发送、过程与恢复', link: '/product/tasks/' }] },
             { text: '文件与结果', items: [{ text: '附件、资料库与 Canvas', link: '/product/files/' }] },
-            { text: '项目', items: [{ text: '会话、指令与手工 Todo', link: '/product/projects/' }] },
+            { text: '项目', items: [{ text: '会话、指令、Todo 与协作', link: '/product/projects/' }] },
             { text: '定时任务', items: [{ text: '计划、日历与执行记录', link: '/product/scheduled-tasks/' }] },
             { text: '连接与语音', items: [{ text: '入口、授权与识别', link: '/product/connections/' }] },
             { text: '设置', items: [{ text: '个性化与个人知识', link: '/product/settings/personalization' }] },
