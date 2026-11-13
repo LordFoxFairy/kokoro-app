@@ -1,3 +1,11 @@
+## 2026-11-13 Task B 文档语言与 API 门户收口
+
+只删除 Runtime Manifest 覆盖 html.lang 的重复 effect，由现 LocaleProvider 唯一维护所选文档语言；请求 navigator.language、manifest scope/policy/取消/期限原样保持，System允许locale与设置码映射仍是独立待裁定项。初始en-US→en-US受控案例原实现即GREEN不冒RED；schema-valid迟到en-GB覆盖fr真实RED，最低回归最终31 PASS（含既有SET31与error/preview），主控同文件31 PASS、非增量types、正式App build、独审CLEAR，六源码/门户输入SHA停写核等。正常原生浏览器English→Français显示与html.lang=fr、硬刷新仍fr、最后恢复English/en；en-GB仅受控响应，不称正常System已支持。
+
+门户只消费已发布BFF396897b8/Public28.38/d6927c3a原artifact，更新新模型草稿条件PATCH参考，App业务client28.37不机械升级。参考首页旧Bearer提示纠正，plain/Secure cookie互斥名称明确；旧changelog多空行按lint修正。主控门户lint/provenance/55tests/正式VitePress build/62页20603内部链接/确定性reference211 public operations/architecture通过。首轮执行cwd写路径错误、旧pin相对当前checkout不匹配、既有changelog空行及auth漏Secure名称断言失败均留日志；正规配对与正文修正后通过，没有删断言或放宽provenance。
+
+原Task B PR保持Draft；未重跑全App默认/模型/计费，不冒整个B14/B15或Task B闭环。正常App只短停自己的3310用于一次正式build，同配置已恢复；PG/Redis/原卷/其它owner不变。next-env开发生成差异不提交。
+
 ## 2026-11-13 B13 同源草稿PATCH主控复验
 
 只在原Admin薄桥精确开放model-revisions/{UUID} PATCH；原64KiB/raw body、native Cookie/固定Origin、key/CAS/有界signal保持。四输入冻结主控四相关文件56 PASS、正常工作区production build通过，writer相关ESLint/完整非增量TS通过。App Public28.37子集pin/生成链不变；消费者须配BFF396897b8新具名操作与Admin本片，不将薄桥测试当真实owner/native闭环。正常App的dev只由主控短停用于build，原配置/数据保留，无副本/依赖复制；沿原#49，Root负责组合与恢复。

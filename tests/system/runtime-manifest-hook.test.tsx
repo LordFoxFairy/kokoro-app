@@ -2,6 +2,8 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useRuntimeManifest } from "@/system/use-runtime-manifest"
+import { LocaleProvider, useLocale } from "@/i18n/context"
+import { LOCALE_STORAGE_KEY } from "@/i18n/messages"
 
 describe("useRuntimeManifest", () => {
   afterEach(() => {
@@ -18,6 +20,51 @@ describe("useRuntimeManifest", () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(result.current.source).toBe("preview")
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("keeps the selected document language when a late manifest settles, fails or enters preview", async () => {
+    const storedLocale = localStorage.getItem(LOCALE_STORAGE_KEY)
+    const previousLang = document.documentElement.lang
+    // A non-default, schema-valid English tag makes the manifest locale effect
+    // rerun; en-US -> en-US alone would not reproduce the competing writer.
+    const browserLanguage = vi.spyOn(navigator, "language", "get").mockReturnValue("en-GB")
+    const late = set31Deferred<Response>()
+    const fetchMock = vi.fn().mockImplementationOnce(() => late.promise).mockRejectedValueOnce(new Error("system unavailable"))
+    vi.stubGlobal("fetch", fetchMock)
+    localStorage.setItem(LOCALE_STORAGE_KEY, "en")
+    const view = renderHook(({ preview }: { preview: boolean }) => ({
+      preference: useLocale(),
+      runtime: useRuntimeManifest({ preview }),
+    }), { initialProps: { preview: false }, wrapper: LocaleProvider })
+    try {
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+      expect(new URL(String(fetchMock.mock.calls[0]![0]), "https://app.example").searchParams.get("locale")).toBe("en-GB")
+      act(() => view.result.current.preference.setLocale("fr"))
+      expect(document.documentElement.lang).toBe("fr")
+
+      const payload = set31Payload("Late English site")
+      await act(async () => { late.resolve(new Response(JSON.stringify({ data: { ...payload.data, locale: "en-GB" } }), { status: 200 })) })
+      await waitFor(() => expect(view.result.current.runtime.source).toBe("live"))
+      expect(view.result.current.runtime.manifest.locale).toBe("en-GB")
+      expect(view.result.current.preference.locale).toBe("fr")
+      expect(document.documentElement.lang).toBe("fr")
+
+      act(() => view.result.current.runtime.retry())
+      await waitFor(() => expect(view.result.current.runtime.source).toBe("error"))
+      expect(document.documentElement.lang).toBe("fr")
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+
+      view.rerender({ preview: true })
+      await waitFor(() => expect(view.result.current.runtime.source).toBe("preview"))
+      expect(document.documentElement.lang).toBe("fr")
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      view.unmount()
+      browserLanguage.mockRestore()
+      if (storedLocale === null) localStorage.removeItem(LOCALE_STORAGE_KEY)
+      else localStorage.setItem(LOCALE_STORAGE_KEY, storedLocale)
+      document.documentElement.lang = previousLang
+    }
   })
 
   it("does not relabel a live manifest failure as preview", async () => {

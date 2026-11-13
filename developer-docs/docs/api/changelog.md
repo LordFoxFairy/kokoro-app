@@ -1,11 +1,15 @@
 # 变更记录
 
+## 2026-11-13 · Public28.38
+
+- 固定 BFF `396897b8e5a97cbb546fe265f93bc2b1b80ad7d2` 已发布的 Public28.38，正规生成同一 API v1 参考。新增模型草稿修订的条件 PATCH；只修改未发布修订，不自动发布或重选版本。
+- 纠正参考首页遗留的“普通产品接口仍声明 Bearer”提示；普通工作台原生 Session 与独立 `skill.list` 外部身份继续分开。未新增认证实现或更改 App 业务 client pin。
+
 ## 2026-11-12 · Public28.37
 
 - 固定 BFF `0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97` 的完整 Public28.37（216 operations），包含只读会话分享 metadata GET 与 Team Skill delete_series 权限枚举。
 - 普通产品 operation 的认证 metadata 与现原生 Session／受信 adapter envelope 对齐；外部 skill.list、公共分享、webhook 和 service-only 例外保持各自边界。机器声明不是正常部署或全部产品旅程的验收证明。
 - browser-private 新授权不进入公开 API 目录。
-
 
 ## 2026-11-11 · 产品指南与 Public 28.35.0
 

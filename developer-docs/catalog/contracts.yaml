@@ -3,15 +3,15 @@ contracts:
   - id: kokoro-bff-public-v1
     owner: kokoro-bff
     visibility: public
-    version: 28.37.0
+    version: 28.38.0
     source:
       repository: https://github.com/LordFoxFairy/kokoro-bff.git
       checkout: ../../kokoro-bff
       path: contract/openapi/v1/openapi.yaml
-      commit: 0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97
+      commit: 396897b8e5a97cbb546fe265f93bc2b1b80ad7d2
     digest:
       algorithm: sha256
-      value: 737688c79fa4fad8216168656d0fe7e4131b496ef2b506e424dbff82d7dca2c8
+      value: d6927c3ae844303a5375cf196049a76db4119ab21478357314345cea0dbf13a1
     generation:
       command: corepack pnpm reference:generate
     publication:

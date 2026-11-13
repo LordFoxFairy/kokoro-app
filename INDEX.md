@@ -1,3 +1,5 @@
+2026-11-13：文档语言只由src/i18n/context.tsx现LocaleProvider维护，Runtime Manifest不再写html.lang；服务端metadata locale不替代用户UI语言。API门户catalog已消费发行Public28.38，当前事实与验证见docs/CURRENT.md。
+
 2026-11-12：原Task B PR在隔离checkout普通整合当前main，保Public28.35/native/Task A事实；API/JSON ACK以安全locator承接fresh exact详情与读取恢复。未发行owner能力不激活，原历史保留。当前证据／未验边界见docs/CURRENT.md，API无增量。
 
 2026-11-12：Composer 菜单按内容／视口布局、完整长名与持久选中态；成功空目录／锁定缺席不冒默认模型。关闭 overlay 不再预读 connector 目录，真实打开仍归 Settings／目录自身，Composer 原 reader 不变。验证与范围见 docs/CURRENT.md；无 API／Schema／依赖变化。

@@ -12,7 +12,7 @@
 
 ### 第一方参考与机器契约
 
-固定 Public28.37 artifact 的普通产品接口声明受信 adapter envelope、原生 Session Cookie 与精确 Web Origin。plain 和 Secure Cookie 表示部署配置的互斥模式，不是同时接受两种名称的运行时 fallback。生成页追溯 owner 原件；浏览器仅访问同源入口，不持有内部服务凭据，也不将用户 Session 转为 Bearer。匿名公共分享、提供方 webhook、service-only operation 与独立 `skill.list` Bearer 接入分别遵循自身声明，不能套用普通工作台认证。
+当前固定 artifact 的普通产品接口声明受信 adapter envelope、原生 Session Cookie 与精确 Web Origin。`kokoro-issuer.session_token`（本地 plain）与 `__Secure-kokoro-issuer.session_token`（HTTPS Secure）表示部署配置的互斥模式，不是同时接受两种名称的运行时 fallback。生成页追溯 owner 原件；浏览器仅访问同源入口，不持有内部服务凭据，也不将用户 Session 转为 Bearer。匿名公共分享、提供方 webhook、service-only operation 与独立 `skill.list` Bearer 接入分别遵循自身声明，不能套用普通工作台认证。
 
 任务、分页、上传和恢复示例是受信第一方服务端参考，在本地 fixture 中使用以下配置；不是给外部客户端索取内部凭据的步骤：
 

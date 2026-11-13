@@ -175,12 +175,8 @@ export function useRuntimeManifest(options: { preview?: boolean } = {}): {
     setAttempt((value) => value + 1)
   }, [])
 
-  useEffect(() => {
-    if (preview) return
-    // Keep the document language aligned with the tenant/product runtime
-    // without exposing tenant identity or requiring a second config channel.
-    document.documentElement.lang = manifest.locale
-  }, [manifest.locale, preview])
+  // LocaleProvider owns document language; System metadata must not override
+  // the user's effective UI language when a manifest settles or falls back.
 
   useEffect(() => {
     document.title = `${manifest.brand.name} Web`
