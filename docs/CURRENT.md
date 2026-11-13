@@ -1,3 +1,11 @@
+## 2026-11-13 Public29 门户已发行，正常 Project ACL 与终态恢复已验
+
+`08bc30b6c7d2debaa2cba7606f1e214ff58fede3` 已推原 PR #49：九个门户路径消费已发行 BFF509597f／Public29.0.0，221 个公开操作／22 个生成文件，六个 browser-private 操作排除；完整 owner 为 227，勿混计。Project／ScheduledTask 的 API 概念与产品导航、可用边界已同步，复用单一 catalog／生成器，不新增公开机器契约副本。后继 BFF replay runtime 修复不改变此 wire pin。
+
+writer 门户 lint／types／55 tests／provenance／reference／examples／architecture／build 与 62 页 21475 链接检查通过；主控九 SHA 停写核等并独立复验 provenance／reference／links。既存大 chunk 警告保留，未再跑全 App 默认或门户全门。Root 固定精确源码组合；这是文档交付，不等同全部产品功能完成。
+
+正常 App 已按本地 HTTP／IAM 环境恢复源码 next dev，未放宽生产 Secure Cookie。真实 owner＋独立普通成员已验 Project viewer 只读、editor 保存、降权写 403、不变性及撤销后列表／直达旧内容退休；下方“候选未激活”只属前阶段。BFF 修复 SSE replay 后，正常会话硬刷新准确恢复新 Run 的 Stopped 与旧 incompatible 失败。完整共享成功执行／安全 FINAL／Artifact 和到期协作仍待；不把 cancelled 当成功答复。next-env.d.ts 只有 Next 自动切 dev types 的未提交差异，业务源未夹带变更。
+
 ## 2026-11-13 Task B：Public29 Project 协作消费者候选（未正常激活）
 
 固定 BFF `38d47c958cecdc072ee60d5a96ad17c48ac691c6`／Public29.0.0 完整 artifact，SHA256 `45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509`。所有受影响消费者由原生成入口重出，新增四项 Project Access 的窄 generated codec/check；auth-session、MCP原生重新授权等独立 profile 不浮动更新。build/test-only 精确29→已发行28.37完整Git原件的叶逆证接回原链，封存父SHA不变，不存在运行时降级／旧入口fallback。
