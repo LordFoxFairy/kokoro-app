@@ -267,3 +267,12 @@ it("all shipped locales own action counts, mixed failures and the distinct Run c
     }
   }
 })
+
+it("provides Custom API governance labels in each of the nine existing dictionaries without fallback", () => {
+  for (const [locale, dictionary] of Object.entries({ zh, en, ja, ko, es, fr, de, pt, ru })) {
+    for (const key of ["customApi.governance.active", "customApi.governance.quarantined", "customApi.governance.revoked", "customApi.governance.unavailable", "customApi.governance.readOnly"] as const) {
+      expect(Object.hasOwn(dictionary, key)).toBe(true);
+      expect(resolveMessage(locale as typeof LOCALES[number], key)).toBe(dictionary[key]);
+    }
+  }
+});

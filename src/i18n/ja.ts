@@ -1991,4 +1991,9 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "projectMcp.unconfirmed": "保存結果を確認できていません。選択は保持されています。開き直して現在の設定を取得してください。",
   "projectMcp.limit": "推奨できるコネクタは16個までです。",
   "projectMcp.remove": "推奨を削除：{name}",
+  "customApi.governance.active": "有効",
+  "customApi.governance.quarantined": "隔離中",
+  "customApi.governance.revoked": "取り消し済み",
+  "customApi.governance.unavailable": "現在利用できません",
+  "customApi.governance.readOnly": "この設定は読み取り専用です。削除はできます。",
 }

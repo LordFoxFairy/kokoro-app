@@ -12,7 +12,7 @@ import { McpCustomApiCard } from "@/ui/mcp/mcp-custom-api-card"
 import { invalidateCustomApiProjection } from "@/ui/mcp/use-custom-api-projection"
 import { invalidateMcpConnectorProjection } from "@/ui/mcp/use-mcp-projection"
 
-const profile = {
+const profile = { governance_status: "active" as const,
   profile_id: "my-api-exact", name: "My actual API", instructions: "Saved API instructions",
   state_version: "2", environment: [], created_at: "2026-10-25T00:00:00Z", updated_at: "2026-10-25T00:00:00Z",
 } satisfies CustomApiProfile
@@ -472,3 +472,30 @@ it.each([false, true])("refreshes a successful empty Provider directory through 
   expect(f.client.createMcpConnector).not.toHaveBeenCalled()
   expect(f.client.preparePrivateMcpServer).not.toHaveBeenCalled()
 })
+
+it.each(["quarantined", "revoked"] as const)("keeps %s metadata visible and Delete available without permitting fresh edits", async governance_status => {
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog");
+  localStorage.setItem("kokoro.locale", "zh");
+  const onSave = vi.fn(), onDelete = vi.fn();
+  render(<LocaleProvider><CustomApiDetailDialog profile={{ ...profile, governance_status }} admitted canUpdate canRemove busy={false} actionError={false} command={undefined}
+    returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={onSave} onDelete={onDelete} onResume={vi.fn()} /></LocaleProvider>);
+  expect(screen.getByRole("textbox", { name: "名称" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "删除" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认移除" }));
+  expect(onDelete).toHaveBeenCalledOnce(); expect(onSave).not.toHaveBeenCalled();
+});
+
+it("keeps explicit original-command recovery available after fresh governance becomes nonactive", async () => {
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog");
+  const { resolveMessage } = await import("@/i18n/resolve");
+  localStorage.setItem("kokoro.locale", "zh");
+  const resume = vi.fn();
+  render(<LocaleProvider><CustomApiDetailDialog profile={{ ...profile, governance_status: "quarantined" }} admitted canUpdate canRemove busy={false} actionError={false}
+    command={{ profileId: profile.profile_id, operation: "update", kind: "unknown" }}
+    returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} onResume={resume} /></LocaleProvider>);
+  const retry = screen.getByRole("button", { name: resolveMessage("zh", "mcp.retryOriginal") });
+  expect(retry).toBeEnabled(); fireEvent.click(retry); expect(resume).toHaveBeenCalledOnce();
+  expect(screen.getByRole("button", { name: "删除" })).toBeDisabled();
+});

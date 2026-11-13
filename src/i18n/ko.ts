@@ -1943,4 +1943,9 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "projectMcp.unconfirmed": "저장 결과가 확인되지 않았습니다. 선택은 유지됩니다. 다시 열어 현재 설정을 읽으세요.",
   "projectMcp.limit": "커넥터는 최대 16개까지 추천할 수 있습니다.",
   "projectMcp.remove": "추천 제거: {name}",
+  "customApi.governance.active": "활성",
+  "customApi.governance.quarantined": "격리됨",
+  "customApi.governance.revoked": "철회됨",
+  "customApi.governance.unavailable": "현재 사용할 수 없음",
+  "customApi.governance.readOnly": "이 구성은 읽기 전용입니다. 삭제는 가능합니다.",
 }

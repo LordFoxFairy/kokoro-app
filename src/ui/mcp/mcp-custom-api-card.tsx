@@ -28,6 +28,7 @@ export function McpCustomApiCard({ profile, onSelect, presentation = "management
         <span className={plaza ? galleryStyles.copy : styles.connectorIdentity}>
           <span>
             <strong className={plaza ? styles.providerName : undefined}><McpSearchHighlight text={profile.name} query={plaza ? searchQuery : ""} /></strong>
+            <small>{t(`customApi.governance.${profile.governance_status}`)}</small>
             <small className={plaza ? styles.providerDescription : undefined}>{profile.instructions ?? t("connectorCatalog.customApi")}</small>
           </span>
         </span>

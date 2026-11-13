@@ -11,7 +11,7 @@ import type { CustomApiSelection } from "@/engine/custom-api-selection"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context"
 import { AUTH_INDEX_SUBJECT_KEY, readBrowserAuthIndexSubject } from "./page-clients"
-export type ComposerCustomApi = { id: string; name: string; stateVersion: string; selectable?: boolean; icon?: CustomApiProfile["icon"] }
+export type ComposerCustomApi = { id: string; name: string; stateVersion: string; selectable?: boolean; governanceStatus?: CustomApiProfile["governance_status"]; icon?: CustomApiProfile["icon"] }
 export type CustomApiDraftSelection = { context: object; selectedProfiles: readonly CustomApiSelection[]; isCurrent: () => boolean; update: (change: (values: readonly CustomApiSelection[]) => readonly CustomApiSelection[]) => void }
 const empty = Object.freeze([])
 const noop = () => () => undefined
@@ -68,7 +68,7 @@ export function useComposerCustomApis({ engine, client, boundary, enforceSubject
         for (const profile of page.items) {
           if (ids.has(profile.profile_id)) throw Error("Duplicate Custom API profile")
           ids.add(profile.profile_id)
-          items.push({ id: profile.profile_id, stateVersion: profile.state_version, selectable: customApiVersionIsSelectable(profile.state_version), name: profile.name, ...(profile.icon ? { icon: profile.icon } : {}) })
+          items.push({ id: profile.profile_id, stateVersion: profile.state_version, selectable: profile.governance_status === "active" && customApiVersionIsSelectable(profile.state_version), governanceStatus: profile.governance_status, name: profile.name, ...(profile.icon ? { icon: profile.icon } : {}) })
         }
         nextCursor = page.page.next_cursor ?? undefined
         if (nextCursor !== undefined && (nextCursor === cursor || seen.has(nextCursor) || (!restoring && active.cursor !== undefined && loadedCursors.current.has(nextCursor)))) throw Error("Repeated Custom API cursor")
@@ -98,7 +98,7 @@ export function useComposerCustomApis({ engine, client, boundary, enforceSubject
     if (!candidate || localDraft || snapshot.hydrating || !current()) return
     if (candidate.profiles.length === 0) { engine?.restoreCustomApiSelection?.(candidate, []); return }
     if (!same || catalog.status !== "ready" || !catalog.complete || catalog.revision !== active.revision) return
-    engine?.restoreCustomApiSelection?.(candidate, candidate.profiles.filter(value => catalog.items.some(item => item.id === value.profileId && item.stateVersion === value.expectedStateVersion)))
+    engine?.restoreCustomApiSelection?.(candidate, candidate.profiles.filter(value => catalog.items.some(item => item.id === value.profileId && item.selectable === true && item.stateVersion === value.expectedStateVersion)))
   })
   return {
     items, status,
@@ -108,7 +108,7 @@ export function useComposerCustomApis({ engine, client, boundary, enforceSubject
     loadMore: () => { if (current() && status !== "loading" && same && catalog.nextCursor) setRequest(previous => ({ scope, revision: previous.scope === scope ? previous.revision + 1 : 1, cursor: catalog.nextCursor })) },
     toggle: (id: string) => {
       if (!current()) return
-      const change = (original: readonly CustomApiSelection[]) => original.some(value => value.profileId === id) ? original.filter(value => value.profileId !== id) : original.length < 32 && items.some(item => item.id === id && item.selectable !== false) ? [...original, { profileId: id, expectedStateVersion: items.find(item => item.id === id)!.stateVersion }] : original
+      const change = (original: readonly CustomApiSelection[]) => original.some(value => value.profileId === id) ? original.filter(value => value.profileId !== id) : status === "ready" && same && catalog.revision === active.revision && original.length < 32 && items.some(item => item.id === id && item.selectable !== false) ? [...original, { profileId: id, expectedStateVersion: items.find(item => item.id === id)!.stateVersion }] : original
       if (localDraft) localDraft.update(change)
       else engine?.setSelectedCustomApiProfiles?.(change(engine.getSnapshot().selectedCustomApiProfiles ?? empty))
     },

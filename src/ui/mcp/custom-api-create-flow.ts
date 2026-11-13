@@ -1,5 +1,5 @@
 import type { HubClient } from "@/hub/client";
-import { customApiCreateInputSchema, customApiProfileSchema, type CustomApiCreateInput } from "@/hub/custom-api.schema";
+import { customApiCreateInputSchema, customApiReceiptProfileSchema, type CustomApiCreateInput } from "@/hub/custom-api.schema";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { createConnectorCommand } from "./connector-command";
 
@@ -18,7 +18,7 @@ export function createCustomApiCreateFlow(options: {
     execute: options.client.createCustomApi,
     invalidRequestCode: "invalid_custom_api_request",
     name: body => body.name,
-    projectCompletion: ack => Object.freeze({ profileId: customApiProfileSchema.parse(ack).profile_id }),
+    projectCompletion: ack => Object.freeze({ profileId: customApiReceiptProfileSchema.parse(ack).profile_id }),
     freeze: input => {
       const body = customApiCreateInputSchema.parse(input);
       body.environment.forEach(item => Object.freeze(item));

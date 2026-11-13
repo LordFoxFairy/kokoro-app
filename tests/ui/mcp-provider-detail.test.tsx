@@ -474,7 +474,7 @@ it("keeps a catalog OAuth detail readable after issuing a ticket without dependi
 
 it("restores an off-page Custom API detail by exact locator after an admission generation retires its page", async () => {
   const { waitFor } = await import("@testing-library/react")
-  const profile = { profile_id: "off-page-profile", name: "Off-page API", state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] }
+  const profile = { governance_status: "active" as const, profile_id: "off-page-profile", name: "Off-page API", state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] }
   const list = vi.fn().mockResolvedValueOnce({ items: [], page: { next_cursor: "two" } })
     .mockResolvedValueOnce({ items: [profile], page: { next_cursor: null } }).mockResolvedValue({ items: [], page: { next_cursor: null } })
   const get = vi.fn().mockResolvedValue(profile)
@@ -513,7 +513,7 @@ it.each(["api", "provider"])("retires and rereads an off-page %s detail when a c
   const { useMcpProviderConnection } = await import("@/ui/mcp/use-mcp-provider-connection")
   const { invalidateCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
   const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
-  const profile = { profile_id: "exact", name: "Exact", state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] }
+  const profile = { governance_status: "active" as const, profile_id: "exact", name: "Exact", state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] }
   const connector = { availability: "unavailable" as const, connector_id: "exact", provider_key: "provider", connector_type: "mcp" as const, display_name: "Exact", status: "active" as const, enabled: true, approved_scopes: [], state_version: "1" }
   const getApi = vi.fn().mockResolvedValueOnce(profile).mockResolvedValue({ ...profile, state_version: "2" })
   const getMcp = vi.fn().mockResolvedValueOnce(connector).mockResolvedValue({ ...connector, state_version: "2" })
@@ -535,7 +535,7 @@ it.each(["api", "provider"])("revalidates a first-page %s detail without reusing
   const { act, waitFor, within } = await import("@testing-library/react")
   const { invalidateCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
   const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
-  const profile = { profile_id: "first-page-api", name: "Initial API", instructions: "Old instructions", state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] }
+  const profile = { governance_status: "active" as const, profile_id: "first-page-api", name: "Initial API", instructions: "Old instructions", state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] }
   const provider = { provider_key: "first-page-provider", display_name: "First-page provider", directory_type: "app" as const, category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
   const connection = { availability: "unavailable" as const, connector_id: "first-page-connection", provider_key: provider.provider_key, connector_type: "mcp" as const, display_name: "Initial connection", status: "active" as const, enabled: false, approved_scopes: [], state_version: "1" }
   const apiPage = { items: kind === "api" ? [profile] : [], page: { next_cursor: null } }
@@ -939,7 +939,7 @@ it("keeps owner pagination after the last visible connector is removed and clear
 })
 
 function customApiSecretFixture(): CustomApiProfile {
-  return { profile_id: "secret-edit-profile", name: "Secret editing API", instructions: "Keep instructions", state_version: "7",
+  return { governance_status: "active" as const, profile_id: "secret-edit-profile", name: "Secret editing API", instructions: "Keep instructions", state_version: "7",
     created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z",
     environment: ["API_TOKEN", "UNUSED_TOKEN"].map(name => ({ name, configured: true, state_version: "2", status: "active" })) }
 }

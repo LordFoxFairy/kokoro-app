@@ -38,6 +38,8 @@ API备注optional独立400/muted，主label500；密钥每行独立12px圆角框
 
 短屏明确工程差异：参考390×400仍有500px最小高度并裁掉页脚；本实现将最小高度限制为`min(500px,95dvh)`，保留全部字段可滚动及页脚键盘可达，不宣称此缺陷态像素一致。`tests/ui/mcp-custom-api-visual.test.tsx`以真实组件DOM、Vite编译生产CSS及Chromium验证普通/短/窄/多密钥几何，不代替正常服务旅程。业务TS、全局token及共享Input/Button未变。
 
+个人 API 治理：卡片／详情显示 fresh 三态；非 active 只读（含 secret/icon）但无未结命令时允许本人 Delete。原 unknown 命令仍显式同 key/body/CAS 恢复；创建 ACK 可缺治理字段且只投影 locator，禁止据其推断 active。读取与写失效仍归现 hooks，不新增轮询／缓存。
+
 ## 自定义 API 删除后的显示退休（2026-10-27）
 
 API management 与现MCP删除使用同一边界原则：仅原冻结remove请求经生产client严格验证deleted:true及exact profile_id的ACK后，在现actor/client command owner内记录只含profile_id的RAM负向显示事实。finish／关窗／同actor再准入generation不丢失；真正owner退休清空，旧late ACK不复活。广场、Settings管理与命令恢复入口统一过滤该ID，失败刷新、迟到旧head／后续页不令已删除卡复现；其它API行仍保原连续性。此记录不是权限、正文、原key/body/CAS或新持久源；unknown／拒绝不记，原请求恢复与精确读取不改，不自动DELETE或清整个列表。

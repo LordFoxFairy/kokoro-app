@@ -13,7 +13,7 @@ function model(): ProjectMcpRecommendationsModel {
   const ref = { kind: "custom_api" as const, profile_id: "profile-a" }
   return { context: {}, allowed: true, configReady: true, directoryReady: true, busy: false,
     facts: { project_id: "project-a", state_version: "1", recommendations: [{ kind: "provider", provider_key: "unlisted" }] },
-    options: [{ id: JSON.stringify([ref.kind, ref.profile_id]), ref, label: "真实 API 配置", search: "真实 api 配置", source: { kind: "custom_api", value: { profile_id: "profile-a", name: "真实 API 配置", state_version: "1", created_at: "2026-10-27T00:00:00Z", updated_at: "2026-10-27T00:00:00Z", environment: [] } } }],
+    options: [{ id: JSON.stringify([ref.kind, ref.profile_id]), ref, label: "真实 API 配置", search: "真实 api 配置", source: { kind: "custom_api", value: { governance_status: "active" as const, profile_id: "profile-a", name: "真实 API 配置", state_version: "1", created_at: "2026-10-27T00:00:00Z", updated_at: "2026-10-27T00:00:00Z", environment: [] } } }],
     isCurrent: () => true, refresh: vi.fn(), save: vi.fn().mockResolvedValue("current") }
 }
 it("opens the project recommendation picker, retains invisible saved refs, and cancel writes nothing", async () => {
@@ -142,3 +142,42 @@ it.each([false, true])("a deferred saved-row removal publishes only within its o
   else expect(screen.getByRole("alert")).toHaveTextContent("当前推荐已有其他修改")
   expect(value.save).toHaveBeenCalledTimes(1)
 })
+
+it("retains a saved quarantined API, shows its state, and only permits explicit removal", async () => {
+  const value = model(), option = value.options[0]!;
+  if (option.source.kind !== "custom_api") throw Error("API fixture required");
+  value.options = [{ ...option, selectable: false, source: { kind: "custom_api", value: { ...option.source.value, governance_status: "quarantined" } } }];
+  value.facts = { project_id: "project-a", state_version: "2", recommendations: [option.ref] };
+  render(<LocaleProvider><ProjectMcpRecommendationsSection model={value} /></LocaleProvider>);
+  expect(screen.getByText(/真实 API 配置 · 已隔离/)).toBeVisible(); expect(value.save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "新增" }));
+  const api = screen.getByRole("checkbox", { name: /真实 API 配置 · 已隔离/ });
+  expect(api).toBeChecked(); expect(api).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(value.save).toHaveBeenCalledExactlyOnceWith([option.ref]));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole("button", { name: "新增" }));
+  const retainedApi = screen.getByRole("checkbox", { name: /真实 API 配置 · 已隔离/ });
+  fireEvent.click(retainedApi); expect(retainedApi).not.toBeChecked(); expect(retainedApi).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(value.save).toHaveBeenNthCalledWith(2, []));
+});
+
+
+it.each(["quarantined", "revoked"] as const)("keeps a newly selected API draft but does not save after its directory state becomes %s", async governance_status => {
+  const value = model(), option = value.options[0]!;
+  if (option.source.kind !== "custom_api") throw Error("API fixture required");
+  const view = render(<LocaleProvider><ProjectMcpRecommendationsSection model={value} /></LocaleProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "新增" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "真实 API 配置" }));
+  view.rerender(<LocaleProvider><ProjectMcpRecommendationsSection model={{ ...value, options: [{ ...option, selectable: false, source: { kind: "custom_api", value: { ...option.source.value, governance_status } } }] }} /></LocaleProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  expect(value.save).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert")).toHaveTextContent("暂不可见");
+  const api = screen.getByRole("checkbox", { name: /真实 API 配置/ });
+  expect(api).toBeChecked(); expect(api).toBeEnabled();
+  fireEvent.click(api);
+  expect(api).not.toBeChecked(); expect(api).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(value.save).toHaveBeenCalledExactlyOnceWith(value.facts!.recommendations));
+});

@@ -2484,4 +2484,9 @@ export const en: Partial<Record<MessageKey, string>> = {
   "projectMcp.unconfirmed": "The save result is unconfirmed. Your choices are kept; reopen to read the current configuration.",
   "projectMcp.limit": "Recommend up to 16 connectors.",
   "projectMcp.remove": "Remove recommendation: {name}",
+  "customApi.governance.active": "Active",
+  "customApi.governance.quarantined": "Quarantined",
+  "customApi.governance.revoked": "Revoked",
+  "customApi.governance.unavailable": "Currently unavailable",
+  "customApi.governance.readOnly": "This configuration is read-only. You can still delete it.",
 }

@@ -3251,7 +3251,7 @@ it.each([
   const { warmCustomApiProjection, useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
   const { warmMcpProjection } = await import("@/ui/mcp/use-mcp-projection")
   const empty = { items: [], page: { next_cursor: null } }
-  const profile = { profile_id: "created-api", name: "New shared API", state_version: "1",
+  const profile = { governance_status: "active" as const, profile_id: "created-api", name: "New shared API", state_version: "1",
     created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
   let resolveOld!: (value: typeof empty) => void, acknowledge!: () => void
   const oldWarm = new Promise<typeof empty>(resolve => { resolveOld = resolve })
@@ -3341,7 +3341,7 @@ it.each(["global", "settings"] as const)("%s creation ACK cannot close a newer c
   const { useCustomApiProjection } = await import("@/ui/mcp/use-custom-api-projection")
   let acknowledge!: () => void
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
-  const profile = { profile_id: "closed-window-api", name: "Previously submitted API", state_version: "1",
+  const profile = { governance_status: "active" as const, profile_id: "closed-window-api", name: "Previously submitted API", state_version: "1",
     created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
   let created = false
   const hub = { ...createHubClient(),
@@ -3398,7 +3398,7 @@ it.each(["mode", "visibility"] as const)("a retained creation host fences old co
   const { McpCreateDialog } = await import("@/ui/mcp/mcp-create-dialog")
   let acknowledge!: () => void
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
-  const hub = { ...createHubClient(), createCustomApi: vi.fn().mockResolvedValue({ profile_id: "retained-host-api", name: "Old API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }) }
+  const hub = { ...createHubClient(), createCustomApi: vi.fn().mockResolvedValue({ governance_status: "active" as const, profile_id: "retained-host-api", name: "Old API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }) }
   const close = vi.fn(), confirmed = vi.fn(async () => { await pending })
   const dialog = (mode: "custom-api" | "json", open = true) => <StrictMode><LocaleProvider><ConnectorCommandProvider client={hub} boundary={{ admitted: true, subject: "preview", generation: 0 }}><McpCreateDialog client={hub} mode={mode} open={open} onOpenChange={close} onDone={confirmed} /></ConnectorCommandProvider></LocaleProvider></StrictMode>
   const view = render(dialog("custom-api"))
@@ -3712,7 +3712,7 @@ it("API creation preserves one frozen command after a lost acknowledgement", asy
 
 it("API creation resumes the original request after closing the window and rechecking its actor", async () => {
   const pageClients = await import("@/ui/shell/page-clients")
-  const profile = { profile_id: "resumed-api", name: "Original API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }
+  const profile = { governance_status: "active" as const, profile_id: "resumed-api", name: "Original API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" }
   const create = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockResolvedValue(profile)
   const hub = { ...apiCreationHub(), createCustomApi: create }
   vi.spyOn(pageClients, "browserHubClient").mockReturnValue(hub)
@@ -3742,7 +3742,7 @@ it.each([false, true])("an acknowledged API secret stays cleared and Done can re
   let acknowledge!: () => void, rejectClosing!: (cause: Error) => void
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
   const closing = new Promise<void>((_resolve, reject) => { rejectClosing = reject })
-  const create = vi.fn(async () => { await pending; return { profile_id: "secret-ack-api", name: "Secret API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" } })
+  const create = vi.fn(async () => { await pending; return { governance_status: "active" as const, profile_id: "secret-ack-api", name: "Secret API", state_version: "1", environment: [], created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z" } })
   const boundary = { admitted: true, subject: "secret-ack-actor", generation: 1 }
   const flow = createCustomApiCreateFlow({ client: { createCustomApi: create }, boundary, onConfirmed: vi.fn() })
   const onDone = vi.fn().mockImplementationOnce(async () => { await closing }).mockResolvedValue(undefined)
@@ -4183,7 +4183,7 @@ it("Custom API same-actor recheck keeps its detail through a failed read and res
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
   let round = 1
-  const profile = () => ({ profile_id: "recheck-api", name: `API ${round}`, instructions: `Instructions ${round}`, state_version: String(round),
+  const profile = () => ({ governance_status: "active" as const, profile_id: "recheck-api", name: `API ${round}`, instructions: `Instructions ${round}`, state_version: String(round),
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
   const apis = vi.fn(async () => { if (round === 2) throw Error("temporary API read failure"); return { items: [profile()], page: { next_cursor: null } } })
   const exact = vi.fn(async (id: string) => {
@@ -4229,7 +4229,7 @@ it("Custom API late confirmed update invalidates its own current projection with
   let finish!: () => void
   let updated = false
   const pending = new Promise<void>(resolve => { finish = resolve })
-  const profile = () => ({ profile_id: "late-api", name: updated ? "Confirmed API" : "Old API", instructions: "Owner instructions", state_version: updated ? "2" : "1",
+  const profile = () => ({ governance_status: "active" as const, profile_id: "late-api", name: updated ? "Confirmed API" : "Old API", instructions: "Owner instructions", state_version: updated ? "2" : "1",
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
   const update = vi.fn(async () => { await pending; updated = true; return profile() })
   const hub = { ...createHubClient(), updateCustomApi: update,
@@ -4296,7 +4296,7 @@ it.each([
     notes: fresh ? "Fresh owner note" : "Retired owner note", server_url: "https://mcp.example.test/selection",
     status: "pending" as const, state_version: fresh ? "2" : "1", headers: [{ name: "x-existing", configured: true, state_version: "1", status: "active" as const }],
     transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
-  const profile = (fresh: boolean) => ({ profile_id: "selection-api", name: fresh ? "Updated server" : "Original server",
+  const profile = (fresh: boolean) => ({ governance_status: "active" as const, profile_id: "selection-api", name: fresh ? "Updated server" : "Original server",
     instructions: fresh ? "Fresh owner note" : "Retired owner note", state_version: fresh ? "2" : "1",
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
   const content = (ready: boolean, fresh = false, partial = false) => <LocaleProvider>{kind === "mcp" ?
@@ -4351,7 +4351,7 @@ it.each(["mcp", "api"])("%s configuration restores a bounded range without steal
     server_id: "focus-choice-server", status: "pending" as const, approved_scopes: [], enabled: false, state_version: "1" }
   const server = (name: string) => ({ availability: "unavailable" as const, server_id: "focus-choice-server", display_name: name, notes: "Fresh note paragraph", server_url: "https://mcp.example.test/focus-choice",
     status: "pending" as const, state_version: "1", headers: [], transport: "streamable_http" as const, prepare_status: "pending_prepare" as const, declarations: [], declarations_available: false })
-  const profile = (name: string) => ({ profile_id: "focus-choice-api", name, instructions: "Fresh note paragraph", state_version: "1",
+  const profile = (name: string) => ({ governance_status: "active" as const, profile_id: "focus-choice-api", name, instructions: "Fresh note paragraph", state_version: "1",
     created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", environment: [] })
   const content = (name: string | null, pendingError = false) => <LocaleProvider>{kind === "mcp" ?
     <CustomMcpDetailDialog admitted={name !== null} managementCommand={undefined} onResumeManagement={() => {}} connector={name === null ? null : connector} server={name === null ? null : server(name)}
@@ -4632,7 +4632,7 @@ it("closing a preparing detail aborts its wait; a late ACK cannot close the succ
 it("an unconfirmed Custom API edit keeps its draft read-only and exposes original-request recovery", async () => {
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
-  const profile = { profile_id: "unknown-api-edit", name: "Editable API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  const profile = { governance_status: "active" as const, profile_id: "unknown-api-edit", name: "Editable API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
   const update = vi.fn().mockRejectedValue(new Error("lost management ACK"))
   const hub = { ...createHubClient(), updateCustomApi: update,
     listCustomApis: vi.fn().mockResolvedValue({ items: [profile], page: { next_cursor: null } }),
@@ -4650,7 +4650,7 @@ it("an unconfirmed Custom API edit keeps its draft read-only and exposes origina
 it("an API deletion remains recoverable when the row disappears, without treating the list as its ACK", async () => {
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
-  const profile = { profile_id: "missing-api-command", name: "Delete API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  const profile = { governance_status: "active" as const, profile_id: "missing-api-command", name: "Delete API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
   let listed = true
   const remove = vi.fn().mockRejectedValueOnce(new Error("lost deletion ACK")).mockResolvedValue(undefined)
   const hub = { ...createHubClient(), removeCustomApi: remove,
@@ -4677,7 +4677,7 @@ it("an API deletion remains recoverable when the row disappears, without treatin
 it("a late API edit ACK clears actual secret drafts without closing a successor window", async () => {
   const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
   const McpContent = withMcpCommandOwner(Content)
-  const profile = { profile_id: "late-managed-api", name: "Late managed API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  const profile = { governance_status: "active" as const, profile_id: "late-managed-api", name: "Late managed API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
   const other = { ...profile, profile_id: "other-managed-api", name: "Other managed API" }
   let acknowledge!: () => void
   const pending = new Promise<void>(resolve => { acknowledge = resolve })
@@ -4709,7 +4709,7 @@ it("a late API edit ACK clears actual secret drafts without closing a successor 
 
 it("a mounted API editor clears secret values on ACK and rejects submitted edits while unknown", async () => {
   const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
-  const profile = { profile_id: "mounted-api", name: "Mounted API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  const profile = { governance_status: "active" as const, profile_id: "mounted-api", name: "Mounted API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
   const save = vi.fn(), resume = vi.fn()
   const content = (kind?: "unknown" | "completed") => <LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy={false} actionError={false} canUpdate canRemove
     command={kind ? { profileId: profile.profile_id, operation: "update", kind } : undefined}
@@ -5146,7 +5146,7 @@ it.each(["close", "recheck"] as const)("private OAuth retires %s without blockin
 it("Custom API card opens its editor directly, keeps unchanged save disabled and closes on cancel", async () => {
   const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
   const close = vi.fn(), save = vi.fn(), remove = vi.fn()
-  const profile = { profile_id: "direct-api", name: "Direct API", instructions: "Original instruction", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
+  const profile = { governance_status: "active" as const, profile_id: "direct-api", name: "Direct API", instructions: "Original instruction", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
   render(<LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy={false} actionError={false} command={undefined}
     canUpdate canRemove onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={close} onSave={save} onDelete={remove} /></LocaleProvider>)
   const dialog = screen.getByRole("dialog", { name: "编辑自定义 API" })
@@ -5168,7 +5168,7 @@ it("Custom API card opens its editor directly, keeps unchanged save disabled and
 it("opening a Custom API with legal owner whitespace does not enable or submit a normalized rewrite", async () => {
   const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
   const save = vi.fn()
-  const profile = { profile_id: "whitespace-api", name: " API ", instructions: " note\n", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
+  const profile = { governance_status: "active" as const, profile_id: "whitespace-api", name: " API ", instructions: " note\n", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
   render(<LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy={false} actionError={false} command={undefined}
     canUpdate canRemove onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={save} onDelete={vi.fn()} /></LocaleProvider>)
   const field = screen.getByRole("textbox", { name: "名称" })
@@ -5180,7 +5180,7 @@ it("opening a Custom API with legal owner whitespace does not enable or submit a
 
 it("a pending Custom API save reports form busy without inserting a loading banner above its fields", async () => {
   const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
-  const profile = { profile_id: "pending-api-layout", name: "Pending API", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
+  const profile = { governance_status: "active" as const, profile_id: "pending-api-layout", name: "Pending API", state_version: "1", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [] }
   render(<LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy actionError={false} command={{ profileId: profile.profile_id, operation: "update", kind: "running" }}
     canUpdate canRemove onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} /></LocaleProvider>)
   expect(screen.getByLabelText("名称").closest("form")).toHaveAttribute("aria-busy", "true")
@@ -5381,7 +5381,7 @@ it("a newer creation window retires the older pending exact-detail handoff", asy
 })
 
 it.each(["pending", "failed"] as const)("independent confirmed API cards stay usable when the initial MCP list is %s", async mode => {
-  const profile = { profile_id: `independent-api-${mode}`, name: `Independent API ${mode}`, state_version: "1", environment: [], created_at: "2026-10-25T00:00:00Z", updated_at: "2026-10-25T00:00:00Z" }
+  const profile = { governance_status: "active" as const, profile_id: `independent-api-${mode}`, name: `Independent API ${mode}`, state_version: "1", environment: [], created_at: "2026-10-25T00:00:00Z", updated_at: "2026-10-25T00:00:00Z" }
   const hub = { ...createHubClient(), listMcpConnectors: vi.fn().mockImplementationOnce(async () => { if (mode === "failed") throw new Error("temporary MCP read failure"); return new Promise<never>(() => {}) }).mockResolvedValue({ items: [{ availability: "unavailable", connector_id: "recovered-mcp", connector_type: "mcp", provider_key: "private-recovered", status: "pending", approved_scopes: [], enabled: false, state_version: "1", display_name: "Recovered MCP" }], next_cursor: "recovered-owner-cursor" }),
     listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
     listCustomApis: vi.fn().mockResolvedValue({ items: [profile], page: { next_cursor: null } }), getCustomApi: vi.fn().mockResolvedValue(profile),

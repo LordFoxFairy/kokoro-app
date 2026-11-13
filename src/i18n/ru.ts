@@ -1943,4 +1943,9 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "projectMcp.unconfirmed": "Результат сохранения не подтверждён. Ваш выбор сохранён; откройте снова для чтения текущей конфигурации.",
   "projectMcp.limit": "Можно рекомендовать не более 16 коннекторов.",
   "projectMcp.remove": "Убрать рекомендацию: {name}",
+  "customApi.governance.active": "Активно",
+  "customApi.governance.quarantined": "На карантине",
+  "customApi.governance.revoked": "Отозвано",
+  "customApi.governance.unavailable": "Сейчас недоступно",
+  "customApi.governance.readOnly": "Эта конфигурация доступна только для чтения. Её по-прежнему можно удалить.",
 }

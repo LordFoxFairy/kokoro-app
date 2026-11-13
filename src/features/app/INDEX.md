@@ -55,3 +55,5 @@ Composer 复用现 Library CLEAN 文件/FINAL artifact 和 Project resources 列
 ## Project Skill source reads
 
 `project-skill-source-picker.tsx` keeps pending reads sr-only with search-field `aria-busy`; failed personal/official reads use a short associated field hint, never an empty list or generic retry panel. Enter explicitly rereads the same failed query; busy/IME guards and the existing actor/generation token, cursor and abort ownership remain unchanged. Back/reopen retains the existing fresh picker lifetime.
+
+Custom API 推荐治理沿现 options/section/picker：保留三态元数据及已保存／草稿引用，非 active 只禁新勾选，原引用仍可显式取消；目录变化不自动 PUT、清引用或授执行资格。

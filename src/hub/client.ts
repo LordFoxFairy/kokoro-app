@@ -78,6 +78,7 @@ import {
   type CustomApiCreateInput,
   type CustomApiPage,
   type CustomApiProfile,
+  type CustomApiReceiptProfile,
   type CustomApiRemoveInput,
   type CustomApiUpdateInput,
 } from "./custom-api.schema";
@@ -978,7 +979,7 @@ export type HubClient = {
     input: CustomApiCreateInput,
     key: string,
     signal?: AbortSignal,
-  ) => Promise<CustomApiProfile>;
+  ) => Promise<CustomApiReceiptProfile>;
   listCustomApis?: (
     query?: { limit?: number; cursor?: string },
     signal?: AbortSignal,
@@ -992,7 +993,7 @@ export type HubClient = {
     input: CustomApiUpdateInput,
     key: string,
     signal?: AbortSignal,
-  ) => Promise<CustomApiProfile>;
+  ) => Promise<CustomApiReceiptProfile>;
   removeCustomApi?: (
     profileId: string,
     input: CustomApiRemoveInput,

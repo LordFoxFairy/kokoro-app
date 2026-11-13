@@ -13,9 +13,9 @@ import styles from "./composer-connections.module.css"
 function ConnectionRow({ name, checked, disabled, icon, availability, onToggle }: {
   name: string; checked: boolean; disabled?: boolean; icon?: McpIconBinding | undefined; availability?: ReactNode; onToggle: () => void
 }) {
-  return <button type="button" role="switch" aria-checked={checked} aria-label={name} title={name} disabled={disabled} className={styles.row} onClick={onToggle}>
+  return <button type="button" role="switch" aria-checked={checked} aria-label={name} aria-description={typeof availability === "string" ? availability : undefined} title={name} disabled={disabled} className={styles.row} onClick={onToggle}>
     <span className={styles.glyph} aria-hidden="true"><McpBoundIcon icon={icon} alt="" fallback={Array.from(name)[0]} /></span>
-    <span className={styles.name}>{name}</span>{availability}
+    <span className={styles.name}>{name}</span>{typeof availability === "string" ? <span className={styles.availability} title={availability}>{availability}</span> : availability}
     <span className={styles.switch} data-checked={checked} aria-hidden="true"><span /></span>
   </button>
 }
@@ -55,8 +55,9 @@ export function ComposerConnections({ controller, onAdd, onManage }: {
       <PopoverContent onOpenAutoFocus={event => { if (pointerOpening.current) event.preventDefault() }} onCloseAutoFocus={event => { if (openingManagement.current) { event.preventDefault(); openingManagement.current = false } }} aria-label={t("firstSite.connectors")} side="top" sideOffset={8} align="start" collisionPadding={12} className={styles.panel}>
         <div className={styles.list} aria-busy={controller.status === "loading" || controller.customApiStatus === "loading"}>
           {controller.items.map(item => <ConnectionRow key={`mcp:${item.id}`} name={item.name} checked={selected.has(item.id)} disabled={!selected.has(item.id) && (!item.selectable || selected.size >= 16)} onToggle={() => controller.toggle(item.id)} availability={!item.selectable ? <McpAvailabilityStatus availability={item.availability === "available" ? "unavailable" : item.availability} className={styles.availability} /> : null} />)}
-          {apiItems.map(item => <ConnectionRow key={`api:${item.id}`} name={item.name} icon={item.icon} checked={selectedApis.has(item.id)} disabled={!selectedApis.has(item.id) && (item.selectable === false || selectedApis.size >= 32)} onToggle={() => controller.toggleCustomApi?.(item.id)} />)}
-          {missingApis.map(id => <ConnectionRow key={`api:${id}`} name={id} checked onToggle={() => controller.toggleCustomApi?.(id)} />)}
+          {apiItems.map(item => <ConnectionRow key={`api:${item.id}`} name={item.name}
+            availability={item.governanceStatus && item.governanceStatus !== "active" ? t(`customApi.governance.${item.governanceStatus}`) : item.selectable === false || (controller.selectedCustomApiProfiles ?? []).some(value => value.profileId === item.id && value.expectedStateVersion !== item.stateVersion) ? t("customApi.governance.unavailable") : undefined} icon={item.icon} checked={selectedApis.has(item.id)} disabled={!selectedApis.has(item.id) && (controller.customApiStatus !== "ready" || item.selectable === false || selectedApis.size >= 32)} onToggle={() => controller.toggleCustomApi?.(item.id)} />)}
+          {missingApis.map(id => <ConnectionRow key={`api:${id}`} name={id} checked availability={t("customApi.governance.unavailable")} onToggle={() => controller.toggleCustomApi?.(id)} />)}
           {missing.map(id => <button type="button" role="switch" aria-checked="true" aria-label={id} className={styles.row} key={`mcp:${id}`} onClick={() => controller.toggle(id)}><Cable aria-hidden="true" /><span className={styles.name}>{id}</span><span className={styles.switch} data-checked="true" aria-hidden="true"><span /></span></button>)}
           {(controller.status === "loading" || controller.customApiStatus === "loading") && controller.items.length === 0 && apiItems.length === 0 ? <p className={styles.feedback} role="status">{t("mcp.loading")}</p> : null}
           {controller.status === "ready" && controller.items.length === 0 && !missing.length && apiItems.length === 0 && !missingApis.length && (controller.customApiStatus === undefined || controller.customApiStatus === "ready" || controller.customApiStatus === "disabled") ? <p className={styles.empty}>{t("firstSite.noConnectors")}</p> : null}

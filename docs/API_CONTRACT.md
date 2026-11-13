@@ -2544,6 +2544,8 @@ Skills 目录重核修复仅改变 Web 内部展示/请求生命周期：不新�
 
 Custom API 创建恢复仅调整 Web 内部 client API：createCustomApi(input, key, signal?) 必须由调用者传合法 Idempotency-Key，取消每次调用隐式生成新 key。浏览器路径、body、header wire、BFF/Platform 固定 artifact 不变。未知结果重试同 key、同正文，按原 owner durable receipt 重放；GET 不作为 ACK。响应仍走既有严格 safe profile 校验并绑定原 name/instructions/environment names；结构或语义不符保留 unknown，而非重新创建。原 OAuth 原生协议不添加此 header。
 
+2026-11-13 私有治理消费候选：只按已提交 BFF `74117ac8800a6c5c5e7fcffe8306ec8cd813efff` 的既有 browser-private code-first 成功边界承接，不改公共 canonical、public pin 或错误 profile。GET/List 的 safe Profile 必须含 governance_status=active/quarantined/revoked；缺失、空串、未知值拒绝。create/update immutable ACK 复用 Profile 基础但状态可省略；历史缺字段不补 active、不补读改写 ACK、不当当前可选或执行授权。创建完成仍只保 exact locator，沿原详情／聚合失效取得本代读取；原 key/body/CAS/unknown 恢复不变。菜单仅在本代读取成功且 active/合法版本时新增选择；同主体既有草稿 ID/CAS 及 Project 原引用不因失效自动删除或换版，显式移除仍可用。管理显示三态，非 active 禁新编辑／secret／icon 保存但保本人 Delete；未结原命令的显式恢复按钮保持原准入／互斥，不借此造新写。当前页展示是最近读到的元数据，非权限 cache；不轮询、不自动 Prepare/连接，owner runtime 的 final fresh 仍是放行边界。九语沿现 useT；正常预览、native 与最终 build 由 Root 串行验收，源码不冒已激活。
+
 
 MCP JSON创建恢复的本地client签名为importPrivateMcpJson(configJson, key, signal?)，与API创建一样显式caller key，无默认新key。原/v1 browser/BFF/Platform contract、header及config_json wire不变；完整原文冻结、同key恢复，ACK沿既有mcpPrivateJsonImportMatches绑定。原子导入不主动Prepare、不逐条Register，原生OAuth没有新增header。
 

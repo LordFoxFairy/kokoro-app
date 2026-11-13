@@ -25,7 +25,7 @@ const boundary = { admitted: true, subject: "icon-form-actor", generation: 1 };
 const iconId = "12345678-1234-1234-1234-123456789abc";
 const selector = { intent_id: iconId, expected_state_version: "3" };
 const imageUrl = "https://images.example.test/icon.png";
-const profile: CustomApiProfile = {
+const profile: CustomApiProfile = { governance_status: "active" as const,
   profile_id: "icon-form-api", name: "Original API", state_version: "7",
   created_at: "2026-10-24T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [],
 };

@@ -12,6 +12,8 @@
 
 沿原actor-owned connector command保密body与unknown key，confirmed ACK只投影API profile locator或有序JSON connector/server locator，不保ACK/凭据。详情独立fresh exact GET，失败只重读locator；迟到ACK可失效原actor目录，但不借新窗口／主体打开详情。组合复用现creation context、McpProjectionRead与原设置/列表边界，不新建cache、store、session、SDK或业务owner。当前验证见CURRENT，源头API不增量。
 
+个人 API 治理只扩此既有边界：hub Fresh Profile 必需三态，ACK Profile 仅治理字段允许省略；completion 校验走 ACK 形状但仍只保存 locator。现 composer list／详情／Project 有界目录复用原状态与 epoch，非 active 禁新增选择／配置编辑，保同主体原草稿和原引用；Delete 与未知原命令恢复独立于新编辑开关。状态来自本代读，不新增 store/cache、轮询、授权或网络协议；正常组合未激活，见 API_CONTRACT 对应私有消费说明。
+
 ## Composer 菜单与读取职责（2026-11-12）
 
 沿现 Radix 菜单定位／碰撞／焦点语义，只在 Composer 局部 CSS 保内容宽度、视口上限、完整标签换行与 checked 常驻强调；触屏不缩小点击行。当前目录成功为空有明确状态；锁定的显式选择缺席时不回退冒显示另一个默认模型。选择身份／engine／草稿／命令与九语言原解析／fallback 机制保持。

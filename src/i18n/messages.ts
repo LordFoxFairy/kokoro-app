@@ -2937,6 +2937,11 @@ export const zh = {
   "projectMcp.unconfirmed": "保存结果尚未确认。你的选择已保留，可关闭后重新读取当前配置。",
   "projectMcp.limit": "最多推荐 16 个连接器。",
   "projectMcp.remove": "移除推荐：{name}",
+  "customApi.governance.active": "启用",
+  "customApi.governance.quarantined": "已隔离",
+  "customApi.governance.revoked": "已撤销",
+  "customApi.governance.unavailable": "当前不可用",
+  "customApi.governance.readOnly": "此配置只读，仍可删除。",
 } as const;
 
 export type MessageKey = keyof typeof zh;

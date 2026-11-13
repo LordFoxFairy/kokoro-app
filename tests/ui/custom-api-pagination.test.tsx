@@ -4,7 +4,7 @@ import { createHubClient } from "@/hub/client"
 import type { CustomApiPage } from "@/hub/custom-api.schema"
 import { invalidateCustomApiProjection, useCustomApiProjection } from "@/ui/mcp/use-custom-api-projection"
 
-const profile = (id: string) => ({ profile_id: id, name: id, state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] })
+const profile = (id: string) => ({ governance_status: "active" as const, profile_id: id, name: id, state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] })
 const page = (ids: string[], cursor: string | null): CustomApiPage => ({ items: ids.map(profile), page: { next_cursor: cursor } })
 afterEach(cleanup)
 

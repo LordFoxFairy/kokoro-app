@@ -84,7 +84,10 @@ export function CustomApiDetailDialog({
   const ready = profile !== null && admitted;
   const unresolved = command?.kind === "running" || command?.kind === "unknown" || command?.kind === "completed";
   const locked = unresolved || busy || !ready;
-  const icon = useMcpIconDraft(iconClient, iconBoundary ?? { subject: null, admitted: false, generation: 0 }, locked, command?.kind === "completed", profile);
+  const governedReadOnly = profile !== null && profile.governance_status !== "active";
+  const editable = ready && canUpdate && !governedReadOnly;
+  const editLocked = locked || !editable;
+  const icon = useMcpIconDraft(iconClient, iconBoundary ?? { subject: null, admitted: false, generation: 0 }, editLocked, command?.kind === "completed", profile);
   const [observedKind, setObservedKind] = useState(command?.kind);
   if (observedKind !== command?.kind) {
     setObservedKind(command?.kind);
@@ -113,7 +116,7 @@ export function CustomApiDetailDialog({
   const changed = profile !== null && (name !== profile.name || instructions !== (profile.instructions ?? "") || secretWrites.length > 0 || removedNames.length > 0 || icon.state.dirty);
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (locked || !canUpdate || !valid || !changed || !icon.draft.canSave() || !profile) return;
+    if (locked || !editable || !valid || !changed || !icon.draft.canSave() || !profile) return;
     icon.draft.protectForSave();
     onSave({
       ...icon.draft.change(),
@@ -152,7 +155,7 @@ export function CustomApiDetailDialog({
         onCloseAutoFocus={closeFocus}
         onOpenAutoFocus={(event) => {
           const field = nameRef.current;
-          if (!field) return;
+          if (!field || field.disabled) return;
           event.preventDefault();
           field.focus({ preventScroll: true });
         }}
@@ -178,6 +181,7 @@ export function CustomApiDetailDialog({
               </div>
             </header>
             <div className={styles.apiConfigurationBody}>
+              {profile ? <p role="status">{t(`customApi.governance.${profile.governance_status}`)}{profile.governance_status !== "active" ? ` · ${t("customApi.governance.readOnly")}` : ""}</p> : null}
               {commandStatus}
               {readFeedback ?? (!ready ? <span className={pendingError ? undefined : "sr-only"} role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span> : null)}
               {actionError ? (
@@ -188,29 +192,31 @@ export function CustomApiDetailDialog({
               <div className={styles.field}>
                 <Label htmlFor="custom-api-detail-name">{t("connectorCatalog.name")}</Label>
                 <Input
-                  readOnly={locked}
+                  readOnly={editLocked}
+                  disabled={governedReadOnly}
                   id="custom-api-detail-name"
                   ref={nameRef}
                   value={name}
                   maxLength={400}
-                  onChange={(event) => !locked && setName(event.target.value)}
+                  onChange={(event) => !editLocked && setName(event.target.value)}
                   required
                 />
               </div>
-              <McpIconPicker draft={icon.draft} state={icon.state} current={profile?.icon} disabled={locked} />
+              <McpIconPicker draft={icon.draft} state={icon.state} current={profile?.icon} disabled={editLocked} />
               <div className={styles.field}>
                 <Label htmlFor="custom-api-detail-instructions">
                   {t("connectorCatalog.notesOptional")}
                 </Label>
                 <Textarea
-                  readOnly={locked}
+                  readOnly={editLocked}
+                  disabled={governedReadOnly}
                   id="custom-api-detail-instructions"
                   value={instructions}
                   maxLength={4000}
-                  onChange={(event) => !locked && setInstructions(event.target.value)}
+                  onChange={(event) => !editLocked && setInstructions(event.target.value)}
                 />
               </div>
-              <fieldset className={styles.headers}>
+              <fieldset className={styles.headers} disabled={governedReadOnly}>
                 <legend>{t("connectorCatalog.secretsLegend")}</legend>
                 <p className={styles.secretHint}>{t("connectorCatalog.savedSecretsHint")}</p>
                 {(profile?.environment ?? []).map(({ name: environmentName, configured }) => {
@@ -223,17 +229,17 @@ export function CustomApiDetailDialog({
                     <div className={styles.secretField}>
                       <Label htmlFor={`api-existing-${environmentName}-value`}>{t("connectorCatalog.secretValue")}</Label>
                       <Textarea id={`api-existing-${environmentName}-value`} aria-label={t("connectorCatalog.namedSecretValue", { name: environmentName })}
-                        value={replacementValues[environmentName] ?? ""} readOnly={locked || removed}
+                        value={replacementValues[environmentName] ?? ""} readOnly={editLocked || removed}
                         placeholder={t(removed ? "connectorCatalog.secretRemovedOnSave" : configured ? "connectorCatalog.secretConfiguredPlaceholder" : "connectorCatalog.secretEnterPlaceholder")}
                         maxLength={4096} autoComplete="off" spellCheck={false}
-                        onChange={(event) => { if (!locked && !removed) setReplacementValues(current => ({ ...current, [environmentName]: event.target.value })); }} />
+                        onChange={(event) => { if (!editLocked && !removed) setReplacementValues(current => ({ ...current, [environmentName]: event.target.value })); }} />
                     </div>
                     <div className={styles.secretActions}>
                       {removed ? <span role="status">{t("connectorCatalog.secretRemovedOnSave")}</span> : null}
-                      <Button type="button" variant="ghost" size="sm" disabled={locked}
+                      <Button type="button" variant="ghost" size="sm" disabled={editLocked}
                         aria-label={t(removed ? "connectorCatalog.namedUndoSecretRemoval" : "connectorCatalog.namedRemoveSecret", { name: environmentName })}
                         onClick={() => {
-                          if (locked) return;
+                          if (editLocked) return;
                           setReplacementValues(current => ({ ...current, [environmentName]: "" }));
                           setRemovedNames(current => removed ? current.filter(item => item !== environmentName) : [...current, environmentName]);
                         }}>
@@ -247,14 +253,15 @@ export function CustomApiDetailDialog({
                     <div className={styles.secretField}>
                     <Label htmlFor={`api-secret-${secret.id}-name`}>{t("connectorCatalog.secretName")}</Label>
                     <Input
-                      readOnly={locked}
+                      readOnly={editLocked}
+                      disabled={governedReadOnly}
                       id={`api-secret-${secret.id}-name`}
                       aria-label={t("connectorCatalog.secretName")}
                       value={secret.name}
                       maxLength={128}
                       autoComplete="off"
                       onChange={(event) =>
-                        !locked && setSecrets((items) =>
+                        !editLocked && setSecrets((items) =>
                           items.map((item) =>
                             item.id === secret.id
                               ? { ...item, name: event.target.value }
@@ -267,7 +274,8 @@ export function CustomApiDetailDialog({
                     <div className={styles.secretField}>
                     <Label htmlFor={`api-secret-${secret.id}-value`}>{t("connectorCatalog.secretValue")}</Label>
                     <Textarea
-                      readOnly={locked}
+                      readOnly={editLocked}
+                      disabled={governedReadOnly}
                       id={`api-secret-${secret.id}-value`}
                       aria-label={t("connectorCatalog.secretValueLabel")}
                       value={secret.value}
@@ -275,7 +283,7 @@ export function CustomApiDetailDialog({
                       autoComplete="off"
                       spellCheck={false}
                       onChange={(event) =>
-                        !locked && setSecrets((items) =>
+                        !editLocked && setSecrets((items) =>
                           items.map((item) =>
                             item.id === secret.id
                               ? { ...item, value: event.target.value }
@@ -290,10 +298,10 @@ export function CustomApiDetailDialog({
                       type="button"
                       size="sm"
                       variant="ghost"
-                      disabled={locked}
+                      disabled={editLocked}
                       aria-label={t("connectorCatalog.removeNewSecret")}
                       onClick={() =>
-                        !locked && setSecrets((items) =>
+                        !editLocked && setSecrets((items) =>
                           items.filter((item) => item.id !== secret.id),
                         )
                       }
@@ -307,9 +315,9 @@ export function CustomApiDetailDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={locked}
+                  disabled={editLocked}
                   onClick={() =>
-                    !locked && setSecrets((items) => [
+                    !editLocked && setSecrets((items) => [
                       ...items,
                       { id: crypto.randomUUID(), name: "", value: "" },
                     ])
@@ -330,7 +338,7 @@ export function CustomApiDetailDialog({
               </Button>}
               <div className={styles.actions}>
                 <Button type="button" variant="outline" onClick={() => { icon.draft.cancel(); onClose(); }}>{t("mcp.cancel")}</Button>
-                <Button type="submit" disabled={locked || !canUpdate || !valid || !changed || !icon.draft.canSave()}>
+                <Button type="submit" disabled={locked || !editable || !valid || !changed || !icon.draft.canSave()}>
                   {busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.save")}
                 </Button>
               </div>

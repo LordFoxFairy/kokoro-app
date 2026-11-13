@@ -38,6 +38,8 @@ AppFrameComposer 仅显式 preview 允许演示转写；NODE_ENV 不改变用户
 
 ## 当前消息的连接来源
 
+个人 API 只在本代目录 ready、active 且版本合法时可新增选择。已选原 ID/CAS 不随目录撤销／版本变化静默移除或重绑；显示状态／不可用提示并允许显式取消。身份退休仍按原规则清私有事实；此展示不授执行权限。
+
 `ComposerConnections` 是独立受控Popover：精确Connection行选择、原选glyph、有限分页，Esc回触发器。添加与管理使用独立回调进入目录窗口和原设置，不修改账号enabled或发模型；打开时原读取刷新保留，不额外展示手动刷新或通用重试面板，失败不伪装成功空态。指针打开不自动聚焦首行，键盘打开仍正常聚焦与回焦；`composer-connections.module.css`持有实测menu/pill/26×16switch几何与局部选中token。
 
 ## 当前草稿的 Skill picker
