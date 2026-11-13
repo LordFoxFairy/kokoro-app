@@ -1,3 +1,11 @@
+## 2026-11-13 Project Skills 词条组九语言统一收口
+
+正常法语同一弹窗继续发现标题／说明／查看我的技能仍英语、emptyHint中文，因此不再逐个key补丁：只将现35个 projectSkills.* 连同已修 emptyState 在九现有locale各自补齐。仅8词典／overlays／现resolver测试10路径；中文源及原emptyState行保持，删除仅此34项旧projectSkillsFallback与8处spread，其它产品fallback、合并顺序、组件/业务请求/状态机不变。
+
+主控停写10 SHA＋中文源核等；新增词条组先8非zh语言RED，最终同文件58 PASS／0 SKIP、scoped ESLint、非增量TypeScript通过，独审CLEAR。正常Chrome法语Project卡片/弹窗标题、默认说明、链接、空态均已本地化；390px document 390/390、dialog client/scroll均371，无横溢。截图留Root ignored；原English及默认viewport已恢复。其它七语言为resolver/插值证据，不冒九语言全视觉矩阵。未改ProjectTodo／全站其它文案，未重复全默认或Next build/typegen，next-env自动diff保留未提交。
+
+该翻译片不改变下方Project安装503/unknown事实，原写body/key仍私有保留且没有第二次安装；当前fresh list0/selection空不替代原写回执。Storage恢复后仅原命令继续，完整安装／包正文一致性仍OPEN。
+
 ## 2026-11-13 Project Skills 英语空态漏译已修，包依赖不冒安装成功
 
 主控正常 English 浏览器在原 QA Project → Skills 实测空列表仍显示“尚无技能”。组件已消费现 t/key，仅 en.ts 补 skills.personal.emptyState，不改组件／其它八语言／选择命令／契约或认证；现 resolver 回归先 RED 中文 fallback，主控停写两输入 SHA 核等、整文件 41 PASS／0 FAIL／0 SKIP、scoped ESLint／非增量 TypeScript 通过，独审 CLEAR。正常页面现显示 No skills yet，截图在 Root local ignored。未为一行翻译重复全默认／Next build，未修改 next-env.d.ts。

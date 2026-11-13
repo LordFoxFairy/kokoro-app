@@ -277,9 +277,31 @@ it("provides Custom API governance labels in each of the nine existing dictionar
   }
 });
 
-it("English Project Skills empty state resolves its translation instead of Chinese fallback", () => {
-  const message = resolveMessage("en", "skills.personal.emptyState")
+it.each(LOCALES)("%s Project Skills empty state resolves its own dictionary entry", (locale) => {
+  const dictionaries = { zh, en, de, es, fr, ja, ko, pt, ru }
+  const dictionary = dictionaries[locale]
+  const key = "skills.personal.emptyState"
+  const message = resolveMessage(locale, key)
+  expect(Object.hasOwn(dictionary, key)).toBe(true)
   expect(message).toBeTruthy()
-  expect(message).not.toBe(zh["skills.personal.emptyState"])
-  expect(message).not.toBe("skills.personal.emptyState")
+  expect(message).toBe(dictionary[key])
+  expect(message).not.toBe(key)
+  if (locale !== "zh") expect(message).not.toBe(zh[key])
+})
+
+it.each(LOCALES)("%s Project Skills messages use their own translations and preserve interpolation", (locale) => {
+  const dictionaries = { zh, en, de, es, fr, ja, ko, pt, ru }
+  const dictionary: Readonly<Partial<Record<keyof typeof zh, string>>> = dictionaries[locale]
+  const keys = (Object.keys(zh) as Array<keyof typeof zh>).filter(key => key.startsWith("projectSkills.") || key === "skills.personal.emptyState")
+  const vars = { name: "QA skill", count: 3, revision: 7 }
+  const placeholders = (message: string) => [...message.matchAll(/\{([^{}]+)\}/gu)].map(match => match[1]).sort()
+  for (const key of keys) {
+    expect(Object.hasOwn(dictionary, key), `${locale}:${key}`).toBe(true)
+    const message = dictionary[key]!
+    expect(message.trim(), `${locale}:${key}`).toBeTruthy()
+    expect(placeholders(message), `${locale}:${key}`).toEqual(placeholders(zh[key]))
+    expect(resolveMessage(locale, key)).toBe(message)
+    expect(resolveMessage(locale, key, vars)).toBe(message.replace(/\{(name|count|revision)\}/gu, (_, name: keyof typeof vars) => String(vars[name])))
+    if (locale !== "zh") expect(message).not.toBe(zh[key])
+  }
 })
