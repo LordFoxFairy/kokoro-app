@@ -541,6 +541,8 @@ export const zh = {
   "rail.tasks": "任务",
   "rail.expandTasks": "展开任务",
   "rail.collapseTasks": "收起任务",
+  "rail.draggableItem": "可拖动项目",
+  "rail.dragHelp": "使用空格开始或放置拖动，使用上下箭头重新排序，按 Escape 取消。",
   "rail.taskOptions": "任务选项",
   "rail.taskFilters": "筛选任务",
   "rail.emptyChats": "还没有直接会话",

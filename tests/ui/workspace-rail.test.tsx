@@ -144,6 +144,69 @@ afterEach(() => {
   window.history.replaceState(window.history.state, "", "/")
 })
 
+it("uses translated English sidebar labels and project disclosure names without replacing owner navigation", async () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  renderRail({
+    projects: [],
+    projectListStatus: "ready",
+    navigation: [
+      { key: "mcp", label: "Published connector label" },
+      { key: "scheduled", label: "Published schedule label" },
+    ],
+  })
+
+  const newTask = await screen.findByTestId("rail-new-conversation")
+  expect(newTask).toHaveAccessibleName("New task")
+  expect(newTask).toHaveTextContent("New task")
+  expect(screen.getByText("Computer")).toBeVisible()
+  expect(screen.getByText("Create")).toBeVisible()
+  expect(screen.getByRole("link", { name: "Automation" })).toHaveTextContent("Automation")
+  expect(screen.getByRole("link", { name: "Published connector label" })).toHaveTextContent("Plugins")
+  expect(screen.getByText("Tasks")).toBeVisible()
+  const collapseTasks = screen.getByRole("button", { name: "Collapse tasks" })
+  expect(collapseTasks).toHaveAttribute("aria-expanded", "true")
+  fireEvent.click(collapseTasks)
+  const expandTasks = screen.getByRole("button", { name: "Expand tasks" })
+  expect(expandTasks).toHaveAttribute("aria-expanded", "false")
+  expect.soft(screen.queryByRole("button", { name: "Task options" })).toBeDisabled()
+  expect.soft(screen.queryByRole("button", { name: "Filter tasks" })).toBeDisabled()
+  fireEvent.click(expandTasks)
+  expect(screen.getByRole("button", { name: "Collapse tasks" })).toHaveAttribute("aria-expanded", "true")
+  const collapseProjects = screen.getByRole("button", { name: "Collapse projects" })
+  expect(collapseProjects).toHaveAttribute("aria-expanded", "true")
+  fireEvent.click(collapseProjects)
+  const expandProjects = screen.getByRole("button", { name: "Expand projects" })
+  expect(expandProjects).toHaveAttribute("aria-expanded", "false")
+  fireEvent.click(expandProjects)
+  expect(screen.getByRole("button", { name: "Collapse projects" })).toHaveAttribute("aria-expanded", "true")
+})
+
+it("renders the French project section and confirmed empty state in French", () => {
+  window.localStorage.setItem("kokoro.locale", "fr")
+  renderRail({ projects: [], projectListStatus: "ready" })
+
+  expect.soft(screen.getByRole("button", { name: "Réduire les projets" })).toHaveTextContent("Projets")
+  expect.soft(screen.getByTestId("projects-empty")).toHaveTextContent("Aucun projet pour le moment.")
+})
+
+it("uses English conversation More and keyboard drag instructions while preserving the user title", () => {
+  window.localStorage.setItem("kokoro.locale", "en")
+  renderRail({
+    projects: [{ id: "project_a", name: "原项目名", href: "/app/project/project_a" }],
+    projectListStatus: "ready",
+  })
+
+  expect.soft(screen.getByRole("button", { name: "原项目名" })).toHaveAttribute("aria-roledescription", "Draggable item")
+  expect.soft(screen.queryByRole("button", { name: "More · 旧标题" })).toBeInTheDocument()
+  const conversation = screen.getByRole("button", { name: "旧标题" })
+  expect(conversation).toHaveTextContent("旧标题")
+  expect(conversation).toHaveAttribute("aria-roledescription", "Draggable item")
+  expect(conversation).toHaveAttribute("aria-describedby", "workspace-rail-drag-help")
+  expect.soft(conversation).toHaveAccessibleDescription(
+    "Press Space to start or drop a drag, use the up and down arrows to reorder, and press Escape to cancel.",
+  )
+})
+
 // CSS media rules may hide the opener before the independently subscribed
 // provider commits its desktop tree. Keep that opener connected to reproduce
 // the browser's body-focus branch, rather than assuming removal is immediate.

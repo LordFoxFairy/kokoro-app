@@ -1,3 +1,7 @@
+2026-11-12：侧栏有限组件树的项目标题／加载／空态／创建与菜单、通知入口和删除失败补齐本语言词条；已存在译文保留，仅七语言 Unavailable 占位改成本语言。既有回归覆盖本片32个key；不翻译上游导航label、品牌、Computer Use或用户标题，不改OVERLAYS与业务行为。
+
+2026-11-12：侧栏导航、项目／任务折叠、More、拖动项目角色与键盘拖动辅助说明由九语言各自提供；用户标题与上游导航 label 保留原值，原解析／fallback、ARIA 关联与拖动行为不变。
+
 2026-11-12：九语言新增 Composer 专用 modelCatalogEmpty／modelNotInCatalog，只陈述当前成功目录事实，不暗示自动采用工作区默认模型或修改已锁定选择。布局按内容与容器适配，不按语言硬编码尺寸。
 
 2026-11-12：九语言新增中性 thread.runEnded，仅表达 exact Run 已终止，不伪造 Skill ready/failed；fail.modelAccessDenied 同时提示积分和模型权限，沿原 failure tuple，无新 wire。

@@ -71,6 +71,7 @@ export function orderByIds<T extends { id: string }>(items: readonly T[], order:
 }
 
 export type WorkspaceRailActionsProps = {
+  draggableItemLabel: string
   projectItems: readonly WorkspaceRailProject[]
   conversations: readonly ConversationSummary[]
   conversationScopeKey: string
@@ -83,6 +84,7 @@ export type WorkspaceRailActionsProps = {
 
 /** Owns local ordering state and pointer/keyboard reorder gestures. */
 export function useWorkspaceRailActions({
+  draggableItemLabel,
   projectItems,
   conversations,
   conversationScopeKey,
@@ -154,7 +156,7 @@ export function useWorkspaceRailActions({
   const dragProps = (kind: RailDragKind, id: string): RailDragProps => ({
     draggable: true,
     "aria-grabbed": dragState?.kind === kind && dragState.id === id ? "true" : "false",
-    "aria-roledescription": "可拖动项目",
+    "aria-roledescription": draggableItemLabel,
     "aria-describedby": DRAG_HELP_ID,
     "aria-keyshortcuts": "Space ArrowUp ArrowDown Escape",
     onDragStart: (event: DragEvent<HTMLElement>) => {

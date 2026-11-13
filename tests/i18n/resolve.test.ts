@@ -3,6 +3,41 @@ import { describe, expect, it } from "vitest"
 import { LOCALES, LOCALE_NAMES, zh } from "@/i18n/messages"
 import { OVERLAYS } from "@/i18n/overlays"
 import { negotiateLocale, resolveMessage } from "@/i18n/resolve"
+import { en } from "@/i18n/en"
+import { de } from "@/i18n/de"
+import { es } from "@/i18n/es"
+import { fr } from "@/i18n/fr"
+import { ja } from "@/i18n/ja"
+import { ko } from "@/i18n/ko"
+import { pt } from "@/i18n/pt"
+import { ru } from "@/i18n/ru"
+
+it("侧栏本片标签及辅助说明在九语言自有词典中明确提供，不借fallback", () => {
+  const dictionaries = { zh, en, de, es, fr, ja, ko, pt, ru }
+  const keys = [
+    "rail.newTask", "rail.computer", "rail.create", "rail.automation",
+    "rail.plugins", "rail.tasks", "firstSite.collapseProjects", "firstSite.expandProjects",
+    "rail.collapseTasks", "rail.expandTasks", "rail.more", "rail.dragHelp", "rail.draggableItem",
+    "rail.taskOptions", "rail.taskFilters",
+    "firstSite.projectOptions", "firstSite.projectSort", "firstSite.newProjectSection",
+    "firstSite.projectCreateTitle", "firstSite.projectNamePlaceholder", "firstSite.projectFolder",
+    "firstSite.projectFolderUnavailable", "firstSite.create", "firstSite.projectsLoading",
+    "firstSite.projectsError", "firstSite.projectsEmpty", "firstSite.projects", "firstSite.newProject",
+    "notifications.open", "notifications.title", "rail.deleteFailed", "firstSite.unavailable",
+  ] as const
+  for (const locale of LOCALES) {
+    for (const key of keys) {
+      const dictionary = dictionaries[locale]
+      expect(Object.hasOwn(dictionary, key), `${locale}:${key} 缺少本语言词条`).toBe(true)
+      expect(dictionary[key]?.trim(), `${locale}:${key} 为空`).toBeTruthy()
+      expect(resolveMessage(locale, key)).toBe(dictionary[key])
+      if (locale !== "zh") expect(dictionary[key]).not.toBe(zh[key])
+      if (key === "firstSite.unavailable" && locale !== "zh" && locale !== "en") {
+        expect(dictionary[key]).not.toBe(en[key])
+      }
+    }
+  }
+})
 
 describe("知识开关说明当前新消息的使用边界", () => {
   const hints = {
