@@ -276,3 +276,10 @@ it("provides Custom API governance labels in each of the nine existing dictionar
     }
   }
 });
+
+it("English Project Skills empty state resolves its translation instead of Chinese fallback", () => {
+  const message = resolveMessage("en", "skills.personal.emptyState")
+  expect(message).toBeTruthy()
+  expect(message).not.toBe(zh["skills.personal.emptyState"])
+  expect(message).not.toBe("skills.personal.emptyState")
+})

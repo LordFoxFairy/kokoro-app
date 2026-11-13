@@ -1,3 +1,9 @@
+## 2026-11-13 Project Skills 英语空态漏译已修，包依赖不冒安装成功
+
+主控正常 English 浏览器在原 QA Project → Skills 实测空列表仍显示“尚无技能”。组件已消费现 t/key，仅 en.ts 补 skills.personal.emptyState，不改组件／其它八语言／选择命令／契约或认证；现 resolver 回归先 RED 中文 fallback，主控停写两输入 SHA 核等、整文件 41 PASS／0 FAIL／0 SKIP、scoped ESLint／非增量 TypeScript 通过，独审 CLEAR。正常页面现显示 No skills yet，截图在 Root local ignored。未为一行翻译重复全默认／Next build，未修改 next-env.d.ts。
+
+同 Project 从原个人 structured-report 导入现 exact source 的实际 POST 返回503，UI保 unknown／Retry original command，原 body/key已私有留存且没有发送第二次安装；response body被浏览器回收，未杜撰错误码。源码确定安装本身先走 Capability verifyPackage→Storage GetPackageReference，不是只在打开正文时才读包；当前 Storage 数据面问题仍限制该主路径。后继独立 native鲜读安装列表200／0项、selection200／空，仅是当前观察，不替代原写回执。未新建版本/包/Project或发送Chat，个人Settings原pin不动；完整Project安装/默认选择/包正文三入口一致性仍待恢复后原命令，不冒闭环。
+
 ## 2026-11-13 Public29 门户已发行，正常 Project ACL 与终态恢复已验
 
 `08bc30b6c7d2debaa2cba7606f1e214ff58fede3` 已推原 PR #49：九个门户路径消费已发行 BFF509597f／Public29.0.0，221 个公开操作／22 个生成文件，六个 browser-private 操作排除；完整 owner 为 227，勿混计。Project／ScheduledTask 的 API 概念与产品导航、可用边界已同步，复用单一 catalog／生成器，不新增公开机器契约副本。后继 BFF replay runtime 修复不改变此 wire pin。
