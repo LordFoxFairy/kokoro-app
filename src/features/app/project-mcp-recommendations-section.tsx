@@ -25,7 +25,7 @@ function SourceIcon({ item }: { item: ProjectMcpRecommendationOption | undefined
 }
 
 /** A project configuration editor, separate from account connection management and execution selection. */
-export function ProjectMcpRecommendationsSection({ model, active = true }: { active?: boolean; model?: ProjectMcpRecommendationsModel | undefined }) {
+export function ProjectMcpRecommendationsSection({ model, active = true, readOnly = false }: { readOnly?: boolean; active?: boolean; model?: ProjectMcpRecommendationsModel | undefined }) {
   const t = useT(), opener = useRef<HTMLButtonElement>(null), fallbackFocus = useRef<HTMLElement>(null)
   const context = model?.context
   const opening = useMemo(() => ({ active, context }), [active, context])
@@ -64,7 +64,7 @@ export function ProjectMcpRecommendationsSection({ model, active = true }: { act
       touched: false, readVersion: model.configReady ? model.facts?.state_version ?? null : null })
   }
   const save = async (draft: readonly ProjectMcpRecommendationRef[], window: object | null) => {
-    if (!active || currentOpening.current !== opening || !live.current || !model?.isCurrent() || window !== null && (live.current.window !== window || !live.current.open)) return
+    if (readOnly || !active || currentOpening.current !== opening || !live.current || !model?.isCurrent() || window !== null && (live.current.window !== window || !live.current.open)) return
     const saved = new Set(refs.map(projectMcpRecommendationKey))
     if (draft.some(ref => ref.kind === "custom_api" && !saved.has(projectMcpRecommendationKey(ref)) && !canSelect(projectMcpRecommendationKey(ref)))) {
       setEditor(previous => previous.context === context && previous.window === window ? { ...previous, touched: true, message: "unavailable" } : previous)
@@ -86,14 +86,14 @@ export function ProjectMcpRecommendationsSection({ model, active = true }: { act
   const feedback = message(view?.message ?? null)
   return <section ref={fallbackFocus} tabIndex={-1} className={styles.section} aria-label={t("firstSite.connectors")}>
     <header className={styles.header}><Cable aria-hidden="true" /><span>{t("firstSite.connectors")}</span>
-      <Button ref={opener} size="sm" variant="ghost" disabled={!model?.allowed || model.busy} onClick={open}>
+      <Button ref={opener} size="sm" variant="ghost" disabled={readOnly || !model?.allowed || model.busy} onClick={open}>
         <Plus aria-hidden="true" />{t("firstSite.add")}</Button>
     </header>
     {refs.length ? <ul className={styles.saved}>{refs.map(ref => {
       const id = projectMcpRecommendationKey(ref), name = label(ref)
       return <li key={id}><span className={styles.icon} aria-hidden="true"><SourceIcon item={options.get(id)} /></span>
         <span className={styles.name} title={name}>{name}</span>
-        <Button size="icon-xs" variant="ghost" disabled={!model?.configReady || !model.directoryReady || model.busy}
+        <Button size="icon-xs" variant="ghost" disabled={readOnly || !model?.configReady || !model.directoryReady || model.busy}
           aria-label={t("projectMcp.remove", { name })} onClick={() => void save(refs.filter(item => projectMcpRecommendationKey(item) !== id), null)}><X aria-hidden="true" /></Button>
       </li>
     })}</ul> : null}

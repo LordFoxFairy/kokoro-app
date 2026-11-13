@@ -1,3 +1,15 @@
+## 2026-11-13 Task B：Public29 Project 协作消费者候选（未正常激活）
+
+固定 BFF `38d47c958cecdc072ee60d5a96ad17c48ac691c6`／Public29.0.0 完整 artifact，SHA256 `45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509`。所有受影响消费者由原生成入口重出，新增四项 Project Access 的窄 generated codec/check；auth-session、MCP原生重新授权等独立 profile 不浮动更新。build/test-only 精确29→已发行28.37完整Git原件的叶逆证接回原链，封存父SHA不变，不存在运行时降级／旧入口fallback。
+
+Project分享不再只是复制私人URL。当前同团队成员目录选择、owner显式viewer/editor授权／到期／撤销使用既有BFF边界；实际Project读取所得canonical ID进入授权接口，不拿route slug作权限事实。长成员名、原生可访问表单、窄屏换行与九语言提示随片实现。原未知命令按同tab、tenant／实际subject／Project冻结目标、body、CAS和key；storage读回后才dispatch、刷新只恢复不自动重放。错member／错version／迟到或取消ACK不确认，首次明确拒绝可显式结束；曾未知的后继拒绝不冒未提交。该槽不是权限缓存、服务凭据或owner回执。
+
+viewer只读，editor使用自身执行资格。公开AG-UI仍唯一网络轨，peer只显示安全busy／生命周期，无他人的Stop、private process／pause或再生成；当前`can_control`／`can_regenerate`来自owner。peer确认FINAL通过原terminal snapshot及parts→AI SDK单轨adoption恢复，不新增stream/store。Project结果详情接受正式无私有asset_id分支，私人Library索引及匹配要求不放宽。Project403/404只退休该Project；401仍立即退休集合并交原生准入重核，不扩大内部OAuth。
+
+Scheduled current Details必须有真实revision及execution_actor_id，旧immutable ACK可仍省略，客户端不猜新版本／执行人。PATCH/retry显式携带当前revision的If-Match，经同源桥原样透传，未知命令绑定原CAS，不隐式rebase或生成替代key；原actor-scoped创建、不同Project独立未知创建和删除行为保持。跨actor修改后是否暂停由BFF确认状态决定，重新启用是当前actor的明确动作。六项Admin Custom API具名同源桥接通，不开放generic proxy、浏览器内部secret或新认证状态。
+
+本片源码工程门已验，正常组合未激活。主控已修复接管时的六桥未接、迟到/错目标Grant确认、Project权限投影、Scheduled CAS接线；首轮完整默认6771 PASS／94 FAIL，失败包含遗漏的新权限fixture/当前pin/新必需字段与实际401集合退休缺口，失败原件保留，不冒全绿。后继当前身份401集合退休已修复、Project403/404只退休目标且回报明确不可用，测试fixture补独立Access读而非把其误算成Detail重复GET；新Scheduled字段/CAS与旧ACK分流、当前pin/完整Git父逆证均已承接。最终停写142输入逐SHA保持，完整默认380文件6865 PASS／0 FAIL／0 SKIP、完整lint、正规check集合、Next生产build及构建后非增量types通过；提交前仅修一处测试行尾空格和本段文档。实际Normal3310仍旧外置compiled baseline，未提前激活候选。原私人URL复制独占测试按功能替换退休，真实Grant正向／未知恢复／角色退休已承接；仅自比常量的伪pin断言删除，完整字节及正式生成检查保持。真实双身份浏览器、当前组合激活、剩余BFF入口和完整TaskB仍OPEN；不以fake client／React渲染／HTTP fixture冒native或模型执行。
+
 ## 2026-11-13 Task B 文档语言与 API 门户收口
 
 只删除 Runtime Manifest 覆盖 html.lang 的重复 effect，由现 LocaleProvider 唯一维护所选文档语言；请求 navigator.language、manifest scope/policy/取消/期限原样保持，System允许locale与设置码映射仍是独立待裁定项。初始en-US→en-US受控案例原实现即GREEN不冒RED；schema-valid迟到en-GB覆盖fr真实RED，最低回归最终31 PASS（含既有SET31与error/preview），主控同文件31 PASS、非增量types、正式App build、独审CLEAR，六源码/门户输入SHA停写核等。正常原生浏览器English→Français显示与html.lang=fr、硬刷新仍fr、最后恢复English/en；en-GB仅受控响应，不称正常System已支持。

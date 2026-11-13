@@ -1,3 +1,7 @@
+## 2026-11-13 Project 协作当前写区
+
+Public29候选及实际验收边界见 `docs/CURRENT.md`。Project Access正规codec位于`src/generated/bff-project-access.ts`，浏览器读取和同tab原命令分别在`src/features/app/project-access-client.ts`、`project-grant-command.ts`；Project header只承接UI，后端资格仍由BFF判定。Chat沿原engine→AI SDK，Scheduled沿原feature client/operations与显式revision，没有第二业务owner或认证层。
+
 2026-11-13：文档语言只由src/i18n/context.tsx现LocaleProvider维护，Runtime Manifest不再写html.lang；服务端metadata locale不替代用户UI语言。API门户catalog已消费发行Public28.38，当前事实与验证见docs/CURRENT.md。
 
 2026-11-12：原Task B PR在隔离checkout普通整合当前main，保Public28.35/native/Task A事实；API/JSON ACK以安全locator承接fresh exact详情与读取恢复。未发行owner能力不激活，原历史保留。当前证据／未验边界见docs/CURRENT.md，API无增量。

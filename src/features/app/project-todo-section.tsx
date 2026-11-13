@@ -43,7 +43,7 @@ export type ProjectTodoClient = {
   write: (projectId: string, intent: ProjectTodoIntent, signal: AbortSignal) => Promise<ProjectTodoWriteResult>
 }
 
-type Props = Readonly<{ projectId: string; subject: string; generation: number; client: ProjectTodoClient }>
+type Props = Readonly<{ readOnly?: boolean; projectId: string; subject: string; generation: number; client: ProjectTodoClient }>
 type Journal = "checking" | "available" | "blocked" | ProjectTodoIntent
 type ReadState = "loading" | "ready" | "unavailable" | "denied"
 type Notice = Exclude<ProjectTodoWriteResult, "ok" | "unknown" | "denied">
@@ -78,7 +78,7 @@ export function ProjectTodoSection(props: Props) {
   return <ProjectTodoScope key={JSON.stringify([props.projectId, props.subject, props.generation, typeof window === "undefined" ? null : overviewRoute(props.projectId)])} {...props} />
 }
 
-function ProjectTodoScope({ projectId, subject, client }: Props) {
+function ProjectTodoScope({ projectId, subject, client, readOnly = false }: Props) {
   const t = useT()
   const heading = useId()
   const key = journalKey(subject, projectId)
@@ -155,7 +155,7 @@ function ProjectTodoScope({ projectId, subject, client }: Props) {
   }
 
   const recovered = typeof journal === "object" ? journal : null
-  const canWrite = readState === "ready" && journal === "available" && !pending
+  const canWrite = !readOnly && readState === "ready" && journal === "available" && !pending
   const dispatch = async (intent: ProjectTodoIntent, retry = false) => {
     const scope = scopeRef.current
     if (!scope || !current(scope) || flight.current || readState !== "ready" ||

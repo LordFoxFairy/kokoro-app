@@ -334,11 +334,11 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
       }
       break
     case "run.created":
-      draft.state.executionProcess = { runId: event.run_id, todos: null, activities: [] }
+      draft.state.executionProcess = event.payload.can_control === false ? null : { runId: event.run_id, todos: null, activities: [] }
       if (draft.state.activeRunId === null || (draft.state.activeRunId === event.run_id &&
         (draft.state.executionHead === null || draft.state.executionHead.state === "queued"))) {
         draft.state.activeRunId = event.run_id
-        draft.state.executionHead = { run_id: event.run_id, state: "active", pending_pauses: [] }
+        draft.state.executionHead = { ...(event.payload.can_control === undefined ? {} : { can_control: event.payload.can_control }), run_id: event.run_id, state: "active", pending_pauses: [] }
       }
       break
     case "message.user": {

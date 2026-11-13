@@ -82,7 +82,7 @@ const EMPTY_THREAD: SessionStreamState = createSessionStreamState()
 /** A queued receipt is not proof that the owner started the Run. */
 export function interruptibleRunId({ machine, thread }: Pick<EngineSnapshot, "machine" | "thread">): string | null {
   const head = thread.executionHead
-  if (head === null || head.run_id !== machine.runId || head.state === "queued") return null
+  if (head === null || head.can_control === false || head.run_id !== machine.runId || head.state === "queued") return null
   return machine.phase === "streaming" || machine.phase === "waiting" || machine.phase === "resuming" ? head.run_id : null
 }
 

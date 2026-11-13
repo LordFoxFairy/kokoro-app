@@ -35,6 +35,7 @@ export type AppFrameMainSurfaceProps = {
   projectContext?: ProjectContextControl
   projectInstruction?: ProjectInstructionControl
   projectDelete?: ProjectDeleteControl
+  projectAccess?: import("@/features/app/use-project-access").ProjectAccessModel
   projectRef: string | undefined
   resolvedRailCollapsed: boolean
   narrowWeb: boolean
@@ -128,6 +129,7 @@ export function AppFrameMainSurface({
   onOpenSettings,
   shareClient,
   shareReadBoundary,
+  projectAccess,
   thread,
   conversationProps,
   emptyState: EmptyState,
@@ -152,6 +154,7 @@ export function AppFrameMainSurface({
       {/* 会话头部（SHARE-1）：有活跃会话且已开聊时显分享入口——创建可撤销只读链接。 */}
       {mounted && !hideWorkspaceHeader ? (
         <WorkspaceHeader
+          {...(projectAccess ? { projectAccess } : {})}
           activeId={activeId}
           shareClient={shareClient}
           {...(shareReadBoundary === undefined ? {} : { shareReadBoundary })}

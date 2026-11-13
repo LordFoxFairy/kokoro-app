@@ -33,6 +33,8 @@ const localDateSchema = z
     return !value.startsWith("0000-") && !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
   })
 const schedulingStateSchema = z.enum(["pending", "active", "paused", "exhausted", "failed"])
+const taskRevisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER)
+const executionActorSchema = z.string().min(1).nullable()
 type CalendarRule = {
   frequency?: string | undefined
   weekdays?: number[] | undefined
@@ -53,6 +55,8 @@ const projectReferenceSchema = z
 export const scheduledTaskRecordSchema = z
   .object({
     id: z.string().min(1),
+    revision: taskRevisionSchema.optional(),
+    execution_actor_id: executionActorSchema.optional(),
     project_id: projectReferenceSchema.optional(),
     title: z.string().min(1),
     prompt: z.string(),
@@ -76,6 +80,8 @@ export type ScheduledTaskRecordResponse = z.infer<typeof scheduledTaskRecordSche
 export const scheduledTaskDetailsSchema = scheduledTaskRecordSchema
   .extend({
     scheduling_state: schedulingStateSchema,
+    revision: taskRevisionSchema,
+    execution_actor_id: executionActorSchema,
   })
   .strict()
   .refine(completeCalendarRule, "Incomplete or conflicting calendar rule")

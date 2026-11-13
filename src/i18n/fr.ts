@@ -1948,4 +1948,22 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "customApi.governance.revoked": "Révoqué",
   "customApi.governance.unavailable": "Actuellement indisponible",
   "customApi.governance.readOnly": "Cette configuration est en lecture seule. Vous pouvez toujours la supprimer.",
+
+  "projectAccess.hint": "Accordez l’accès uniquement aux membres actuels de l’équipe. Le lien ne donne aucun droit.",
+  "projectAccess.unavailable": "Lecture des membres ou droits incomplète. Rouvrez pour réessayer.",
+  "projectAccess.member": "Membre",
+  "projectAccess.role": "Rôle du projet",
+  "projectAccess.viewer": "Lecteur",
+  "projectAccess.editor": "Éditeur",
+  "projectAccess.expiry": "Expiration (vide : illimitée)",
+  "projectAccess.grant": "Enregistrer le droit",
+  "projectAccess.revoked": "Révoqué",
+  "projectAccess.revoke": "Révoquer l’accès",
+  "projectAccess.resume": "Reprendre la commande initiale",
+  "projectAccess.readOnly": "Ce projet est en lecture seule.",
+  "projectAccess.peerBusy": "Un autre membre exécute une tâche.",
+  "projectAccess.unknown": "La modification de l’accès n’est pas confirmée. Reprenez uniquement l’opération initiale.",
+  "projectAccess.rejected": "La modification initiale n’a pas été appliquée. Terminez-la avant d’en lancer une autre.",
+  "projectAccess.finish": "Terminer l’opération refusée",
+
 }

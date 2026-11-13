@@ -1,3 +1,4 @@
+import { proxyProjectAccess } from "@/lib/server/project-access";
 import { mcpReauthorizationRequestSchema, mcpReauthorizationErrorAllowed } from "@/hub/mcp-reauthorization.schema";
 import { proxyProjectSkillContent } from "@/lib/server/project-skill-content";
 import { proxyLibraryArtifactMutation } from "@/lib/server/library-artifact-mutation";
@@ -2317,6 +2318,7 @@ async function proxyHubRequest(
     return proxyLibraryFileDelete(request, path);
   if ((request.method === "DELETE" || request.method === "PUT") && path[libraryAt] === "library" && path[libraryAt + 1] === "artifacts")
     return proxyLibraryArtifactMutation(request, path);
+  if (path[0] === "projects" && ["access", "grants"].includes(path[2] ?? "")) return proxyProjectAccess(request, path);
   if (isProjectTaskFamily(path)) return proxyProjectTasks(request, path);
   if (isProjectWebsitesFamily(path)) return proxyProjectWebsites(request, path);
   if ((path[0] === "self" && path[1] === "project-pins") || (path[0] === "projects" && path[2] === "pin") || (path[0] === "self" && path[1] === "projects" && path[3] === "pin") || (path[0] === "self" && path[1] === "self" && path[2] === "project-pins")) return proxyProjectPins(request, path);

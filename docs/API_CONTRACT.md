@@ -1,3 +1,11 @@
+## 2026-11-13 Task B：Public29 消费与同源接线（候选）
+
+固定BFF `38d47c958cecdc072ee60d5a96ad17c48ac691c6`／29.0.0，完整SHA256 `45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509`。原正式生成器重出，新增Project Access窄codec；独立auth-session/reauthorization来源不机械升级。build/test叶逆证精确还原已发行28.37的完整Git bytes，原封存父hash不改；不存在runtime旧协议fallback。
+
+具名同源接口：GET `/api/hub/projects/{id}/access`；GET `/api/hub/projects/{id}/grants`；PUT/DELETE `/api/hub/projects/{id}/grants/{subject_id}`。当前native准入仍在BFF，body仅role/expires_at，写带原idempotency-key和quoted access_version If-Match。client核Project、目标member、版本/结果和取消寿命；目录有界完整分页，不按浏览器自报身份授权。
+
+`/api/admin/custom-apis`只桥接list/get/audit-events与quarantine/restore/revoke六项。Scheduled current Details要求revision/execution_actor_id；immutable ACK允许保历史省略。PATCH/retry透传真实quoted revision If-Match，未知命令原key/body/CAS固定，不自行GET推算或rebase。AG-UI公开Project snapshot/head/message的project_access、can_control、can_regenerate按owner语义消费；peer FINAL仍经同一snapshot/parts与AI SDK呈现。工程验收与native状态见CURRENT，不据本合同文档声称已部署。
+
 ## 2026-11-12 · Task B Public28.37／新授权消费者候选
 
 固定 BFF `0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97` 的 Public28.37（216 operations，原生 Session metadata、Share GET、Team delete_series）及独立 browser-private reauthorization1.0。当前 public 生成链与精确28.36／28.35父字节逆证一起升级，旧独立 profile 与历史父 pin 不变；无契约手写副本、锁依赖或认证状态机变更。

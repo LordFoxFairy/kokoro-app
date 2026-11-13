@@ -40,7 +40,7 @@ const requiredCreate = {
 describe("scheduled task UTC contract", () => {
   it("separates strict current rules and lifecycle from immutable command snapshots", () => {
     for (const rule of [{ frequency: "daily" }, { frequency: "weekly", weekdays: [1, 4] }, { frequency: "monthly", month_days: [1, 31] }, { frequency: "once", local_date: "2030-02-28" }]) {
-      const current = { ...requiredRecord, ...rule, scheduling_state: "exhausted" }
+      const current = { ...requiredRecord, ...rule, scheduling_state: "exhausted", revision: 1, execution_actor_id: "owner" }
       expect(scheduledTaskDetailResponseSchema.parse({ task: current })).toEqual({ task: current })
       expect(scheduledTaskListResponseSchema.parse({ tasks: [current] })).toEqual({ tasks: [current] })
       expect(scheduledTaskDetailResponseSchema.safeParse({ task: { ...current, recurrence_anchor_at: "2026-09-01T08:00:00Z" } }).success).toBe(false)
@@ -48,7 +48,7 @@ describe("scheduled task UTC contract", () => {
     expect(scheduledTaskDetailResponseSchema.safeParse({ task: requiredRecord }).success).toBe(false)
     expect(scheduledTaskMutationResponseSchema.parse({ task: requiredRecord })).toEqual({ task: requiredRecord })
     for (const bad of [{ frequency: "weekly" }, { frequency: "monthly", month_days: [] }, { frequency: "once", local_date: "2030-02-29" }, { frequency: "daily", weekdays: [1] }, { frequency: "weekly", weekdays: [1, 1] }])
-      expect(scheduledTaskDetailResponseSchema.safeParse({ task: { ...requiredRecord, ...bad, scheduling_state: "active" } }).success).toBe(false)
+      expect(scheduledTaskDetailResponseSchema.safeParse({ task: { ...requiredRecord, ...bad, scheduling_state: "active", revision: 1, execution_actor_id: "owner" } }).success).toBe(false)
   })
 
   it("requires nullable next_run_at and accepts only owner UTC instants when present", () => {

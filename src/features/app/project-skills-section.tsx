@@ -17,13 +17,14 @@ import { ProjectSkillSourcePicker } from "./project-skill-source-picker"
 import { useProjectSkills, type ProjectSkillCommand } from "./use-project-skills"
 import styles from "./project-skills.module.css"
 
-type Props = Pick<EmptyStateProps, "projectDetail" | "projectReadBoundary" | "onOpenSettings" | "preview"> & { active?: boolean }
+type Props = Pick<EmptyStateProps, "projectDetail" | "projectReadBoundary" | "onOpenSettings" | "preview"> & { active?: boolean; readOnly?: boolean }
 export function ProjectSkillsSection({
   projectDetail,
   projectReadBoundary,
   onOpenSettings,
   preview = false,
   active = true,
+  readOnly = false,
 }: Props) {
   const t = useT()
   const [open, setOpen] = useState(false)
@@ -67,7 +68,7 @@ export function ProjectSkillsSection({
   }
   if (confirmation && confirmation.facts !== model.facts) setConfirmation(null)
   const confirm = confirmation?.facts === model.facts ? confirmation : null
-  const locked =
+  const locked = readOnly ||
     !model.allowed || model.status !== "ready" || model.listStatus !== "ready" || model.pending !== null
   const readBusy = !preview && (model.status === "blocked" || model.status === "loading" || model.listStatus === "loading")
   const readFailed = !preview && model.pending === null &&

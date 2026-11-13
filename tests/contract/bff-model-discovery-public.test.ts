@@ -7,7 +7,7 @@ import { restoreModelDiscoveryParent } from "./bff-model-discovery-parent"
 const digest = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex")
 it("pins only the formal provider discovery GET and preserves the complete Public22.2 parent", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml")
-  expect(digest(bytes)).toBe("737688c79fa4fad8216168656d0fe7e4131b496ef2b506e424dbff82d7dca2c8")
+  expect(digest(bytes)).toBe("45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509")
   const spec = YAML.parse(restorePublic26MessagePartsContract(bytes.toString()))
   expect(spec.info.version).toBe("26.0.0")
   const path = spec.paths["/v1/admin/model-providers/{provider_id}/upstream-models"]

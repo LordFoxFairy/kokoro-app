@@ -382,6 +382,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let snapshot: EngineSnapshot = buildSnapshot()
 
   function canSubmitMessage(): boolean {
+    if (thread.executionHead?.can_control === false || thread.projectAccess && !thread.projectAccess.capabilities.includes("edit")) return false
     if (disposed || recoveringExpiredCursor || submissionRecoveryUnavailable || connection.status !== "connected" || pendingSubmission !== null) return false
     if (machine.phase === "idle" || machine.phase === "error") return true
     return store !== null && (
@@ -754,6 +755,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       observeSnapshotTerminals(sessionId, sessionSnapshot)
       if (sessionSnapshot.session.session_id === sessionId) {
         mergeSteerSettlements(sessionSnapshot, pendingSteerTargets(terminalRead.runs))
+      }
+      // Peer FINAL is intentionally absent from live text. Adopt its safe durable
+      // message/parts baseline through the existing SDK reader, never a second stream.
+      if (sessionSnapshot.project_access && thread.resumeCursor === cursorAtStart) {
+        adoptOwnerSnapshot(sessionId, sessionSnapshot, undefined, notificationGeneration)
+        notify()
+        return
       }
       const snapshotDeliveries = sessionSnapshot.deliveries.map(deliveryFromSnapshot)
       const liveAdvanced = thread.resumeCursor !== cursorAtStart
@@ -1498,6 +1506,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   async function regenerateAnswer(input: { sourceMessageId: string; sourceRunId: string; key: string; signal: AbortSignal }) {
     const sessionId = store?.activeId, generation = hydrateGeneration
     input.signal.throwIfAborted()
+    if (thread.projectAccess && !thread.messages.some(message => message.snapshotMessageId === input.sourceMessageId && message.canRegenerate === true)) throw Error("regeneration_source_not_current")
     const sourceIds = new Set([
       ...thread.messages.flatMap(message => message.role === "assistant" && message.runId === input.sourceRunId && message.snapshotMessageId ? [message.snapshotMessageId] : []),
       ...Object.values(thread.messageParts ?? {}).flatMap(part => part.runId === input.sourceRunId ? [part.messageId] : []),
@@ -1885,6 +1894,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function cancelRun(): void {
+    if (thread.executionHead?.can_control === false) return
     if (disposed) {
       return
     }

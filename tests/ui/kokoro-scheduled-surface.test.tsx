@@ -326,7 +326,7 @@ it("live 模式先呈现 loading，GET 列表失败可用原请求重试并保�
     title: "Live digest",
     frequency: "daily" as const,
     time: "08:00",
-    status: "active" as const,
+    status: "active" as const, revision: 1,
   };
   const listScheduledTasks = vi
     .fn()
@@ -358,7 +358,7 @@ it("live client mutation 成功后重新 GET 投影，不靠 optimistic 状态�
     title: "Live digest",
     frequency: "daily" as const,
     time: "08:00",
-    enabled: true,
+    enabled: true, revision: 1,
   };
   const pausedTask = {
     ...activeTask,
@@ -391,7 +391,7 @@ it("live client mutation 成功后重新 GET 投影，不靠 optimistic 状态�
     expect(updateScheduledTask).toHaveBeenCalledWith("scheduled_live_1", {
       enabled: false,
       status: "paused",
-    }),
+    }, 1),
   );
   await waitFor(() => expect(card).toHaveAttribute("data-status", "paused"));
   expect(listScheduledTasks).toHaveBeenCalledTimes(2);
@@ -780,14 +780,14 @@ it("actual Response 的空 next_run_at 不在列表或日历伪造日期，已�
     weekdays: [2],
     time: "08:00",
     timezone: "UTC",
-    auto_approve: false,
+    auto_approve: false, revision: 1, execution_actor_id: "owner",
   } as const;
   const fetcher: typeof fetch = async () =>
     new Response(
       JSON.stringify({
         tasks: [
-          { ...ownerTask, id: "scheduled_pending_owner", title: "Owner 等待登记", scheduling_state: "pending", next_run_at: null, enabled: true, status: "active" },
-          { ...ownerTask, id: "scheduled_exhausted_owner", title: "Owner 已耗尽", frequency: "once", weekdays: undefined, local_date: "2020-01-01", scheduling_state: "exhausted", next_run_at: null, enabled: true, status: "active" },
+          { ...ownerTask, id: "scheduled_pending_owner", title: "Owner 等待登记", scheduling_state: "pending", next_run_at: null, enabled: true, status: "active", revision: 1, execution_actor_id: "owner" },
+          { ...ownerTask, id: "scheduled_exhausted_owner", title: "Owner 已耗尽", frequency: "once", weekdays: undefined, local_date: "2020-01-01", scheduling_state: "exhausted", next_run_at: null, enabled: true, status: "active", revision: 1, execution_actor_id: "owner" },
           {
             ...ownerTask,
             id: "scheduled_paused_owner",
@@ -802,7 +802,7 @@ it("actual Response 的空 next_run_at 不在列表或日历伪造日期，已�
             scheduling_state: "active",
             next_run_at: confirmedNextRun,
             enabled: true,
-            status: "active",
+            status: "active", revision: 1, execution_actor_id: "owner",
           },
         ],
       }),
@@ -1115,7 +1115,7 @@ it("编辑 owner 任务时忽略 URL 项目创建上下文且不改变归属", a
     frequency: "daily" as const,
     time: "08:00",
     timezone: "UTC",
-    autoApprove: false,
+    autoApprove: false, revision: 1,
   };
   const listScheduledTasks = vi
     .fn()
@@ -1159,7 +1159,7 @@ it("编辑 owner 任务时忽略 URL 项目创建上下文且不改变归属", a
   await waitFor(() =>
     expect(updateScheduledTask).toHaveBeenCalledWith(
       "scheduled_existing",
-      expect.not.objectContaining({ projectId: expect.anything() }),
+      expect.not.objectContaining({ projectId: expect.anything() }), 1,
     ),
   );
   expect(createScheduledTask).not.toHaveBeenCalled();
@@ -1264,6 +1264,7 @@ it.each(["resolve", "reject"] as const)(
   async (outcome) => {
     const ownerTask = {
       id: "scheduled_old_update",
+      revision: 1,
       projectId: "project-old",
       title: "旧任务",
       prompt: "执行旧任务",

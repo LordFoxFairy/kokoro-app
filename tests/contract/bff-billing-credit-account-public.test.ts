@@ -8,9 +8,9 @@ import { billingCreditAccountPath, billingSummarySchema } from "@/contract/http"
 
 it("pins the current tenant's inherently idempotent initialization without changing the read projections", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml")
-  expect(createHash("sha256").update(bytes).digest("hex")).toBe("737688c79fa4fad8216168656d0fe7e4131b496ef2b506e424dbff82d7dca2c8")
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe("45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509")
   const spec = YAML.parse(bytes.toString())
-  expect(spec.info.version).toBe("28.37.0")
+  expect(spec.info.version).toBe("29.0.0")
   const path = spec.paths["/v1/billing/credit-account"]
   expect(Object.keys(path)).toEqual(["put"])
   expect(billingCreditAccountPath()).toBe("/billing/credit-account")

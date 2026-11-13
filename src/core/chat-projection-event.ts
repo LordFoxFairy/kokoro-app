@@ -31,6 +31,7 @@ const sessionCreatedPayload = z
 
 const runCreatedPayload = z
   .object({
+    can_control: z.boolean().optional(),
     run_id: z.string().min(1),
   })
   .strict()

@@ -1,7 +1,9 @@
+import { restorePublic2837ProjectCollaborationContract } from "./bff-project-collaboration-parent"
 // Build-time exact additive inverse; never a runtime downgrade.
 import { createHash } from "node:crypto"
 const hash = (source: string) => createHash("sha256").update(source).digest("hex")
 export function restorePublic2836SessionShareContract(source: string): string {
+  source = restorePublic2837ProjectCollaborationContract(source)
   if (!/^  version: 28\.37\.0$/mu.test(source)) return source
   if (hash(source) !== "737688c79fa4fad8216168656d0fe7e4131b496ef2b506e424dbff82d7dca2c8") throw Error("Session Share metadata Public28.37 child drift")
   const parent = source

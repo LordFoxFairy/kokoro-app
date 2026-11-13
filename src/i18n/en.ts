@@ -2489,4 +2489,22 @@ export const en: Partial<Record<MessageKey, string>> = {
   "customApi.governance.revoked": "Revoked",
   "customApi.governance.unavailable": "Currently unavailable",
   "customApi.governance.readOnly": "This configuration is read-only. You can still delete it.",
+
+  "projectAccess.hint": "Grant access only to current team members. The link itself grants no access.",
+  "projectAccess.unavailable": "Member or grant read is incomplete. Reopen to retry.",
+  "projectAccess.member": "Member",
+  "projectAccess.role": "Project role",
+  "projectAccess.viewer": "Viewer",
+  "projectAccess.editor": "Editor",
+  "projectAccess.expiry": "Expiry (blank for no expiry)",
+  "projectAccess.grant": "Save grant",
+  "projectAccess.revoked": "Revoked",
+  "projectAccess.revoke": "Revoke access",
+  "projectAccess.resume": "Resume original command",
+  "projectAccess.readOnly": "This project is read-only.",
+  "projectAccess.peerBusy": "Another member is running a task.",
+  "projectAccess.unknown": "The access change is unconfirmed. Resume only the original operation.",
+  "projectAccess.rejected": "The original access change was not applied. Close it before starting another.",
+  "projectAccess.finish": "Close rejected operation",
+
 }

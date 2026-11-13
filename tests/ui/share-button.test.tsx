@@ -151,7 +151,7 @@ describe("ShareButton", () => {
     )
 
     expect(document.querySelector('[data-workspace-upgrade="true"]')).toBeNull()
-    expect(screen.getByRole("button", { name: "项目选项" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Project options" })).toBeInTheDocument()
 
     rerender(
       <WorkspaceHeader
@@ -165,60 +165,17 @@ describe("ShareButton", () => {
 
     expect(document.querySelector('[data-workspace-upgrade="true"]')).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Credits & usage" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "项目选项" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Project options" })).toBeInTheDocument()
   })
 
-  it("presents a project link as private navigation without invented owners or editable invites", async () => {
-    window.history.replaceState(null, "", "/app/project/kokoro?conversation=private-task#settings")
+  // Private URL-copy UI was replaced by the real Project Grant workflow.
+  // Its positive/unknown/retirement behavior is covered in project-share.test.tsx.
+  it("does not invent Project sharing authority from a route or a private Session share client", () => {
     const client = makeClient()
     render(<WorkspaceHeader shareReadBoundary={{ admitted: true, subject: "share-owner", generation: 1 }} activeId="task_1" projectWorkspace shareClient={client} />, { wrapper: LocaleProvider })
-    fireEvent.click(screen.getByRole("button", { name: "Share" }))
-    const link = await screen.findByRole("textbox", { name: "Project link" })
-    expect(link).toHaveValue("http://localhost:3000/app/project/kokoro")
-    expect(link).toHaveAttribute("readonly")
-    expect(screen.getByText("Copying this link does not grant access. Project access still requires sign-in and permission.")).toBeVisible()
-    expect(screen.queryByText("owner@kokoro.local")).not.toBeInTheDocument()
-    expect(screen.queryByRole("textbox", { name: "Enter an email address" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Share" })).toBeDisabled()
+    expect(screen.queryByRole("dialog")).toBeNull()
     expect(client.createShare).not.toHaveBeenCalled()
-  })
-
-  it("copies a canonical project URL without task query or hash state", async () => {
-    window.history.replaceState(null, "", "/app/project/kokoro?conversation=task_1#settings")
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
-    render(
-      <WorkspaceHeader
-        shareReadBoundary={{ admitted: true, subject: "share-owner", generation: 1 }}
-        activeId="task_1"
-        projectWorkspace
-        shareClient={makeClient()}
-      />,
-      { wrapper: LocaleProvider },
-    )
-
-    fireEvent.click(screen.getByRole("button", { name: "Share" }))
-    fireEvent.click(await screen.findByRole("button", { name: "Copy link" }))
-    await waitFor(() => expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument())
-    expect(writeText).toHaveBeenCalledWith("http://localhost:3000/app/project/kokoro")
-  })
-
-  it("shows a recoverable state when project link copying is rejected", async () => {
-    window.history.replaceState(null, "", "/app/project/kokoro")
-    const writeText = vi.fn().mockRejectedValue(new Error("clipboard blocked"))
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
-    render(
-      <WorkspaceHeader
-        shareReadBoundary={{ admitted: true, subject: "share-owner", generation: 1 }}
-        activeId="task_1"
-        projectWorkspace
-        shareClient={makeClient()}
-      />,
-      { wrapper: LocaleProvider },
-    )
-
-    fireEvent.click(screen.getByRole("button", { name: "Share" }))
-    fireEvent.click(await screen.findByRole("button", { name: "Copy link" }))
-    expect(await screen.findByRole("button", { name: "Copy failed, try again" })).toBeInTheDocument()
   })
 
   it("opens the share panel without publishing and requires an explicit share action", async () => {

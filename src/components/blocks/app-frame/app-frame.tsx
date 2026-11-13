@@ -1,5 +1,7 @@
 "use client"
 
+import { useProjectAccess } from "@/features/app/use-project-access"
+
 import type { CustomApiSelection } from "@/engine/custom-api-selection"
 
 import { useAnswerActionScope } from "@/ui/thread/answer-action-scope"
@@ -491,8 +493,13 @@ function AppFrameRuntime({
         mcpTouched: current.mcpTouched, mcpSeededVersion: current.mcpSeededVersion, ...choice }
     })
   }
-  const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(featureFlags, workspaceCapabilities, { preview })
-  const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace && projectedWorkspaceCapabilities.instructions === true)
+  const baseWorkspaceCapabilities = projectWorkspaceCapabilities(featureFlags, workspaceCapabilities, { preview })
+  const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace && baseWorkspaceCapabilities.instructions === true)
+  const canonicalAccessProjectId = projectWorkspace && !preview && projectReads.current.status === "ready" ? projectReads.current.data.id : undefined
+  const projectAccess = useProjectAccess(canonicalAccessProjectId, projectReadBoundary, projectReads.retireProject)
+  const projectEditable = !projectWorkspace || preview || projectAccess.access?.capabilities.includes("edit") === true
+  const projectManageable = preview || projectAccess.access?.capabilities.includes("manage") === true
+  const projectedWorkspaceCapabilities = { ...baseWorkspaceCapabilities, readOnly: projectWorkspace && !projectEditable }
   const projectPins = useProjectPins({ preview, boundary: projectReadBoundary,
     visibleIds: projectReads.list.status === "ready" ? projectReads.list.data.map(item=>item.id) : null,
     onUnavailable: projectReads.retireProject })
@@ -801,7 +808,7 @@ function AppFrameRuntime({
       ? machine.phase === "idle" && !canRetryPendingSubmission
       : activeId === routedConversationId)
   )
-  const canSend = draft.trim().length > 0 && canSubmitMessage && projectSubmissionAdmitted
+  const canSend = projectEditable && thread.executionHead?.can_control !== false && draft.trim().length > 0 && canSubmitMessage && projectSubmissionAdmitted
     && !navigationState.conversationHydrating && !navigationState.conversationHydrationFailed
   const conversations = conversationsCtl?.conversations ?? []
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent
@@ -937,12 +944,13 @@ function AppFrameRuntime({
     selectedSkill: actions.selectedSkill,
     onRemoveSelectedSkill: actions.clearSelectedSkill,
     onKeyDown: actions.handleKeyDown,
-    onSubmit: actions.handleSubmit,
+    onSubmit: (event) => { if (projectEditable && thread.executionHead?.can_control !== false) actions.handleSubmit(event); else event.preventDefault() },
     ...(actions.activeDelivery === undefined ? {} : { activeDelivery: actions.activeDelivery }),
     isStreaming,
     isAwaitingApproval: (machine.phase === "waiting" || machine.phase === "resuming"),
     canSend,
-    onStop: () => engine?.cancelRun(),
+    canStop: thread.executionHead?.can_control !== false,
+    onStop: () => { if (thread.executionHead?.can_control !== false) engine?.cancelRun() },
     composerRef,
     emptyWorkspace: !composerHasMessages,
     mode,
@@ -1032,10 +1040,11 @@ function AppFrameRuntime({
       connection={connection}
       onReconnect={() => engine?.reconnect()}
       projectCreation={project.projectCreation}
-      projectRename={project.projectRename}
+      projectAccess={projectAccess}
+      projectRename={{ ...project.projectRename, available: project.projectRename.available && projectEditable }}
       projectContext={project.projectContext}
       projectInstruction={project.projectInstruction}
-      projectDelete={project.projectDelete}
+      projectDelete={{ ...project.projectDelete, available: project.projectDelete.available && projectManageable }}
       onRetryProjectCreation={project.retryProjectCreation}
       retryConversationHydration={retryConversationHydration}
       onOpenSettings={overlays.openSettings}

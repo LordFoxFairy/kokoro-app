@@ -225,3 +225,13 @@ it("rejects nonempty publish streams before BFF I/O",async()=>{
  const {POST}=await import("@/app/api/admin/[...path]/route");const id="11111111-1111-4111-8111-111111111111";
  const response=await POST(new Request(`http://localhost/api/admin/model-revisions/${id}/publish`,{method:"POST",headers:{cookie: "kokoro-issuer.session_token=fixture", "idempotency-key":"original-publish","if-match":'"3"',"content-length":"0"},body:new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode("x"));controller.close();}}),duplex:"half"} as RequestInit),params(["model-revisions",id,"publish"]));expect(response.status).toBe(400);expect(fetchWithDomain).not.toHaveBeenCalled();
 });
+
+it.each([
+ ["GET",["custom-apis"]], ["GET",["custom-apis","profile-a"]], ["GET",["custom-apis","profile-a","audit-events"]],
+ ["POST",["custom-apis","profile-a","quarantine"]], ["POST",["custom-apis","profile-a","restore"]], ["POST",["custom-apis","profile-a","revoke"]],
+] as const)("admits only the named Custom API bridge %s %j and retains the owner error",async(method,path)=>{
+ vi.mocked(fetchWithDomain).mockImplementation(async(_url,_domain,init)=>Response.json({error:{code:"custom_api_forbidden",message:"Forbidden",retryable:false}},{status:403,headers:{"cache-control":"no-store","x-request-id":new Headers(init?.headers).get("x-kokoro-request-id")!}}))
+ const route=await import("@/app/api/admin/[...path]/route")
+ const response=await route[method](new Request(`http://localhost/api/admin/${path.join("/")}`,{method,headers:{cookie:"kokoro-issuer.session_token=fixture","x-kokoro-request-id":"custom-admin",...(method==="POST"?{"content-type":"application/json","content-length":"2","idempotency-key":"original-command"}:{})},...(method==="POST"?{body:"{}"}:{})}),params([...path]))
+ expect(response.status).toBe(403);expect((await response.json()).error.code).toBe("custom_api_forbidden");expect(fetchWithDomain).toHaveBeenCalledOnce()
+})

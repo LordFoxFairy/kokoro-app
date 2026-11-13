@@ -10,10 +10,10 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-agent-failure.ts")
-const ownerCommit = "0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97"
-const expectedDigest = "737688c79fa4fad8216168656d0fe7e4131b496ef2b506e424dbff82d7dca2c8"
-const expectedVersion = "28.37.0"
-const expectedChatMessageFingerprint = "2f3471297de580e2931d8d768d86f9c0d7fc037de99993237b933d29fe25dc7b"
+const ownerCommit = "38d47c958cecdc072ee60d5a96ad17c48ac691c6"
+const expectedDigest = "45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509"
+const expectedVersion = "29.0.0"
+const expectedChatMessageFingerprint = "d8645df1a0f6e3af5f5c1f79ccb8732972eb410c688e4dc0cc9e9f81b6391387"
 
 const digest = (value) => createHash("sha256").update(value).digest("hex")
 
@@ -32,13 +32,20 @@ export function inspectBffAgentFailureContract(spec) {
   assert.equal(spec?.info?.version, expectedVersion, "BFF public OpenAPI version drift")
   const chatMessage = spec?.components?.schemas?.ChatMessage
   assert.ok(chatMessage, "missing BFF ChatMessage schema")
+  const prior = structuredClone(chatMessage)
+  delete prior.properties.can_regenerate
+  assert.equal(digest(stableJson(prior)), "2f3471297de580e2931d8d768d86f9c0d7fc037de99993237b933d29fe25dc7b", "Existing ChatMessage failure contract drift")
   assert.equal(digest(stableJson(chatMessage)), expectedChatMessageFingerprint, "BFF ChatMessage failure fragment drift")
 
   const schemas = spec.components.schemas
   const privateReads = structuredClone([schemas.ChatMessageRead, schemas.OrderedAssistantMessageRead, schemas.CancelledAssistantMessageRead])
   const sourceSchemas = [schemas.ChatMessageRead,schemas.OrderedAssistantMessageRead,schemas.CancelledAssistantMessageRead,schemas.RegeneratedAssistantMessageRead]
   const closedFingerprint=digest(stableJson(sourceSchemas))
-  assert.equal(closedFingerprint,"26c72d0c3061e1eaf40632d379cacee525e27a4e5fd558a125c705a485cc4b7f","BFF regenerated private graph drift")
+  assert.equal(closedFingerprint,"aea219b6ef04611e43a916b34d8334133ba1632d1dbd8570e8d1ba9fdfb1e113","BFF regenerated private graph drift")
+  const priorGraph=structuredClone(sourceSchemas)
+  for(const item of priorGraph) if(item.properties) delete item.properties.can_regenerate
+  assert.equal(digest(stableJson(priorGraph)),"26c72d0c3061e1eaf40632d379cacee525e27a4e5fd558a125c705a485cc4b7f","Existing regenerated graph drift")
+  for(const item of privateReads) if(item.properties) delete item.properties.can_regenerate
   privateReads[0].oneOf=privateReads[0].oneOf.filter(item=>item.$ref!=="#/components/schemas/RegeneratedAssistantMessageRead")
   delete privateReads[1].properties.regenerated_from_message_id
   delete privateReads[2].properties.regenerated_from_message_id

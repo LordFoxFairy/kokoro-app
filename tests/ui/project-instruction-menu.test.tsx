@@ -58,9 +58,12 @@ function mountProjectMenu(respond?: (path: string, init?: RequestInit) => Promis
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const path = new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname
     if (init?.method === "PATCH") writes.push({ path, body: JSON.parse(String(init.body)) as unknown })
+    const accessed = projects.find(item => path === `/api/hub/projects/${item.id}/access`)
+    if (accessed) return Response.json({ data: { project_id: accessed.id, role: "owner", expires_at: null, access_version: "1", capabilities: ["read", "edit", "manage"] }, meta: { request_id: "req_access" } })
     const response = await respond?.(path, init)
     if (response) return response
     if (path === "/api/hub/projects") return Response.json({ data: { projects }, meta: { request_id: "req_list" } })
+
     if (path.endsWith("/instruction-revisions")) return Response.json({ data: { items: [] }, meta: { request_id: "req_history" } })
     const project = projects.find((item) => path === `/api/hub/projects/${item.id}`)
     if (project) {

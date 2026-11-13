@@ -1996,4 +1996,22 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "customApi.governance.revoked": "取り消し済み",
   "customApi.governance.unavailable": "現在利用できません",
   "customApi.governance.readOnly": "この設定は読み取り専用です。削除はできます。",
+
+  "projectAccess.hint": "現在のチームメンバーだけに権限を付与します。リンク自体は権限を付与しません。",
+  "projectAccess.unavailable": "メンバーまたは権限の読み込みが未完了です。開き直してください。",
+  "projectAccess.member": "メンバー",
+  "projectAccess.role": "プロジェクトの役割",
+  "projectAccess.viewer": "閲覧者",
+  "projectAccess.editor": "編集者",
+  "projectAccess.expiry": "有効期限（空欄は無期限）",
+  "projectAccess.grant": "権限を保存",
+  "projectAccess.revoked": "取消済み",
+  "projectAccess.revoke": "権限を取り消す",
+  "projectAccess.resume": "元の操作を再開",
+  "projectAccess.readOnly": "このプロジェクトは読み取り専用です。",
+  "projectAccess.peerBusy": "他のメンバーがタスクを実行中です。",
+  "projectAccess.unknown": "アクセス変更の結果は未確認です。元の操作のみ再開してください。",
+  "projectAccess.rejected": "元のアクセス変更は適用されていません。新しい操作の前に終了してください。",
+  "projectAccess.finish": "拒否された操作を終了",
+
 }

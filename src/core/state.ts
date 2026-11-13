@@ -20,6 +20,7 @@ export type RunFailure =
 export type AttributedRunFailure = RunFailure & { failedRunId: string }
 
 export type SessionMessage = {
+  canRegenerate?: boolean
   id: string
   role: "assistant" | "user"
   content: string
@@ -97,7 +98,7 @@ export type WorkspaceFileEntry = {
 export type SessionDelivery = {
   conversationId: string
   artifactId: string
-  assetId: string
+  assetId?: string
   /** Owner-proven virtual origin for display only, never a read locator. */
   displayPath?: string
   artifactKind: "document" | "code" | "image" | "audio" | "video" | "data" | "archive" | "other"
@@ -117,6 +118,7 @@ export type MessagePartsState = {
   status: "unread" | "loading" | "partial" | "complete" | "changed" | "failed";
 }
 export type SessionStreamState = {
+  projectAccess?: import("@/generated/bff-project-access").ProjectAccess
   finalAnswersByRun?: Record<string, import("./final-answer-reference").FinalAnswerReference>
   messageParts?: Record<string, MessagePartsState>
   executionHead: ExecutionHead | null

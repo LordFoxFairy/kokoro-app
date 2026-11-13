@@ -22,6 +22,7 @@ export function WorkspaceHeaderSessionActions({
   projectDelete,
   shareClient,
   shareReadBoundary,
+  projectAccess,
 }: WorkspaceHeaderActionProps) {
   const t = useT()
 
@@ -34,7 +35,7 @@ export function WorkspaceHeaderSessionActions({
             {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
           />
         ) : null}
-        <WorkspaceHeaderProjectShare />
+        <WorkspaceHeaderProjectShare model={projectAccess} />
         {!emptyWorkspace ? (
           <>
             <Button

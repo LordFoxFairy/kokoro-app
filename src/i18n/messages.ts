@@ -2942,6 +2942,24 @@ export const zh = {
   "customApi.governance.revoked": "已撤销",
   "customApi.governance.unavailable": "当前不可用",
   "customApi.governance.readOnly": "此配置只读，仍可删除。",
+  "projectAccess.hint": "仅向本团队现有成员授权。链接本身不授予访问权限。",
+  "projectAccess.unavailable": "成员或授权读取未完成，请重新打开。",
+  "projectAccess.member": "成员",
+  "projectAccess.role": "项目角色",
+  "projectAccess.viewer": "只读成员",
+  "projectAccess.editor": "编辑成员",
+  "projectAccess.expiry": "到期时间（留空表示不限期）",
+  "projectAccess.grant": "保存授权",
+  "projectAccess.revoked": "已撤销",
+  "projectAccess.revoke": "撤销授权",
+  "projectAccess.resume": "恢复原授权操作",
+  "projectAccess.readOnly": "此项目当前只读。",
+  "projectAccess.peerBusy": "其他成员正在执行。",
+
+  "projectAccess.unknown": "授权操作结果未确认；请只恢复原操作。",
+  "projectAccess.rejected": "原授权操作未执行；结束该操作后再发起新的授权。",
+  "projectAccess.finish": "结束被拒绝的操作",
+
 } as const;
 
 export type MessageKey = keyof typeof zh;

@@ -17,7 +17,8 @@ type Editor = { phase: "loading" | "failed"; recovery?: Recovery } |
   { phase: "ready" | "saving"; original: ProjectWebsitesState; draft: string[]; notice?: "recovered" | "rejected" }
 type Lease = { controller: AbortController; busy: boolean }
 
-export function ProjectWebsitesDialog({ projectId, isCurrent, onClose }: {
+export function ProjectWebsitesDialog({ projectId, isCurrent, onClose, readOnly = false }: {
+  readOnly?: boolean
   projectId: string
   isCurrent: () => boolean
   onClose: (restoreFocus?: boolean) => void
@@ -82,7 +83,7 @@ export function ProjectWebsitesDialog({ projectId, isCurrent, onClose }: {
   const editing = editor.phase === "saving" || (editor.phase === "loading" && editor.recovery !== undefined)
   const changeOpen = (open: boolean) => { if (!open && !editing) onClose() }
   const add = () => {
-    if (!ready || ready.draft.length >= PROJECT_WEBSITE_URL_LIMIT) return
+    if (readOnly || !ready || ready.draft.length >= PROJECT_WEBSITE_URL_LIMIT) return
     const normalized = canonicalProjectWebsite(address)
     if (normalized === null || ready.draft.includes(normalized)) { setInvalidAddress(true); return }
     setEditor({ ...ready, draft: [...ready.draft, normalized].sort() })
@@ -92,7 +93,7 @@ export function ProjectWebsitesDialog({ projectId, isCurrent, onClose }: {
   }
   const save = async () => {
     const lease = leaseRef.current
-    if (!ready || !lease || lease.busy || !current(lease) || sameProjectWebsites(ready.original.websites, ready.draft)) return
+    if (readOnly || !ready || !lease || lease.busy || !current(lease) || sameProjectWebsites(ready.original.websites, ready.draft)) return
     lease.busy = true
     setEditor({ ...ready, phase: "saving" })
     const result = await projectWebsitesClient.replace(ready.original, ready.draft, lease.controller.signal)
@@ -143,7 +144,7 @@ export function ProjectWebsitesDialog({ projectId, isCurrent, onClose }: {
       </ul> : null}
       <DialogFooter className={styles.websitePickerFooter}>
         <DialogClose asChild><Button type="button" variant="outline" disabled={editing}>{t("firstSite.cancel")}</Button></DialogClose>
-        <Button type="button" disabled={!ready || sameProjectWebsites(ready.original.websites, ready.draft)} onClick={() => { void save() }}>
+        <Button type="button" disabled={readOnly || !ready || sameProjectWebsites(ready.original.websites, ready.draft)} onClick={() => { void save() }}>
           {t("firstSite.save")}
         </Button>
       </DialogFooter>

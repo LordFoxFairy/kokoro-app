@@ -1,4 +1,10 @@
-> D0实现候选（2026-11-03）：已固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` 的 browser-private auth-session 1.0.0（SHA256 `a7b5876632f6ad91b9fc162c9abcf48b36b2677a3b15a6a497d3305aeaea81ba`），按本节正式边界完成本地消费者切片；本仓Root完整工程门已验（证据见Root唯一计划及本仓PR）；仍是未合并的源码候选，不代表BFF真实资源、共享登录/rolling/撤权或浏览器组合通过。下方旧RP/refresh/proof叙述只保留历史语境。
+## 2026-11-13 Task B：Project 协作本地视图与待确认命令（候选）
+
+Web没有新增数据库、owner Schema、权限镜像或服务凭据。Project Access、viewer/editor、access_version、当前消息再生成/Run控制与Scheduled revision/execution_actor_id均是BFF当前只读事实；immutable ACK允许历史省略字段，不补造executor/revision，不将私有asset_id要求加到正式共享详情。
+
+唯一新增本地槽是同tab Grant未确认命令，按可信native读边界中的tenant/subject与canonical Project隔离；闭集保存operation、target subject、原key/version/body及prepared/attempted/rejected阶段，最多4096 UTF-8 bytes。它不是owner receipt或权限缓存：写后读回才dispatch，错误目标/迟到/取消不确认；仅匹配原ACK或首次明确拒绝后的显式结束可清槽。主体/route退休不删除未知原命令，不自动重放、过期清理或转绑新身份。
+
+Scheduled原actor-scoped client继续保自己的未知命令，CAS加入原请求身份；不同Project未知创建保持独立。Project当前集合和Chat/AI SDK仍各沿原单一视图，不复制个人凭据、资金、peer过程或建立第二流。来源/网络见API_CONTRACT，实际验证及仍OPEN范围见CURRENT。
 
 ## A‑08：资源选择复用原草稿与提交（2026‑11‑09）
 

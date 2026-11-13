@@ -47,6 +47,7 @@ export type ProjectInstructionControl = {
 }
 
 export type WorkspaceHeaderProps = {
+  projectAccess?: import("@/features/app/use-project-access").ProjectAccessModel
   activeId: string | null
   projectRename?: ProjectRenameControl
   projectContext?: ProjectContextControl
@@ -70,5 +71,5 @@ export type WorkspaceHeaderIdentityProps = Pick<
 
 export type WorkspaceHeaderActionProps = Pick<
   WorkspaceHeaderProps,
-  "shareReadBoundary" | "projectContext" | "activeId" | "projectRename" | "projectInstruction" | "projectDelete" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
+  "projectAccess" | "shareReadBoundary" | "projectContext" | "activeId" | "projectRename" | "projectInstruction" | "projectDelete" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
 >

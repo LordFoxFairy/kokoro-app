@@ -53,6 +53,7 @@ export function WorkspaceHeader({
   activeId,
   shareClient,
   shareReadBoundary,
+  projectAccess,
   onOpenSettings,
   brandName = DEFAULT_BRAND.name,
   emptyWorkspace = false,
@@ -85,6 +86,7 @@ export function WorkspaceHeader({
           activeId={activeId}
           emptyWorkspace={emptyWorkspace}
           {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
+          {...(projectAccess ? { projectAccess } : {})}
           projectWorkspace={projectWorkspace}
           {...(projectRename === undefined ? {} : { projectRename })}
           {...(projectContext === undefined ? {} : { projectContext })}

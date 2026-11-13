@@ -756,15 +756,15 @@ describe("Skill metadata and download contract separation", () => {
 describe("R255 ScheduledTask owner recurrence graph under the current public pin", () => {
   it("consumes the exact locally accepted current canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("737688c79fa4fad8216168656d0fe7e4131b496ef2b506e424dbff82d7dca2c8")
-    expect(spec.info.version).toBe("28.37.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509")
+    expect(spec.info.version).toBe("29.0.0")
   })
 
   it("publishes current rule details separately from immutable command snapshots", async () => {
     const schemas = (await r76PublicSpec()).spec.components.schemas
     expect(schemas.ScheduledTaskDetails).toMatchObject({
       allOf: [{ $ref: "#/components/schemas/ScheduledTask" }],
-      required: ["scheduling_state"],
+      required: ["scheduling_state", "revision", "execution_actor_id"],
     })
     expect(schemas.ScheduledTask!.properties.recurrence_anchor_at).toBeUndefined()
     expect(schemas.ScheduledTaskListResponse).toMatchObject({ properties: { data: { properties: { tasks: { items: { $ref: "#/components/schemas/ScheduledTaskDetails" } } } } } })

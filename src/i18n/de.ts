@@ -1948,4 +1948,22 @@ export const de: Partial<Record<MessageKey, string>> = {
   "customApi.governance.revoked": "Widerrufen",
   "customApi.governance.unavailable": "Derzeit nicht verfügbar",
   "customApi.governance.readOnly": "Diese Konfiguration ist schreibgeschützt. Du kannst sie weiterhin löschen.",
+
+  "projectAccess.hint": "Zugriff nur für aktuelle Teammitglieder. Der Link allein gewährt keinen Zugriff.",
+  "projectAccess.unavailable": "Mitglieder oder Rechte wurden nicht vollständig geladen. Erneut öffnen.",
+  "projectAccess.member": "Mitglied",
+  "projectAccess.role": "Projektrolle",
+  "projectAccess.viewer": "Betrachter",
+  "projectAccess.editor": "Bearbeiter",
+  "projectAccess.expiry": "Ablauf (leer: unbegrenzt)",
+  "projectAccess.grant": "Berechtigung speichern",
+  "projectAccess.revoked": "Widerrufen",
+  "projectAccess.revoke": "Zugriff widerrufen",
+  "projectAccess.resume": "Ursprünglichen Vorgang fortsetzen",
+  "projectAccess.readOnly": "Dieses Projekt ist schreibgeschützt.",
+  "projectAccess.peerBusy": "Ein anderes Mitglied führt eine Aufgabe aus.",
+  "projectAccess.unknown": "Die Zugriffsänderung ist unbestätigt. Setzen Sie nur den ursprünglichen Vorgang fort.",
+  "projectAccess.rejected": "Die ursprüngliche Zugriffsänderung wurde nicht angewendet. Beenden Sie sie vor einem neuen Vorgang.",
+  "projectAccess.finish": "Abgelehnten Vorgang beenden",
+
 }

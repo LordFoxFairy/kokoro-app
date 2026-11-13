@@ -57,6 +57,7 @@ export class ProjectInstructionSaveError extends Error {
 }
 
 export type WorkspaceCapabilities = {
+  readOnly?: boolean;
   instructions: boolean;
   connectors: boolean;
   resources: boolean;

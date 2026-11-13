@@ -15,7 +15,7 @@ import type { ProjectResourcePreview, ResourceKind } from "./project-workspace-m
 import dialogStyles from "./project-workspace-dialogs.module.css"
 type Revision = NonNullable<EmptyStateProps["projectInstructionHistory"]>[number]
 type DialogChange = (setOpen: (open: boolean) => void) => (open: boolean) => void
-export type ProjectContextDialogsProps = { preview: boolean
+export type ProjectContextDialogsProps = { readOnly?: boolean; preview: boolean
   historyAvailable?: boolean
   instructionsAvailable: boolean
   onInstructionsCloseAutoFocus: (event: Event) => void
@@ -57,7 +57,7 @@ export type ProjectContextDialogsProps = { preview: boolean
   onContextDialogChange: DialogChange
   active?: boolean
 }
-export function ProjectContextDialogs({ preview, active = true, historyAvailable = true, instructionsAvailable, onInstructionsCloseAutoFocus, instructionsOpen, setInstructionsOpen, instructions, setInstructions, instructionsSaving, setInstructionsSaving, instructionsError, instructionsResult, setInstructionsResult, setInstructionsError, instructionsHistoryOpen, setInstructionsHistoryOpen, selectedInstructionRevision, setSelectedInstructionRevision, projectInstructionHistory, onSaveProjectInstructions, resourceActions, resourceFocusContext, resourcesAvailable, resourcesOpen, setResourcesOpen, resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources, resourceListStatus, resourceRefreshFailed, resourceNextCursor, onLoadMoreResources, resourceUploads, onRetryResourceUpload, handleResourceFiles, onOpenSettings, onContextDialogChange }: ProjectContextDialogsProps) {
+export function ProjectContextDialogs({ preview, readOnly = false, active = true, historyAvailable = true, instructionsAvailable, onInstructionsCloseAutoFocus, instructionsOpen, setInstructionsOpen, instructions, setInstructions, instructionsSaving, setInstructionsSaving, instructionsError, instructionsResult, setInstructionsResult, setInstructionsError, instructionsHistoryOpen, setInstructionsHistoryOpen, selectedInstructionRevision, setSelectedInstructionRevision, projectInstructionHistory, onSaveProjectInstructions, resourceActions, resourceFocusContext, resourcesAvailable, resourcesOpen, setResourcesOpen, resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources, resourceListStatus, resourceRefreshFailed, resourceNextCursor, onLoadMoreResources, resourceUploads, onRetryResourceUpload, handleResourceFiles, onOpenSettings, onContextDialogChange }: ProjectContextDialogsProps) {
  const { locale, t } = useLocale()
   const resourceReturnFocus = useRef<{ target: HTMLButtonElement; context: object; route: string } | null>(null)
   const activeResourceFocus = useRef(resourceFocusContext)
@@ -71,7 +71,7 @@ export function ProjectContextDialogs({ preview, active = true, historyAvailable
     ?? projectInstructionHistory[0]
   const frozenInstruction = instructionsResult?.status === "unknown" || instructionsResult?.status === "read-error" || instructionsResult?.status === "forbidden"
   const saveInstruction = async () => {
-    if (!active || !instructionsAvailable || instructionsSaving || !onSaveProjectInstructions || instructionsResult?.status === "forbidden") return
+    if ((readOnly && !frozenInstruction) || !active || !instructionsAvailable || instructionsSaving || !onSaveProjectInstructions || instructionsResult?.status === "forbidden") return
     setInstructionsSaving(true)
     setInstructionsError(false)
     try {
@@ -95,7 +95,7 @@ export function ProjectContextDialogs({ preview, active = true, historyAvailable
         className={dialogStyles.instructionsDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
         <DialogHeader className={dialogStyles.instructionsDialogHeader}><DialogTitle>{t("firstSite.projectInstructionsTitle")}</DialogTitle><DialogDescription>{t("firstSite.projectInstructionsDescription")}</DialogDescription></DialogHeader>
         <div className={dialogStyles.instructionsDialogBody}>
-          <Textarea disabled={!instructionsAvailable || instructionsSaving || frozenInstruction} className={dialogStyles.instructionsTextarea} aria-label={t("firstSite.projectInstructionsTitle")} value={instructions} onChange={(event) => { setInstructions(event.target.value); setInstructionsError(false) }} />
+          <Textarea disabled={!instructionsAvailable || instructionsSaving || frozenInstruction} className={dialogStyles.instructionsTextarea} aria-label={t("firstSite.projectInstructionsTitle")} readOnly={readOnly} value={instructions} onChange={(event) => { if (readOnly) return; setInstructions(event.target.value); setInstructionsError(false) }} />
           {instructionsError ? <p role="alert" className={dialogStyles.instructionsError}>{t(instructionsResult?.status === "unknown" ? "projectSkills.unknown"
             : instructionsResult?.status === "read-error" ? "projectSkills.ackReadFailed"
             : instructionsResult?.status === "forbidden" ? "skills.personal.forbidden" : "firstSite.projectInstructionsSaveError")}</p> : null}
@@ -104,7 +104,7 @@ export function ProjectContextDialogs({ preview, active = true, historyAvailable
           <Button type="button" variant="outline" className={dialogStyles.instructionsHistory} disabled={!historyAvailable} onClick={() => { setSelectedInstructionRevision(null); setInstructionsHistoryOpen(true) }}>{t("firstSite.history")}</Button>
           <span className={dialogStyles.instructionsFooterSpacer} />
           <DialogClose asChild><Button type="button" variant="outline" disabled={instructionsSaving}>{t("firstSite.cancel")}</Button></DialogClose>
-          <Button type="button" disabled={!instructionsAvailable || instructionsSaving || !onSaveProjectInstructions || instructionsResult?.status === "forbidden"} onClick={() => { void saveInstruction() }}>{t(instructionsResult?.status === "unknown" ? "projectSkills.retryOriginal" : instructionsResult?.status === "read-error" ? "projectSkills.reload" : "firstSite.save")}</Button>
+          <Button type="button" disabled={(readOnly && instructionsResult?.status !== "unknown" && instructionsResult?.status !== "read-error") || !instructionsAvailable || instructionsSaving || !onSaveProjectInstructions || instructionsResult?.status === "forbidden"} onClick={() => { void saveInstruction() }}>{t(instructionsResult?.status === "unknown" ? "projectSkills.retryOriginal" : instructionsResult?.status === "read-error" ? "projectSkills.reload" : "firstSite.save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

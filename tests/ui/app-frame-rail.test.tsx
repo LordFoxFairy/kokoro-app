@@ -5731,6 +5731,7 @@ async function projectRecommendationFixture(hold = false) {
   let finish!: (value: Response) => void
   const request = stubBusinessFetch(vi.fn<typeof fetch>(async (input, init) => {
     const path = new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname
+    if (path === `/api/hub/projects/${project.id}/access`) return Response.json({ data: { project_id: project.id, role: "owner", expires_at: null, access_version: "1", capabilities: ["read", "edit", "manage"] }, meta: { request_id: "access-fixture" } })
     if (path.endsWith("/mcp-recommendations")) {
       if (init?.method === "PUT") {
         const body = JSON.parse(String(init.body)) as { recommendations: typeof configuration.recommendations; expected_state_version: string }

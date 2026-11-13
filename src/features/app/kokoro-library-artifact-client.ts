@@ -21,18 +21,20 @@ export type LibraryArtifact = {
   favorited: boolean
 }
 
-export type LibraryArtifactDetailView = LibraryArtifact & { projectRef?: string | null }
+export type LibraryArtifactDetailView = Omit<LibraryArtifact, "assetId" | "favorited"> & { assetId?: string; favorited?: boolean; projectRef?: string | null }
 
 export type LibraryArtifactClient = { getArtifact?: typeof getLibraryArtifact; listArtifacts: typeof listLibraryArtifacts }
 
 export type LibraryArtifactPage = { items: readonly LibraryArtifact[]; nextCursor: string | null }
 export type LibraryArtifactSelector = Pick<LibraryArtifact, "conversationId" | "artifactId">
 
-function mapArtifact(item: LibraryArtifactWire): LibraryArtifact {
+function mapArtifact(item: LibraryArtifactWire): LibraryArtifact
+function mapArtifact(item: LibraryArtifactDetailWire): LibraryArtifactDetailView
+function mapArtifact(item: LibraryArtifactWire | LibraryArtifactDetailWire): LibraryArtifactDetailView {
   return {
     conversationId: item.conversation_id,
     artifactId: item.artifact_id,
-    assetId: item.asset_id,
+    ...("asset_id" in item ? { assetId: item.asset_id } : {}),
     artifactKind: item.artifact_kind,
     title: item.title,
     filename: item.filename,
@@ -41,7 +43,7 @@ function mapArtifact(item: LibraryArtifactWire): LibraryArtifact {
     deliveredAt: item.delivered_at,
     sourceRunId: item.source_run_id,
     contentSha256: item.content_sha256,
-    favorited: item.favorited,
+    ...("favorited" in item ? { favorited: item.favorited } : {}),
   }
 }
 
@@ -82,7 +84,7 @@ export async function listLibraryArtifacts(cursor: string | null, signal: AbortS
   const response = await fetch(`/api/hub/library?${query}`, { cache: "no-store", signal })
   const parsed = libraryArtifactListResponseSchema.safeParse(await parsedResponse(response))
   if (!parsed.success) throw new Error("library_artifacts_invalid_response")
-  return { items: parsed.data.data.items.map(mapArtifact), nextCursor: parsed.data.data.next_cursor }
+  return { items: parsed.data.data.items.map(item => mapArtifact(item)), nextCursor: parsed.data.data.next_cursor }
 }
 
 async function readArtifactWire(selector: LibraryArtifactSelector, signal: AbortSignal): Promise<LibraryArtifactDetailWire> {
@@ -156,7 +158,7 @@ export async function deleteLibraryArtifact(selector: LibraryArtifactSelector, k
   return "unknown"
 }
 
-type CanvasArtifactIdentity = Pick<LibraryArtifact, "assetId" | "sourceRunId" | "mimeType" | "sizeBytes">
+type CanvasArtifactIdentity = Pick<LibraryArtifact, "sourceRunId" | "mimeType" | "sizeBytes"> & { assetId?: string | undefined }
 
 /** Chat's Delivery metadata is not a permission to read a different source/version. */
 export function readLibraryArtifactTextPreview(
@@ -166,7 +168,7 @@ export function readLibraryArtifactTextPreview(
 ): Promise<LibraryTextPreviewResult> {
   return withLibraryPreviewDeadline(signal, async (bounded) => {
     const detail = await readArtifactWire(selector, bounded)
-    if (detail.asset_id !== expected.assetId || detail.source_run_id !== expected.sourceRunId ||
+    if (("asset_id" in detail ? detail.asset_id !== expected.assetId : expected.assetId !== undefined || !("project_access" in detail)) || detail.source_run_id !== expected.sourceRunId ||
       detail.mime_type !== expected.mimeType || detail.size_bytes !== expected.sizeBytes)
       throw new Error("library_artifact_preview_metadata_changed")
     return readVerifiedLibraryText(`${artifactPath(selector)}/content`, {

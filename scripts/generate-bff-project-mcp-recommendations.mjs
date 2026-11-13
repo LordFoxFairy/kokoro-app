@@ -13,10 +13,10 @@ const outputPath = new URL(
   import.meta.url,
 );
 const provenance = {
-  ownerCommit: "0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97",
+  ownerCommit: "38d47c958cecdc072ee60d5a96ad17c48ac691c6",
   sourceSha256:
-    "737688c79fa4fad8216168656d0fe7e4131b496ef2b506e424dbff82d7dca2c8",
-  openapiVersion: "28.37.0",
+    "45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509",
+  openapiVersion: "29.0.0",
 };
 function render(s, schemas) {
   if (s.$ref)

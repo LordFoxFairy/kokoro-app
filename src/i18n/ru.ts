@@ -1948,4 +1948,22 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "customApi.governance.revoked": "Отозвано",
   "customApi.governance.unavailable": "Сейчас недоступно",
   "customApi.governance.readOnly": "Эта конфигурация доступна только для чтения. Её по-прежнему можно удалить.",
+
+  "projectAccess.hint": "Предоставляйте доступ только текущим участникам команды. Ссылка сама по себе не даёт доступа.",
+  "projectAccess.unavailable": "Участники или права загружены не полностью. Откройте снова.",
+  "projectAccess.member": "Участник",
+  "projectAccess.role": "Роль в проекте",
+  "projectAccess.viewer": "Читатель",
+  "projectAccess.editor": "Редактор",
+  "projectAccess.expiry": "Срок действия (пусто: бессрочно)",
+  "projectAccess.grant": "Сохранить доступ",
+  "projectAccess.revoked": "Отозвано",
+  "projectAccess.revoke": "Отозвать доступ",
+  "projectAccess.resume": "Продолжить исходную операцию",
+  "projectAccess.readOnly": "Этот проект доступен только для чтения.",
+  "projectAccess.peerBusy": "Другой участник выполняет задачу.",
+  "projectAccess.unknown": "Изменение доступа не подтверждено. Возобновите только исходную операцию.",
+  "projectAccess.rejected": "Исходное изменение доступа не применено. Завершите его перед новой операцией.",
+  "projectAccess.finish": "Завершить отклонённую операцию",
+
 }

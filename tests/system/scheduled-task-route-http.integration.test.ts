@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 
 
-import { GET, POST } from "@/app/api/scheduled-tasks/[[...path]]/route"
+import { GET, POST, PATCH } from "@/app/api/scheduled-tasks/[[...path]]/route"
 
 type RunningServer = { server: Server; baseUrl: string }
 
@@ -27,6 +27,7 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
   let receivedPath = ""
   let receivedNamespace = ""
   let receivedUser = ""
+  let receivedRevision = ""
   let publicError = false
 
   beforeAll(async () => {
@@ -34,6 +35,7 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
       receivedPath = request.url ?? ""
       receivedNamespace = request.headers["x-kokoro-namespace"]?.toString() ?? ""
       receivedUser = request.headers["x-kokoro-principal-id"]?.toString() ?? ""
+      receivedRevision = request.headers["if-match"]?.toString() ?? ""
       if (publicError) {
         response.writeHead(403, { "content-type": "application/json", "cache-control": "public,max-age=600" })
         response.end(JSON.stringify({ error: { code: "forbidden", message: "Denied" }, meta: { request_id: "fixture-request" } }))
@@ -75,6 +77,16 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
     expect(receivedPath).toBe("/v1/scheduled-tasks")
     expect(receivedNamespace).toBe("")
     expect(receivedUser).toBe("")
+  })
+
+  it("forwards the exact task revision without guessing or refreshing CAS at the adapter", async () => {
+    const response = await PATCH(new Request("https://first.example/api/scheduled-tasks/task-a", {
+      method: "PATCH", headers: { origin: "https://first.example", cookie: "kokoro-issuer.session_token=fixture", "content-type": "application/json", "if-match": '"28"', "idempotency-key": "original-command" },
+      body: JSON.stringify({ enabled: false }),
+    }), { params: Promise.resolve({ path: ["task-a"] }) })
+    expect(response.status).toBe(200)
+    expect(receivedPath).toBe("/v1/scheduled-tasks/task-a")
+    expect(receivedRevision).toBe('"28"')
   })
 
   it("retires a cancelled incoming task body before any BFF request", async () => {

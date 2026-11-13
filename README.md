@@ -1,3 +1,7 @@
+## Task B 当前源码（2026-11-13）
+
+Public29 Project协作、真实角色与本人Run控制、原CAS Scheduled写入和六项Admin具名桥的工程候选已验。正常组合与真实双身份验收仍待，不以测试/build冒产品闭环。当前事实与缺口见[CURRENT](docs/CURRENT.md)，正式边界见[API_CONTRACT](docs/API_CONTRACT.md)。
+
 ## T-01 标准认证消费者（2026-11-03，本地候选）
 
 固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` / browser-private auth-session1.0.0 的原字节和生成 codec；状态 strict data 只含匿名 false 或真实 subject/tenant/RFC3339 UTC expiry。普通业务不再经 Web 假claims 或前后/me；原生登录/退出/CSRF交互安全、原body/key/CAS/receipt与unknown显式恢复保持。UI寿命和跨标签无秘密失效不成为认证证明。

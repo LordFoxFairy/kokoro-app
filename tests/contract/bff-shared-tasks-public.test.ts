@@ -20,7 +20,7 @@ function stable(value: unknown): unknown {
 it("pins formal15.3 bytes and restores complete15.2 canonical contract after only the new list is removed", async () => {
   const bytes = await readFile("src/generated/bff-public-openapi.yaml");
   expect(hash(bytes)).toBe(
-    "737688c79fa4fad8216168656d0fe7e4131b496ef2b506e424dbff82d7dca2c8",
+    "45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509",
   );
   let spec = YAML.parse(restorePublic26MessagePartsContract(bytes.toString()));
   expect(spec.info.version).toBe("26.0.0");

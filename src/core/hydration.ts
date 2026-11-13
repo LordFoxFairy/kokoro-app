@@ -13,18 +13,18 @@ import {
 } from "./state"
 
 // snake→camel 的成果投影：live 事件与 snapshot 双源共用同一领域形状。
-export function deliveryFromSnapshot(delivery: PrivateDelivery): SessionDelivery {
+export function deliveryFromSnapshot(delivery: PrivateDelivery | SessionSnapshot["deliveries"][number]): SessionDelivery {
   return {
     conversationId: delivery.conversation_id,
     artifactId: delivery.artifact_id,
-    assetId: delivery.asset_id,
+    ...("asset_id" in delivery ? { assetId: delivery.asset_id } : {}),
     artifactKind: delivery.artifact_kind,
     title: delivery.title,
     mime: delivery.mime,
     size: delivery.size,
     runId: delivery.run_id,
     createdAt: delivery.created_at,
-    ...(delivery.display_path === undefined ? {} : { displayPath: delivery.display_path }),
+    ...(!("display_path" in delivery) || delivery.display_path === undefined ? {} : { displayPath: delivery.display_path }),
   }
 }
 
@@ -37,6 +37,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
   const candidate = activeAssistants.length === 1 ? activeAssistants[0] : undefined
   const messages: SessionMessage[] = snapshotMessages.map((message) => ({
     id: message.message_id,
+    ...(message.can_regenerate === undefined ? {} : { canRegenerate: message.can_regenerate }),
     role: message.role,
     content: message.content ?? "",
     ...(message.role === "user" && (message.status === "pending" || message.status === "failed") ? { deliveryStatus: message.status } : {}),
@@ -110,6 +111,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     files: snapshot.files,
     deliveries: snapshot.deliveries.map(deliveryFromSnapshot),
     deliveriesHasMore: snapshot.deliveries_has_more,
+    ...(snapshot.project_access ? { projectAccess: snapshot.project_access } : {}),
     meta: {
       title: snapshot.session.title,
       ownerId: snapshot.session.owner_id,

@@ -1948,4 +1948,22 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "customApi.governance.revoked": "철회됨",
   "customApi.governance.unavailable": "현재 사용할 수 없음",
   "customApi.governance.readOnly": "이 구성은 읽기 전용입니다. 삭제는 가능합니다.",
+
+  "projectAccess.hint": "현재 팀 구성원에게만 접근 권한을 부여합니다. 링크 자체는 권한을 부여하지 않습니다.",
+  "projectAccess.unavailable": "구성원 또는 권한을 읽지 못했습니다. 다시 열어주세요.",
+  "projectAccess.member": "구성원",
+  "projectAccess.role": "프로젝트 역할",
+  "projectAccess.viewer": "뷰어",
+  "projectAccess.editor": "편집자",
+  "projectAccess.expiry": "만료 시간(비우면 무기한)",
+  "projectAccess.grant": "권한 저장",
+  "projectAccess.revoked": "취소됨",
+  "projectAccess.revoke": "권한 취소",
+  "projectAccess.resume": "원래 작업 재개",
+  "projectAccess.readOnly": "이 프로젝트는 읽기 전용입니다.",
+  "projectAccess.peerBusy": "다른 구성원이 작업을 실행 중입니다.",
+  "projectAccess.unknown": "접근 권한 변경 결과가 확인되지 않았습니다. 원래 작업만 재개하세요.",
+  "projectAccess.rejected": "원래 접근 권한 변경이 적용되지 않았습니다. 새 작업 전에 종료하세요.",
+  "projectAccess.finish": "거부된 작업 종료",
+
 }

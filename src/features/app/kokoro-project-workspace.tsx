@@ -337,6 +337,7 @@ export function KokoroProjectWorkspace({
     scope.uploads.add(intent.id)
     setResourceUploads((current) => current.map((item) => item.id === intent.id ? { ...item, status: "uploading", error: undefined } : item))
     try {
+      if (capabilities?.readOnly) throw new ProjectResourceUploadError("project_edit_forbidden", false)
       if (!onUploadProjectResource) throw new ProjectResourceUploadError("upload_not_configured", false)
       const receipt = await onUploadProjectResource(intent.file, intent.key)
       if (!current()) return
@@ -481,14 +482,14 @@ export function KokoroProjectWorkspace({
               onClick={(event) => {
                 rememberContextOpener(event)
                 setScheduledQuery("")
-                setScheduledOpen(true)
+                if (!capabilities?.readOnly) setScheduledOpen(true)
               }}
             />
           ) : null}
         </ProjectContextComposition>
         {!task && !preview && projectRef && projectReadBoundary?.admitted && projectReadBoundary.subject &&
           projectDetail?.status === "ready" && projectDetail.data.id === projectRef ?
-          <ProjectTodoSection projectId={projectDetail.data.id} subject={projectReadBoundary.subject}
+          <ProjectTodoSection readOnly={capabilities?.readOnly === true} projectId={projectDetail.data.id} subject={projectReadBoundary.subject}
             generation={projectReadBoundary.generation} client={projectTodoClient} /> : null}
         {!task && capabilities?.projectConversations ? <ProjectConversations
           projectConversations={projectConversations}
@@ -502,6 +503,7 @@ export function KokoroProjectWorkspace({
       {!task ? <div ref={composerRef} className={cn(styles.composer, layoutStyles.composer)}>{composer}</div> : null}
 
       <ProjectContextDialogs
+        readOnly={capabilities?.readOnly === true}
         active={contextActive}
         preview={preview}
         instructionsAvailable={instructionsAvailable}
@@ -527,11 +529,11 @@ export function KokoroProjectWorkspace({
           await onSaveProjectInstructions(value)
           instructionSetter("draftInitialized")(false)
         } })}
-        resourceActions={{ ...resourceActions,
+        resourceActions={{ ...resourceActions, readOnly: capabilities?.readOnly === true,
           open: id => { if (presentationCurrent()) resourceActions.open(id) },
           close: () => { if (presentationCurrent()) resourceActions.close() },
-          askDelete: () => { if (presentationCurrent()) resourceActions.askDelete() },
-          confirmDelete: () => { if (presentationCurrent()) resourceActions.confirmDelete() },
+          askDelete: () => { if (!capabilities?.readOnly && presentationCurrent()) resourceActions.askDelete() },
+          confirmDelete: () => { if ((!capabilities?.readOnly || resourceActions.deleteState === "unknown") && presentationCurrent()) resourceActions.confirmDelete() },
           download: () => { if (presentationCurrent()) resourceActions.download() },
         }}
         resourceFocusContext={resourceContext}
@@ -555,7 +557,7 @@ export function KokoroProjectWorkspace({
         onContextDialogChange={onContextDialogChange}
       />
       {websiteProject !== null && websiteDialogScope === websiteScope ? <ProjectWebsitesDialog
-        projectId={websiteProject} isCurrent={websiteScopeCurrent} onClose={closeWebsites} /> : null}
+        readOnly={capabilities?.readOnly === true} projectId={websiteProject} isCurrent={websiteScopeCurrent} onClose={closeWebsites} /> : null}
       <ProjectWorkspaceDialogs preview={preview}
         {...(brandName === undefined ? {} : { brandName })}
         scheduledOpen={!task && scheduledOpen}

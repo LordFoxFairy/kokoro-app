@@ -47,6 +47,7 @@ const nonblankString = z.string().min(1).refine((value) => value.trim().length >
 
 export const kokoroAgUiMetadataSchema = z
   .object({
+    can_control: z.boolean().optional(),
     event_id: z.string().min(1),
     seq: z.number().int().nonnegative(),
     public_sequence: z.string().regex(/^[1-9][0-9]{0,18}(?![\s\S])/u).refine((value) => BigInt(value) <= BigInt("9223372036854775807")),
@@ -65,6 +66,7 @@ const agentRunErrorMetadataSchema = kokoroAgUiMetadataSchema
 
 const dispatchRunErrorMetadataSchema = z
   .object({
+    can_control: z.boolean().optional(),
     event_id: z.string().min(1),
     seq: z.string().regex(/^[1-9][0-9]*$/u),
     source_owner: z.literal("kokoro-bff"),

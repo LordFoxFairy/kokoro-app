@@ -1,3 +1,13 @@
+## 2026-11-13 Task B：Project 协作消费设计（候选，正常未激活）
+
+唯一边界仍为Browser→同源adapter→BFF→owner。Project管理使用当前canonical Project Access；route slug不充当授权事实，viewer只读，editor只控制实际属于自身的执行。分享改为团队成员显式Grant，不保留“复制私人URL等于共享”的旧产品入口。
+
+Chat继续AG-UI唯一网络轨→既有engine→AI SDK；peer safe busy不带private process/pause，控制及再生成使用owner明确的can_control/can_regenerate。peer FINAL由原terminal snapshot和parts接回同一adoption，不另stream/store。历史私人Library匹配不因共享详情无asset_id而放宽。Project403/404局部退休，401仍全局退休可见集合并交原生准入重核。
+
+Grant UI按同tab、tenant/subject/Project保原未确认命令，写前保留并读回，刷新不自动发送；迟到/错目标ACK不确认。只做请求寿命和原命令恢复，不拥有权限或服务凭据。Scheduled沿原feature加显式current revision/If-Match与真实executor投影，未知原CAS不rebase，旧ACK不补造当前字段。六项Admin桥为具名允许列表，不开放generic proxy或新增认证。
+
+正式机器来源及传输细节见API_CONTRACT，本地状态见DATA_MODEL，实际门禁/native缺口只记CURRENT。
+
 ## 2026-11-12 · Task B Public28.37／新授权消费者候选
 
 固定 BFF `0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97` 的 Public28.37（216 operations，原生 Session metadata、Share GET、Team delete_series）及独立 browser-private reauthorization1.0。当前 public 生成链与精确28.36／28.35父字节逆证一起升级，旧独立 profile 与历史父 pin 不变；无契约手写副本、锁依赖或认证状态机变更。

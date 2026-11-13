@@ -757,6 +757,7 @@ async function mountInstructionBoundary(
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = input instanceof Request ? input.url : String(input)
     const path = new URL(url, window.location.origin).pathname
+    if (path === `/api/hub/projects/${instructionOwnerProject.id}/access`) return Response.json({ data: { project_id: instructionOwnerProject.id, role: "editor", expires_at: null, access_version: "1", capabilities: ["read", "edit"] }, meta: { request_id: "req_access" } })
     if (path === "/api/hub/projects") return Response.json({ data: { projects: [] }, meta: { request_id: "req_instruction_list" } })
     if (path.startsWith("/api/hub/projects/instruction-project")) return respond(path, init)
     return Response.json({}, { status: 503 })
