@@ -1,5 +1,11 @@
 # 变更记录
 
+## 2026-11-13 · Public29.1
+
+- 固定 BFF `bec8584f0b185a3ce0a32366199142b945d8812b` 的 Public29.1 正式契约。完整 owner artifact 的228项操作中，222项 public 进入门户，原6项 browser-private 继续排除；版本与原始契约摘要由既有 catalog 绑定。
+- 新增 `GET /v1/admin/identity/audit-events`，仅读取当前 Product tenant 的 IAM 安全审计元数据。每页沿当前原生 Session 与平台管理员准入，IAM 再于事件页同一有界快照核当前用户、active tenant、成员及管理员事实；tenant-bound cursor 不是权限凭据，不开放浏览器 tenant/site 选择。
+- 不公开审计 details、正文或秘密，不扩展全平台／跨 owner 日志，也不混入 Provider 命令审计。此次固定来源及静态文档更新，不代替正常管理后台旅程的真实环境验收。
+
 ## 2026-11-13 · Public29
 
 - 固定 BFF `509597f935519cd1d4ac81e6db397794bc43d25d` 的 Public29 原始契约，沿现生成链发布 API v1 参考；完整 owner artifact 的 227 项操作中，221 项 public 进入门户，6 项 browser-private 保持排除。

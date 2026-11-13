@@ -1,3 +1,9 @@
+## 2026-11-13 Public29.1 API门户增量（已验）
+
+仅原catalog/contracts.yaml固定正式BFF `bec8584f0b185a3ce0a32366199142b945d8812b`／29.1.0／raw `dea9f3b6dfc03daab3a6fe3b4009635cd0aecf03517c05e7ce42ae116162c925` 与API changelog；新IAM审计GET由正规reference链生成，228 owner/222 public，六browser-private继续排除。22份生成参考仍ignored不手改/不提交，不改App通用业务contract pin或另外创建文档系统。
+
+writer完整门户check通过55例、62 HTML/21556内部链接；主控2源+22生成SHA核等、provenance/reference/links直接复验通过，确定性reference digest b9d19964dabd7849e818718b9876c12ea65b8f25a7c54b736e1fd67b942c8ebd，build仅chunk体积warning。Portal发行不代表后台normal native已通过；App透明审计桥业务源仍143b283c，门户不改运行行为，无部署。
+
 ## 2026-11-13 B13：Admin IAM 审计具名桥（源码阶段已验）
 
 仅现 Product Admin adapter 增加 exact GET identity/audit-events，复用原 bounded proxy 的 limit/cursor、native Cookie/固定Origin/服务envelope、request-id/no-store、10秒总预算及取消；不开放 identity prefix、不直连IAM或新增schema/parser/SDK/认证/缓存。Admin 是这项公开响应的正式raw contract消费者；App是透明传输，原通用业务及browser-private pins不机械升级。
