@@ -122,7 +122,7 @@ it("the original non-edit MCP detail shows only its admitted server binding and 
 it("the original API added card uses its list binding without losing selection or owner pagination", () => {
   localStorage.setItem("kokoro.locale", "zh");
   const icon = binding();
-  const profile: CustomApiProfile = { profile_id: "bound-api", name: "Bound API", state_version: "2", created_at: "2026-10-24T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [], icon };
+  const profile: CustomApiProfile = { governance_status: "active" as const, profile_id: "bound-api", name: "Bound API", state_version: "2", created_at: "2026-10-24T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [], icon };
   const select = vi.fn(), next = vi.fn(), action = vi.fn();
   render(<LocaleProvider><McpConnectionList connectors={[]} customApis={[profile]} providers={[]} query="" brandName="Kokoro"
     onBrowse={action} onEdit={action} onSelectCustomApi={select} previousEnabled={false} nextEnabled

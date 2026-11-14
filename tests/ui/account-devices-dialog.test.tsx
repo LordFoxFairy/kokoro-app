@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@/i18n/context"
 import { AccountDevicesDialog } from "@/ui/settings/sections/account-devices-dialog"
@@ -33,8 +33,28 @@ it("unknown result forbids another removal until explicit read", async () => {
 })
 it("empty and failed initial reads remain distinct and retry reads only", async () => {
   fetcher.mockResolvedValueOnce(reply(page([]))); const view = renderDialog(); await screen.findByText("No other sign-in sessions."); view.unmount()
-  fetcher.mockRejectedValueOnce(new Error("offline")); renderDialog(); await act(async () => {}); expect(screen.queryByRole("alert")).not.toBeInTheDocument(); expect(screen.queryByText("No other sign-in sessions.")).not.toBeInTheDocument()
+  fetcher.mockRejectedValueOnce(new Error("offline")); renderDialog()
+  expect(await screen.findByRole("alert")).toHaveTextContent("Sign-in sessions could not be loaded.")
+  expect(screen.getByRole("alert")).toBeVisible(); expect(screen.queryByText("No other sign-in sessions.")).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "Read again" })); await screen.findByText("Current session")
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(fetcher.mock.calls.map(call => call[1].method)).toEqual(["GET", "GET", "GET"])
+})
+it("shows a partial-read error while preserving loaded sessions and recovers with GET only", async () => {
+  fetcher.mockResolvedValueOnce(reply({ ...page(), meta: { request_id: "id", next_cursor: "next" } }))
+  renderDialog(); await screen.findByText("Current session")
+  fetcher.mockRejectedValueOnce(new Error("page unavailable"))
+  fireEvent.click(screen.getByRole("button", { name: "Load more" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("Only the loaded portion is shown. Read again.")
+  expect(screen.getByRole("alert")).toBeVisible()
+  expect(screen.getAllByText("Device information unknown")).toHaveLength(2)
+  expect(screen.queryByText("No other sign-in sessions.")).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Read again" }))
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument())
+  expect(screen.getByRole("button", { name: "Read again" })).toBeEnabled()
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  expect(screen.getAllByText("Device information unknown")).toHaveLength(2)
+  expect(fetcher.mock.calls.map(call => call[1].method)).toEqual(["GET", "GET", "GET"])
 })
 it.each(["success", "failure"])("unknown removal keeps every remove control disabled after More %s", async (outcome) => {
   const first = { ...page(), meta: { request_id: "id", next_cursor: "next" } }

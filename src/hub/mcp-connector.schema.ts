@@ -1,3 +1,4 @@
+import { mcpReauthorizationMatches } from "./mcp-reauthorization.schema";
 import { mcpIconBindingSchema, mcpIconSelectionSchema, mcpIconSaveMatches, type McpIconOperation } from "./mcp-icon.schema";
 import { z } from "zod";
 import { connectorCommandErrorAllowed } from "./connector-command-error";
@@ -21,6 +22,7 @@ export type McpPrivateServerOperation =
   | "registerServer"
   | "importJson"
   | "server"
+  | "reauthorizeServer"
   | "prepareServer"
   | "updateServer"
   | "deleteServer";
@@ -556,6 +558,7 @@ export function mcpPrivateServerMatches(
   serverId: string | undefined,
   input?: unknown,
 ): boolean {
+  if (operation === "reauthorizeServer") return mcpReauthorizationMatches(value, serverId, input);
   if (operation === "server")
     return (
       z

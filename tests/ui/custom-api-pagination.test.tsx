@@ -4,9 +4,30 @@ import { createHubClient } from "@/hub/client"
 import type { CustomApiPage } from "@/hub/custom-api.schema"
 import { invalidateCustomApiProjection, useCustomApiProjection } from "@/ui/mcp/use-custom-api-projection"
 
-const profile = (id: string) => ({ profile_id: id, name: id, state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] })
+const profile = (id: string) => ({ governance_status: "active" as const, profile_id: id, name: id, state_version: "1", created_at: "2026-10-17T12:00:00Z", updated_at: "2026-10-17T12:00:00Z", environment: [] })
 const page = (ids: string[], cursor: string | null): CustomApiPage => ({ items: ids.map(profile), page: { next_cursor: cursor } })
 afterEach(cleanup)
+
+it("fences head reload synchronously through the matching GET settlement", async () => {
+  let finish!: (value: CustomApiPage) => void
+  const list = vi.fn().mockRejectedValueOnce(Error("head unavailable"))
+    .mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    .mockResolvedValue(page(["after-second-retry"], null))
+  const client = { ...createHubClient(), listCustomApis: list }
+  const { result } = renderHook(() => useCustomApiProjection({ client, identity: "reload-owner", refreshKey: 0 }))
+  await waitFor(() => expect(result.current.error).toBe(true))
+  act(() => { result.current.reload(); result.current.reload() })
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  expect(result.current.reloading).toBe(true)
+  act(() => result.current.reload())
+  expect(list).toHaveBeenCalledTimes(2)
+  await act(async () => finish(page(["recovered"], null)))
+  expect(result.current.reloading).toBe(false)
+  expect(result.current.data.items[0]?.profile_id).toBe("recovered")
+  act(() => result.current.reload())
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(result.current.data.items[0]?.profile_id).toBe("after-second-retry"))
+})
 
 it("appends opaque Custom API pages once, deduplicates IDs and retries without discarding confirmed rows", async () => {
   const list = vi.fn().mockResolvedValueOnce(page(["first"], "opaque-two"))

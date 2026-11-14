@@ -3,6 +3,8 @@ export type ScheduledTaskStatus = "active" | "paused" | "failed"
 
 export type ScheduledTaskRecord = {
   id: string
+  revision?: number
+  executionActorId?: string | null
   projectId?: string
   title: string
   prompt?: string
@@ -63,8 +65,8 @@ export type ScheduledTaskClient = {
   listScheduledTasks: (options?: ScheduledTaskReadOptions) => Promise<readonly ScheduledTaskRecord[]>
   listScheduledExecutions: (options?: ScheduledExecutionReadOptions) => Promise<ScheduledExecutionPage>
   createScheduledTask: (draft: ScheduledTaskDraft) => Promise<ScheduledTaskRecord>
-  updateScheduledTask: (taskId: string, patch: ScheduledTaskPatch) => Promise<ScheduledTaskRecord>
-  retryScheduledTask: (taskId: string) => Promise<ScheduledTaskRecord>
+  updateScheduledTask: (taskId: string, patch: ScheduledTaskPatch, expectedRevision: number) => Promise<ScheduledTaskRecord>
+  retryScheduledTask: (taskId: string, expectedRevision: number) => Promise<ScheduledTaskRecord>
   deleteScheduledTask: (taskId: string) => Promise<{ ok: true }>
 }
 
@@ -87,6 +89,8 @@ export type ScheduledExecutionPage = { executions: readonly ScheduledExecution[]
 export function isScheduledTaskRecord(value: unknown): value is ScheduledTaskRecord {
   if (typeof value !== "object" || value === null) return false
   if (!("id" in value) || typeof value.id !== "string" || value.id.length === 0) return false
+  if ("revision" in value && value.revision !== undefined && (typeof value.revision !== "number" || !Number.isSafeInteger(value.revision) || value.revision < 1)) return false
+  if ("executionActorId" in value && value.executionActorId !== undefined && value.executionActorId !== null && (typeof value.executionActorId !== "string" || value.executionActorId.length === 0)) return false
   if ("projectId" in value && value.projectId !== undefined && !isExactProjectReference(value.projectId)) return false
   if (!("title" in value) || typeof value.title !== "string" || value.title.length === 0) return false
   if (

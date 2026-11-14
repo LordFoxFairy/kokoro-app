@@ -26,22 +26,22 @@ describe("scheduled task HTTP client", () => {
     for (const rule of rules) {
       const draft = { title: "Rule", prompt: "Run", time: "09:00", timezone: "Asia/Tokyo", autoApprove: false, ...rule }
       await client.createScheduledTask(draft)
-      await client.updateScheduledTask("scheduled_1", { time: draft.time, timezone: draft.timezone, ...rule })
+      await client.updateScheduledTask("scheduled_1", { time: draft.time, timezone: draft.timezone, ...rule }, 1)
     }
     expect(fetcher.mock.calls.map(([, init]) => JSON.parse(init.body))).toMatchObject([
       { weekdays: [1, 4] }, { weekdays: [1, 4] }, { month_days: [1, 31] }, { month_days: [1, 31] }, { local_date: "2030-02-28" }, { local_date: "2030-02-28" },
     ])
-    await expect(client.updateScheduledTask("scheduled_1", { weekdays: [2] })).rejects.toMatchObject({ reason: "parse" })
+    await expect(client.updateScheduledTask("scheduled_1", { weekdays: [2] }, 1)).rejects.toMatchObject({ reason: "parse" })
     expect(fetcher).toHaveBeenCalledTimes(6)
   })
 
   it("keeps an old command snapshot separate from current read facts and rejects an unpaired read", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ task: wireTask }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ tasks: [{ ...wireTask, title: "Current rule", scheduling_state: "pending", next_run_at: null }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tasks: [{ ...wireTask, title: "Current rule", scheduling_state: "pending", next_run_at: null, revision: 1, execution_actor_id: "owner" }] }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ tasks: [wireTask] }), { status: 200 }))
     const client = createScheduledTaskClient(fetcher)
-    const receipt = await client.updateScheduledTask("scheduled_1", { enabled: false })
+    const receipt = await client.updateScheduledTask("scheduled_1", { enabled: false }, 1)
     expect(receipt.title).toBe("Daily digest")
     expect(receipt).not.toHaveProperty("schedulingState")
     expect(await client.listScheduledTasks()).toMatchObject([{ title: "Current rule", schedulingState: "pending", nextRun: null }])
@@ -83,12 +83,12 @@ describe("scheduled task HTTP client", () => {
       )
     const client = createScheduledTaskClient(fetcher)
     await expect(
-      client.retryScheduledTask("scheduled_1"),
+      client.retryScheduledTask("scheduled_1", 1),
     ).rejects.toMatchObject({ status: 502 })
     await expect(
-      client.retryScheduledTask("scheduled_1"),
+      client.retryScheduledTask("scheduled_1", 1),
     ).rejects.toMatchObject({ status: 401 })
-    await client.retryScheduledTask("scheduled_1")
+    await client.retryScheduledTask("scheduled_1", 1)
     expect(
       new Set(
         fetcher.mock.calls.map(([, init]) =>
@@ -157,7 +157,7 @@ describe("scheduled task HTTP client", () => {
         new Response(JSON.stringify({ task: wireTask }), { status: 200 }),
       )
     const client = createScheduledTaskClient(fetcher, () => generation)
-    const save = client.retryScheduledTask("scheduled_1")
+    const save = client.retryScheduledTask("scheduled_1", 1)
     await Promise.resolve()
     generation = null
     resolve({ task: wireTask })
@@ -167,7 +167,7 @@ describe("scheduled task HTTP client", () => {
     })
     expect(fetcher).toHaveBeenCalledTimes(1)
     generation = 2
-    await client.retryScheduledTask("scheduled_1")
+    await client.retryScheduledTask("scheduled_1", 1)
     expect(
       new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("Idempotency-Key"),
     ).toBe(
@@ -176,13 +176,15 @@ describe("scheduled task HTTP client", () => {
   })
 
   it("uses the typed list path and maps the wire projection to the surface record", async () => {
-    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ tasks: [{ ...wireTask, scheduling_state: "active" }] }), { status: 200 }))
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ tasks: [{ ...wireTask, scheduling_state: "active", revision: 1, execution_actor_id: "owner" }] }), { status: 200 }))
 
     const tasks = await createScheduledTaskClient(fetcher).listScheduledTasks()
 
     expect(fetcher).toHaveBeenCalledWith("/api/scheduled-tasks", { cache: "no-store" })
     expect(tasks).toEqual([{
       id: "scheduled_1",
+      revision: 1,
+      executionActorId: "owner",
       title: "Daily digest",
       prompt: "Run the digest",
       frequency: "daily",
@@ -201,8 +203,8 @@ describe("scheduled task HTTP client", () => {
     const confirmedNextRun = "2026-10-15T08:00:00.000Z"
     const fetcher: typeof fetch = async () => new Response(JSON.stringify({
       tasks: [
-        { ...wireTask, id: "scheduled_paused", scheduling_state: "active", status: "paused", enabled: false, next_run_at: null },
-        { ...wireTask, id: "scheduled_confirmed", scheduling_state: "active", next_run_at: confirmedNextRun },
+        { ...wireTask, id: "scheduled_paused", scheduling_state: "active", status: "paused", enabled: false, next_run_at: null, revision: 1, execution_actor_id: "owner" },
+        { ...wireTask, id: "scheduled_confirmed", scheduling_state: "active", next_run_at: confirmedNextRun, revision: 1, execution_actor_id: "owner" },
       ],
     }), { status: 200 })
 
@@ -228,7 +230,7 @@ describe("scheduled task HTTP client", () => {
       expiresAt: "2026-09-30T23:59:59.999Z",
       autoApprove: true,
     })
-    await client.updateScheduledTask("scheduled_1", { enabled: false, status: "paused" })
+    await client.updateScheduledTask("scheduled_1", { enabled: false, status: "paused" }, 1)
 
     expect(fetcher).toHaveBeenNthCalledWith(1, "/api/scheduled-tasks", expect.objectContaining({
       method: "POST",
@@ -256,9 +258,9 @@ describe("scheduled task HTTP client", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: "resource.version_conflict", code: "resource.version_conflict" }), { status: 409 }))
     const client = createScheduledTaskClient(fetcher)
 
-    await client.retryScheduledTask("scheduled_1")
+    await client.retryScheduledTask("scheduled_1", 1)
     await client.deleteScheduledTask("scheduled_1")
-    await expect(client.updateScheduledTask("scheduled_1", { enabled: false })).rejects.toMatchObject({
+    await expect(client.updateScheduledTask("scheduled_1", { enabled: false }, 1)).rejects.toMatchObject({
       reason: "http",
       status: 409,
       code: "resource.version_conflict",
@@ -291,7 +293,7 @@ describe("scheduled task HTTP client", () => {
   it("sends an explicit null when an update clears expiry", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ task: { ...wireTask, expires_at: undefined } }), { status: 200 }))
 
-    await createScheduledTaskClient(fetcher).updateScheduledTask("scheduled_1", { expiresAt: null })
+    await createScheduledTaskClient(fetcher).updateScheduledTask("scheduled_1", { expiresAt: null }, 1)
 
     expect(fetcher).toHaveBeenCalledWith("/api/scheduled-tasks/scheduled_1", expect.objectContaining({
       method: "PATCH",
@@ -307,9 +309,9 @@ describe("scheduled task HTTP client", () => {
     const client = createScheduledTaskClient(fetcher)
     const patch = { enabled: false, status: "paused" as const }
 
-    await expect(client.updateScheduledTask("scheduled_1", patch)).rejects.toMatchObject({ reason: "network" })
-    await client.updateScheduledTask("scheduled_1", patch)
-    await client.updateScheduledTask("scheduled_1", patch)
+    await expect(client.updateScheduledTask("scheduled_1", patch, 1)).rejects.toMatchObject({ reason: "network" })
+    await client.updateScheduledTask("scheduled_1", patch, 1)
+    await client.updateScheduledTask("scheduled_1", patch, 1)
 
     const firstKey = new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("Idempotency-Key")
     const retryKey = new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("Idempotency-Key")
@@ -325,8 +327,8 @@ describe("scheduled task HTTP client", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ task: wireTask }), { status: 200 }))
     const client = createScheduledTaskClient(fetcher)
 
-    await expect(client.retryScheduledTask("scheduled_1")).rejects.toMatchObject({ reason: "http", status: 409 })
-    await client.retryScheduledTask("scheduled_1")
+    await expect(client.retryScheduledTask("scheduled_1", 1)).rejects.toMatchObject({ reason: "http", status: 409 })
+    await client.retryScheduledTask("scheduled_1", 1)
 
     const failedKey = new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("Idempotency-Key")
     const nextKey = new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("Idempotency-Key")
@@ -349,9 +351,9 @@ describe("scheduled task HTTP client", () => {
         )
       const client = createScheduledTaskClient(fetcher)
       await expect(
-        client.retryScheduledTask("scheduled_1"),
+        client.retryScheduledTask("scheduled_1", 1),
       ).rejects.toMatchObject({ status })
-      await client.retryScheduledTask("scheduled_1")
+      await client.retryScheduledTask("scheduled_1", 1)
       expect(
         new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("Idempotency-Key"),
       ).toBe(
@@ -377,8 +379,8 @@ describe("scheduled task HTTP client", () => {
       const client = createScheduledTaskClient(fetcher)
       const submit = () =>
         operation === "update"
-          ? client.updateScheduledTask("scheduled_1", { enabled: false })
-          : client.retryScheduledTask("scheduled_1")
+          ? client.updateScheduledTask("scheduled_1", { enabled: false }, 1)
+          : client.retryScheduledTask("scheduled_1", 1)
       await expect(submit()).rejects.toMatchObject({ reason: "parse" })
       await submit()
       expect(
@@ -461,7 +463,7 @@ describe("R80 scheduled task project association client", () => {
     }
 
     await client.createScheduledTask(personal)
-    await client.updateScheduledTask("scheduled_1", { title: "Renamed" })
+    await client.updateScheduledTask("scheduled_1", { title: "Renamed" }, 1)
     await expect(client.createScheduledTask({ ...personal, projectId: "missing" })).rejects.toMatchObject({
       reason: "http",
       status: 404,

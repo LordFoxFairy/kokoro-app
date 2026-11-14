@@ -1321,6 +1321,16 @@ button.helpGuideTrigger {
   font-weight: 400;
 }
 
+.identityAvatarFallback {
+  background: inherit;
+  color: inherit;
+  font: inherit;
+}
+
+.identityAvatar :global([data-slot="avatar-image"]) {
+  object-fit: cover;
+}
+
 .identityText {
   min-width: 0;
   flex: 1 1 auto;

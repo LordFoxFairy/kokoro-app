@@ -644,6 +644,8 @@ it("定时任务入口打开选择弹窗和编辑器，并提交项目级任务"
 
   const dialogs = screen.getAllByRole("dialog")
   const editor = at(dialogs, -1, "scheduled task editor")
+  expect(within(editor).queryByRole("textbox", { name: "RSS 订阅源链接" })).not.toBeInTheDocument()
+  expect(within(editor).getByRole("combobox", { name: "排程" })).toBeInTheDocument()
   fireEvent.change(within(editor).getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "每日简报" } })
   fireEvent.change(within(editor).getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" }), { target: { value: "汇总今天的重要消息" } })
   fireEvent.click(within(editor).getByRole("button", { name: "保存" }))
@@ -654,7 +656,6 @@ it("定时任务入口打开选择弹窗和编辑器，并提交项目级任务"
     frequency: "daily",
     time: "08:00",
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    expiresAt: undefined,
     autoApprove: false,
   }))
   await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(1))
@@ -756,6 +757,7 @@ async function mountInstructionBoundary(
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = input instanceof Request ? input.url : String(input)
     const path = new URL(url, window.location.origin).pathname
+    if (path === `/api/hub/projects/${instructionOwnerProject.id}/access`) return Response.json({ data: { project_id: instructionOwnerProject.id, role: "editor", expires_at: null, access_version: "1", capabilities: ["read", "edit"] }, meta: { request_id: "req_access" } })
     if (path === "/api/hub/projects") return Response.json({ data: { projects: [] }, meta: { request_id: "req_instruction_list" } })
     if (path.startsWith("/api/hub/projects/instruction-project")) return respond(path, init)
     return Response.json({}, { status: 503 })

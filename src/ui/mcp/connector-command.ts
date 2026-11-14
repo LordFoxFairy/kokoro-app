@@ -12,7 +12,7 @@ export type ConnectorCommandState = Readonly<{
 type Command<T> = { readonly body: T; readonly key: string; readonly name: string | undefined; uncertain: boolean; failure: ConnectorCommandFailure | undefined };
 
 /** One actor-owned command, not a second profile projection. Secrets stay in RAM. */
-export function createConnectorCommand<T>(options: {
+export function createConnectorCommand<T, Completion = undefined>(options: {
   execute: ((body: T, key: string, signal: AbortSignal) => Promise<unknown>) | undefined;
   freeze: (input: T) => T;
   name?: (input: T) => string;
@@ -20,6 +20,8 @@ export function createConnectorCommand<T>(options: {
   surface: ConnectorCommandSurface;
   boundary: ProjectReadBoundary;
   onConfirmed: () => void;
+  /** A caller may retain only a safe locator, never the raw ACK or secrets. */
+  projectCompletion?: (ack: unknown) => Completion;
   /** Opt-in owner semantics for an initial, never-uncertain rejection only. */
   classifyRejection?: (error: HubClientError) => ConnectorCommandState["rejection"];
   /** Only typed, non-secret callers opt into an unknown intent restored before any I/O. */
@@ -34,6 +36,7 @@ export function createConnectorCommand<T>(options: {
   let command: Command<T> | undefined;
   let active: { controller: AbortController } | undefined;
   let state: ConnectorCommandState = { kind: "idle" };
+  let completion: Completion | undefined;
   if (options.restored && actor !== null) {
     const body = options.freeze(options.restored.body);
     command = { body, key: connectorCreationKeySchema.parse(options.restored.key), name: options.name?.(body), uncertain: true, failure: options.restored.failure };
@@ -62,7 +65,7 @@ export function createConnectorCommand<T>(options: {
     if (retired) return;
     if (value.subject !== actor) {
       retired = true;
-      cancel(); command = undefined;
+      cancel(); command = undefined; completion = undefined;
       update({ kind: "idle" });
       return;
     }
@@ -84,10 +87,11 @@ export function createConnectorCommand<T>(options: {
     try {
       // Store notifications may synchronously commit a new admission boundary.
       if (active !== running || !matches(value) || !admitted()) return false;
-      await execute(intent.body, intent.key, running.controller.signal);
+      const ack = await execute(intent.body, intent.key, running.controller.signal);
       // The original actor's confirmed write must invalidate even after its
       // window/lease retires. It grants no admission or owner facts to a new actor.
       if (retired || command !== intent) { options.onConfirmed(); return false; }
+      completion = options.projectCompletion?.(ack);
       const current = active === running && matches(value) && admitted();
       command = undefined;
       if (active !== running) active?.controller.abort();
@@ -114,6 +118,7 @@ export function createConnectorCommand<T>(options: {
     instanceId: crypto.randomUUID(),
     available: options.execute !== undefined,
     getSnapshot: () => state,
+    getCompletion: (value: ProjectReadBoundary) => matches(value) && admitted() && state.kind === "completed" ? completion : undefined,
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     matches,
     bind,
@@ -129,7 +134,7 @@ export function createConnectorCommand<T>(options: {
         bind({ ...boundary, admitted: false });
         queueMicrotask(() => {
           if (leases !== 0 || retired) return;
-          retired = true; cancel(); command = undefined; update({ kind: "idle" });
+          retired = true; cancel(); command = undefined; completion = undefined; update({ kind: "idle" });
         });
       };
     },
@@ -145,7 +150,7 @@ export function createConnectorCommand<T>(options: {
     retry: (value: ProjectReadBoundary, signal?: AbortSignal) => state.kind === "unknown" ? run(value, signal) : Promise.resolve(false),
     finish: (value: ProjectReadBoundary) => {
       if (!matches(value) || !admitted() || active || state.kind !== "completed") return false;
-      update({ kind: "idle" }); return true;
+      completion = undefined; update({ kind: "idle" }); return true;
     },
   };
 }

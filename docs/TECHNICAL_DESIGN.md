@@ -1,3 +1,35 @@
+## 2026-11-13 B13：Admin IAM 审计具名桥（源码阶段已验，正常配对待完成）
+
+保当前 Browser→Admin 同源→App Product bridge→BFF→IAM 边界。仅现 /api/admin/[...path] 增加 exact GET identity/audit-events，并在原有有界 Admin proxy 复用 limit/cursor 读传输；不开放 identity 任意前缀。原 native Cookie/固定Origin/service envelope/request-id/10秒入站至响应预算、原字节上限/取消/无自动重试保持。Web 不直连 IAM、读审计库或作权限决定，不新增OAuth/token/SDK/缓存/事件协议。
+
+桥只转正式BFF读，不持有审计正文事实或进行内部auth。Public29.1正式发行后沿现固定artifact正规消费；原52项Admin消费由Admin独立pin，App通用业务生成器与browser-private来源不因一个透明Admin GET机械迁移。公开API门户仅原catalog/正规reference增量，内部工程文档不混入产品门户。
+
+## 2026-11-13 Task B：Project 协作消费设计（候选，正常未激活）
+
+唯一边界仍为Browser→同源adapter→BFF→owner。Project管理使用当前canonical Project Access；route slug不充当授权事实，viewer只读，editor只控制实际属于自身的执行。分享改为团队成员显式Grant，不保留“复制私人URL等于共享”的旧产品入口。
+
+Chat继续AG-UI唯一网络轨→既有engine→AI SDK；peer safe busy不带private process/pause，控制及再生成使用owner明确的can_control/can_regenerate。peer FINAL由原terminal snapshot和parts接回同一adoption，不另stream/store。历史私人Library匹配不因共享详情无asset_id而放宽。Project403/404局部退休，401仍全局退休可见集合并交原生准入重核。
+
+Grant UI按同tab、tenant/subject/Project保原未确认命令，写前保留并读回，刷新不自动发送；迟到/错目标ACK不确认。只做请求寿命和原命令恢复，不拥有权限或服务凭据。Scheduled沿原feature加显式current revision/If-Match与真实executor投影，未知原CAS不rebase，旧ACK不补造当前字段。六项Admin桥为具名允许列表，不开放generic proxy或新增认证。
+
+正式机器来源及传输细节见API_CONTRACT，本地状态见DATA_MODEL，实际门禁/native缺口只记CURRENT。
+
+## 2026-11-12 · Task B Public28.37／新授权消费者候选
+
+固定 BFF `0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97` 的 Public28.37（216 operations，原生 Session metadata、Share GET、Team delete_series）及独立 browser-private reauthorization1.0。当前 public 生成链与精确28.36／28.35父字节逆证一起升级，旧独立 profile 与历史父 pin 不变；无契约手写副本、锁依赖或认证状态机变更。
+
+会话分享打开／重开／焦点刷新只读 fresh metadata；成功 null 才是未分享，失败不当空、不自动发布。POST／DELETE 仍需明确操作，unknown 保原 scope／key／body，ACK 后只通过 fresh GET 展示；主体／窗口／准入退休阻断迟到显示与剪贴板反馈。确认后读失败只重读，不再发布。
+
+已断开的个人 MCP 仅显式“创建新授权”可提交 source Connector＋Server/Connector 双 CAS；复用现 actor-owned command 冻结原 key/body，unknown 原样恢复。严格 pending ACK 只提供新 Connector locator，随后 fresh exact Connector＋Server，历史 ACK 不授连接／执行资格；失败只重读，零自动 Prepare／OAuth／enable。旧 picture/RSS 等退休链保持不激活。此为消费者源码候选；工程证据由停写交接与主控复验绑定，正常 native 组合旅程／build／Root 配对另由主控验收，不冒全部 Task B 完成。
+
+## Task B当前主线承接（2026-11-12）
+
+以current native／Public28.35为唯一活动事实：旧29.3不是更高版本即可覆盖的同一发行，scheduled保现executions而非旧RSS/runs第二链；分享metadata、private reauthorize及picture需owner正式交付后再接，未发行读不返回假空事实。只读配置与运行连接授权继续分开。
+
+沿原actor-owned connector command保密body与unknown key，confirmed ACK只投影API profile locator或有序JSON connector/server locator，不保ACK/凭据。详情独立fresh exact GET，失败只重读locator；迟到ACK可失效原actor目录，但不借新窗口／主体打开详情。组合复用现creation context、McpProjectionRead与原设置/列表边界，不新建cache、store、session、SDK或业务owner。当前验证见CURRENT，源头API不增量。
+
+个人 API 治理只扩此既有边界：hub Fresh Profile 必需三态，ACK Profile 仅治理字段允许省略；completion 校验走 ACK 形状但仍只保存 locator。现 composer list／详情／Project 有界目录复用原状态与 epoch，非 active 禁新增选择／配置编辑，保同主体原草稿和原引用；Delete 与未知原命令恢复独立于新编辑开关。状态来自本代读，不新增 store/cache、轮询、授权或网络协议；正常组合未激活，见 API_CONTRACT 对应私有消费说明。
+
 ## Composer 菜单与读取职责（2026-11-12）
 
 沿现 Radix 菜单定位／碰撞／焦点语义，只在 Composer 局部 CSS 保内容宽度、视口上限、完整标签换行与 checked 常驻强调；触屏不缩小点击行。当前目录成功为空有明确状态；锁定的显式选择缺席时不回退冒显示另一个默认模型。选择身份／engine／草稿／命令与九语言原解析／fallback 机制保持。

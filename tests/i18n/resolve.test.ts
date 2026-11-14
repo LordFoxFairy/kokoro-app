@@ -3,6 +3,61 @@ import { describe, expect, it } from "vitest"
 import { LOCALES, LOCALE_NAMES, zh } from "@/i18n/messages"
 import { OVERLAYS } from "@/i18n/overlays"
 import { negotiateLocale, resolveMessage } from "@/i18n/resolve"
+import { en } from "@/i18n/en"
+import { de } from "@/i18n/de"
+import { es } from "@/i18n/es"
+import { fr } from "@/i18n/fr"
+import { ja } from "@/i18n/ja"
+import { ko } from "@/i18n/ko"
+import { pt } from "@/i18n/pt"
+import { ru } from "@/i18n/ru"
+
+it("侧栏本片标签及辅助说明在九语言自有词典中明确提供，不借fallback", () => {
+  const dictionaries = { zh, en, de, es, fr, ja, ko, pt, ru }
+  const keys = [
+    "rail.newTask", "rail.computer", "rail.create", "rail.automation",
+    "rail.plugins", "rail.tasks", "firstSite.collapseProjects", "firstSite.expandProjects",
+    "rail.collapseTasks", "rail.expandTasks", "rail.more", "rail.dragHelp", "rail.draggableItem",
+    "rail.taskOptions", "rail.taskFilters",
+    "firstSite.projectOptions", "firstSite.projectSort", "firstSite.newProjectSection",
+    "firstSite.projectCreateTitle", "firstSite.projectNamePlaceholder", "firstSite.projectFolder",
+    "firstSite.projectFolderUnavailable", "firstSite.create", "firstSite.projectsLoading",
+    "firstSite.projectsError", "firstSite.projectsEmpty", "firstSite.projects", "firstSite.newProject",
+    "notifications.open", "notifications.title", "rail.deleteFailed", "firstSite.unavailable",
+  ] as const
+  for (const locale of LOCALES) {
+    for (const key of keys) {
+      const dictionary = dictionaries[locale]
+      expect(Object.hasOwn(dictionary, key), `${locale}:${key} 缺少本语言词条`).toBe(true)
+      expect(dictionary[key]?.trim(), `${locale}:${key} 为空`).toBeTruthy()
+      expect(resolveMessage(locale, key)).toBe(dictionary[key])
+      if (locale !== "zh") expect(dictionary[key]).not.toBe(zh[key])
+      if (key === "firstSite.unavailable" && locale !== "zh" && locale !== "en") {
+        expect(dictionary[key]).not.toBe(en[key])
+      }
+    }
+  }
+})
+
+describe("知识开关说明当前新消息的使用边界", () => {
+  const hints = {
+    zh: "开启后供之后的新消息参考；关闭后仍保留已保存的知识。",
+    en: "When enabled, saved knowledge can inform new messages. Turning it off keeps your saved knowledge.",
+    de: "Wenn aktiviert, kann gespeichertes Wissen in neue Nachrichten einfließen. Beim Ausschalten bleibt es gespeichert.",
+    es: "Al activarlo, los nuevos mensajes pueden tener en cuenta los conocimientos guardados. Al desactivarlo, se conservan.",
+    fr: "Une fois activée, cette option permet aux nouveaux messages de s’appuyer sur vos connaissances enregistrées. La désactiver ne les supprime pas.",
+    ja: "オンにすると、これから送る新しいメッセージで保存済みの知識を参照できます。オフにしても知識は保存されたままです。",
+    ko: "켜면 이후 새 메시지에서 저장된 지식을 참고할 수 있습니다. 꺼도 저장된 지식은 유지됩니다.",
+    pt: "Quando ativado, os novos envios de mensagens podem levar em conta o conhecimento salvo. Ao desativar, ele continua salvo.",
+    ru: "Если включено, сохранённые знания могут учитываться в новых сообщениях. При выключении знания сохраняются.",
+  } as const
+
+  it.each(LOCALES)("%s 不再声称任务应用待接通", (locale) => {
+    const source = locale === "zh" ? zh : OVERLAYS[locale]
+    expect(source["settings.knowledgeUseHint"]).toBe(hints[locale])
+    expect(resolveMessage(locale, "settings.knowledgeUseHint")).toBe(hints[locale])
+  })
+})
 
 describe("i18n 协商（technical/14）", () => {
   it("所有已上线语言显式提供中性文件操作类别，不借完成状态或路径命名", () => {
@@ -210,5 +265,43 @@ it("all shipped locales own action counts, mixed failures and the distinct Run c
       const own = (source as Readonly<Record<string, string | undefined>>)[key]
       expect(own, `${locale}:${key}`).toBeTruthy()
     }
+  }
+})
+
+it("provides Custom API governance labels in each of the nine existing dictionaries without fallback", () => {
+  for (const [locale, dictionary] of Object.entries({ zh, en, ja, ko, es, fr, de, pt, ru })) {
+    for (const key of ["customApi.governance.active", "customApi.governance.quarantined", "customApi.governance.revoked", "customApi.governance.unavailable", "customApi.governance.readOnly"] as const) {
+      expect(Object.hasOwn(dictionary, key)).toBe(true);
+      expect(resolveMessage(locale as typeof LOCALES[number], key)).toBe(dictionary[key]);
+    }
+  }
+});
+
+it.each(LOCALES)("%s Project Skills empty state resolves its own dictionary entry", (locale) => {
+  const dictionaries = { zh, en, de, es, fr, ja, ko, pt, ru }
+  const dictionary = dictionaries[locale]
+  const key = "skills.personal.emptyState"
+  const message = resolveMessage(locale, key)
+  expect(Object.hasOwn(dictionary, key)).toBe(true)
+  expect(message).toBeTruthy()
+  expect(message).toBe(dictionary[key])
+  expect(message).not.toBe(key)
+  if (locale !== "zh") expect(message).not.toBe(zh[key])
+})
+
+it.each(LOCALES)("%s Project Skills messages use their own translations and preserve interpolation", (locale) => {
+  const dictionaries = { zh, en, de, es, fr, ja, ko, pt, ru }
+  const dictionary: Readonly<Partial<Record<keyof typeof zh, string>>> = dictionaries[locale]
+  const keys = (Object.keys(zh) as Array<keyof typeof zh>).filter(key => key.startsWith("projectSkills.") || key === "skills.personal.emptyState")
+  const vars = { name: "QA skill", count: 3, revision: 7 }
+  const placeholders = (message: string) => [...message.matchAll(/\{([^{}]+)\}/gu)].map(match => match[1]).sort()
+  for (const key of keys) {
+    expect(Object.hasOwn(dictionary, key), `${locale}:${key}`).toBe(true)
+    const message = dictionary[key]!
+    expect(message.trim(), `${locale}:${key}`).toBeTruthy()
+    expect(placeholders(message), `${locale}:${key}`).toEqual(placeholders(zh[key]))
+    expect(resolveMessage(locale, key)).toBe(message)
+    expect(resolveMessage(locale, key, vars)).toBe(message.replace(/\{(name|count|revision)\}/gu, (_, name: keyof typeof vars) => String(vars[name])))
+    if (locale !== "zh") expect(message).not.toBe(zh[key])
   }
 })

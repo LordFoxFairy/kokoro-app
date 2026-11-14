@@ -55,10 +55,19 @@ test('authored portal pages are Chinese and the required reading route exists', 
     '/api/guides/cursor-pagination',
     '/api/changelog',
     '/api/provenance',
+    '/product/settings/personalization',
   ]) {
     assert.match(config, new RegExp(`link: '${route.replaceAll('/', '\\/')}`));
   }
   assert.match(config, /lang: 'zh-CN'/u);
+  const personalizationPath = 'settings/personalization.md';
+  assert.ok(readFileSync(join(docsRoot, 'product', personalizationPath), 'utf8'));
+  for (const page of ['index.md', 'availability.md']) {
+    assert.ok(
+      readFileSync(join(docsRoot, 'product', page), 'utf8').includes(`](${personalizationPath})`),
+      `product/${page} must link to the personalization guide`,
+    );
+  }
 });
 
 test('the generated reference is the metadata inventory for the pinned BFF contract', () => {

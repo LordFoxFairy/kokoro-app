@@ -23,10 +23,11 @@ Web 不创建本地 Product Session，不读取 Auth.js/RP state、CSRF、callba
 所有业务 adapter 只携 allowlisted Cookie、固定 Origin 和受信服务身份调用 BFF 认证边缘，使用 `upstream-http.ts` 的有限 deadline、响应大小和取消语义：
 
 - `account-profile.ts`、`account-sessions.ts`、`shared-tasks.ts`：账户投影和分享边界；账户资料返回前保留 fresh native admission 复验，明确无效或身份变化为 `401 session_invalid`，复验不可用为 `503 account_profile_unavailable`，两者均不返回资料。
-- `session-answer-actions.ts`、`session-archive.ts`、`session-share.ts`：Chat 会话具名操作；不扩 generic proxy。
+- `session-answer-actions.ts`、`session-archive.ts`、`session-share.ts`：Chat 会话具名操作；分享 GET 只返回严格的 fresh nullable metadata，不创建 receipt／幂等键，沿原 deadline／取消与 native adapter；POST／DELETE 保明确原命令，不扩 generic proxy。
 - `library-file-delete.ts`：个人 Library 文件的精确空 `DELETE`；透传原幂等键，校验绑定 Asset 的 owner 回执，不授予读取或跨范围删除权限。
 - `project-skill-content.ts`、`project-mcp-recommendations.ts`、`project-pins.ts`、`mcp-project-publication.ts`：Project owner 薄桥。
 - `mcp-server-icon.ts`、`skill-download.ts`：固定媒体/下载路径，完整 EOF 后才返回内容。
+- `src/app/api/admin/[...path]/route.ts`：Admin 模型草稿更新仅放行 `PATCH model-revisions/{UUID}`，与原 model-labels PATCH 共用64KiB长度校验、原生Cookie／固定Origin、原body／幂等key／CAS／取消信号透传；不解析第二套草稿字段或改变生成契约，其他路径／方法仍按原allowlist。
 - `admin-billing-proxy.ts`、`billing-routes` 相关 adapter：Billing owner 读写；不在 Web 建账本、权限或资金事实。
 - `same-origin.ts`：变更请求的 Host/Origin/scheme 守卫，不读取 Redis、SQL 或用户自报身份。
 - `bff-response.ts`：统一 success/error envelope、request id 和公开响应头。

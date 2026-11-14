@@ -1,3 +1,4 @@
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { SessionClient } from "@/engine/client"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 
@@ -46,12 +47,14 @@ export type ProjectInstructionControl = {
 }
 
 export type WorkspaceHeaderProps = {
+  projectAccess?: import("@/features/app/use-project-access").ProjectAccessModel
   activeId: string | null
   projectRename?: ProjectRenameControl
   projectContext?: ProjectContextControl
   projectInstruction?: ProjectInstructionControl
   projectDelete?: ProjectDeleteControl
-  shareClient: Pick<SessionClient, "createShare" | "revokeShare">
+  shareReadBoundary?: ProjectReadBoundary
+  shareClient: Pick<SessionClient, "readShare" | "createShare" | "revokeShare">
   onOpenSettings?: (tab: SettingsTab) => void
   brandName?: string
   emptyWorkspace?: boolean
@@ -68,5 +71,5 @@ export type WorkspaceHeaderIdentityProps = Pick<
 
 export type WorkspaceHeaderActionProps = Pick<
   WorkspaceHeaderProps,
-  "projectContext" | "activeId" | "projectRename" | "projectInstruction" | "projectDelete" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
+  "projectAccess" | "shareReadBoundary" | "projectContext" | "activeId" | "projectRename" | "projectInstruction" | "projectDelete" | "emptyWorkspace" | "onOpenSettings" | "projectWorkspace" | "shareClient"
 >

@@ -1,7 +1,9 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useRuntimeManifest } from "@/system/use-runtime-manifest"
+import { LocaleProvider, useLocale } from "@/i18n/context"
+import { LOCALE_STORAGE_KEY } from "@/i18n/messages"
 
 describe("useRuntimeManifest", () => {
   afterEach(() => {
@@ -18,6 +20,51 @@ describe("useRuntimeManifest", () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(result.current.source).toBe("preview")
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("keeps the selected document language when a late manifest settles, fails or enters preview", async () => {
+    const storedLocale = localStorage.getItem(LOCALE_STORAGE_KEY)
+    const previousLang = document.documentElement.lang
+    // A non-default, schema-valid English tag makes the manifest locale effect
+    // rerun; en-US -> en-US alone would not reproduce the competing writer.
+    const browserLanguage = vi.spyOn(navigator, "language", "get").mockReturnValue("en-GB")
+    const late = set31Deferred<Response>()
+    const fetchMock = vi.fn().mockImplementationOnce(() => late.promise).mockRejectedValueOnce(new Error("system unavailable"))
+    vi.stubGlobal("fetch", fetchMock)
+    localStorage.setItem(LOCALE_STORAGE_KEY, "en")
+    const view = renderHook(({ preview }: { preview: boolean }) => ({
+      preference: useLocale(),
+      runtime: useRuntimeManifest({ preview }),
+    }), { initialProps: { preview: false }, wrapper: LocaleProvider })
+    try {
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+      expect(new URL(String(fetchMock.mock.calls[0]![0]), "https://app.example").searchParams.get("locale")).toBe("en-GB")
+      act(() => view.result.current.preference.setLocale("fr"))
+      expect(document.documentElement.lang).toBe("fr")
+
+      const payload = set31Payload("Late English site")
+      await act(async () => { late.resolve(new Response(JSON.stringify({ data: { ...payload.data, locale: "en-GB" } }), { status: 200 })) })
+      await waitFor(() => expect(view.result.current.runtime.source).toBe("live"))
+      expect(view.result.current.runtime.manifest.locale).toBe("en-GB")
+      expect(view.result.current.preference.locale).toBe("fr")
+      expect(document.documentElement.lang).toBe("fr")
+
+      act(() => view.result.current.runtime.retry())
+      await waitFor(() => expect(view.result.current.runtime.source).toBe("error"))
+      expect(document.documentElement.lang).toBe("fr")
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+
+      view.rerender({ preview: true })
+      await waitFor(() => expect(view.result.current.runtime.source).toBe("preview"))
+      expect(document.documentElement.lang).toBe("fr")
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      view.unmount()
+      browserLanguage.mockRestore()
+      if (storedLocale === null) localStorage.removeItem(LOCALE_STORAGE_KEY)
+      else localStorage.setItem(LOCALE_STORAGE_KEY, storedLocale)
+      document.documentElement.lang = previousLang
+    }
   })
 
   it("does not relabel a live manifest failure as preview", async () => {
@@ -359,5 +406,194 @@ describe("SET31 runtime lifecycle", () => {
     expect(view.result.current.manifest.brand.name).toBe("Retry B")
     expect(view.result.current.retrying).toBe(false)
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("runtime manifest absolute read deadline", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] })
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  async function advance(milliseconds: number) {
+    await act(async () => { await vi.advanceTimersByTimeAsync(milliseconds) })
+  }
+
+  it("ends an uncooperative fetch at 20 seconds and only retries on an explicit request", async () => {
+    const signals: AbortSignal[] = []
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      signals.push(init!.signal!)
+      return new Promise<Response>(() => undefined)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    const view = set31Render()
+    await set31Flush()
+    await advance(19_999)
+    expect(view.result.current.source).toBe("loading")
+    expect(signals[0]!.aborted).toBe(false)
+
+    await advance(1)
+    expect(view.result.current.source).toBe("error")
+    expect(view.result.current.manifest).toEqual(PRODUCT_RUNTIME_MANIFEST)
+    expect(view.result.current.retrying).toBe(false)
+    expect(signals[0]!.aborted).toBe(true)
+    await advance(60_000)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    act(() => view.result.current.retry())
+    await set31Flush()
+    expect(view.result.current.source).toBe("loading")
+    expect(view.result.current.retrying).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await advance(19_999)
+    expect(view.result.current.retrying).toBe(true)
+    await advance(1)
+    expect(view.result.current.source).toBe("error")
+    expect(view.result.current.retrying).toBe(false)
+    expect(signals[1]!.aborted).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("uses the remaining fetch budget for a stalled body and rejects its late skin", async () => {
+    const request = set31Deferred<Response>()
+    const body = set31Deferred<unknown>()
+    const response = set31Response("Late Body")
+    const json = vi.spyOn(response, "json").mockImplementation(() => body.promise)
+    let signal: AbortSignal | null | undefined
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      signal = init?.signal
+      return request.promise
+    }))
+    const view = set31Render()
+    await set31Flush()
+    await advance(12_000)
+    await act(async () => { request.resolve(response) })
+    expect(json).toHaveBeenCalledTimes(1)
+    await advance(7_999)
+    expect(view.result.current.source).toBe("loading")
+    await advance(1)
+    expect(view.result.current.source).toBe("error")
+    expect(signal?.aborted).toBe(true)
+    expect(view.result.current.manifest).toEqual(PRODUCT_RUNTIME_MANIFEST)
+
+    await act(async () => { body.resolve(set31Payload("Late Body")) })
+    expect(view.result.current.source).toBe("error")
+    expect(document.title).toBe("Kokoro Web")
+    expect(document.documentElement.style.getPropertyValue("--primary")).toBe("")
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("does not consume a timed-out response after a newer retry has applied its skin", async () => {
+    const old = set31Deferred<Response>()
+    const fetchMock = vi.fn().mockImplementationOnce(() => old.promise).mockResolvedValueOnce(set31Response("Current Retry"))
+    vi.stubGlobal("fetch", fetchMock)
+    const view = set31Render()
+    await set31Flush()
+    await advance(20_000)
+    expect(view.result.current.source).toBe("error")
+    act(() => view.result.current.retry())
+    await set31Flush()
+    expect(view.result.current.source).toBe("live")
+    expect(view.result.current.retrying).toBe(false)
+
+    const late = set31Response("Expired Fetch")
+    const json = vi.spyOn(late, "json")
+    await act(async () => { old.resolve(late) })
+    expect(json).not.toHaveBeenCalled()
+    expect(view.result.current.manifest.brand.name).toBe("Current Retry")
+    expect(document.title).toBe("Current Retry Web")
+    expect(document.documentElement.style.getPropertyValue("--primary")).toBe("#123456")
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("keeps a success before the deadline settled after the old timer would fire", async () => {
+    const body = set31Deferred<unknown>()
+    const response = set31Response("Timely Site")
+    vi.spyOn(response, "json").mockImplementation(() => body.promise)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
+    const view = set31Render()
+    await set31Flush()
+    await advance(19_999)
+    await act(async () => { body.resolve(set31Payload("Timely Site")) })
+    expect(view.result.current.source).toBe("live")
+    expect(vi.getTimerCount()).toBe(0)
+    await advance(20_000)
+    expect(view.result.current.source).toBe("live")
+    expect(view.result.current.manifest.brand.name).toBe("Timely Site")
+  })
+
+  it("rejects a body at the exact deadline even before its timer callback runs", async () => {
+    const body = set31Deferred<unknown>()
+    const response = set31Response("Deadline Site")
+    vi.spyOn(response, "json").mockImplementation(() => body.promise)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
+    const started = performance.now()
+    const view = set31Render()
+    await set31Flush()
+    // Advancing the clock without dispatching the timer models a busy event loop.
+    vi.spyOn(performance, "now").mockReturnValue(started + 20_000)
+    await act(async () => { body.resolve(set31Payload("Deadline Site")) })
+    expect(view.result.current.source).toBe("error")
+    expect(view.result.current.manifest).toEqual(PRODUCT_RUNTIME_MANIFEST)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each(["preview", "unmount", "retry"] as const)("retires the old deadline silently on %s", async (mode) => {
+    const old = set31Deferred<Response>()
+    const next = set31Deferred<Response>()
+    let signal: AbortSignal | null | undefined
+    const fetchMock = vi.fn().mockImplementationOnce((_input: RequestInfo | URL, init?: RequestInit) => {
+      signal = init?.signal
+      return old.promise
+    }).mockImplementationOnce(() => next.promise)
+    vi.stubGlobal("fetch", fetchMock)
+    const view = set31Render()
+    await set31Flush()
+    await advance(10_000)
+    if (mode === "preview") view.rerender({ preview: true })
+    else if (mode === "unmount") view.unmount()
+    else act(() => view.result.current.retry())
+    await set31Flush()
+    expect(signal?.aborted).toBe(true)
+    await advance(10_000)
+    if (mode === "preview") expect(view.result.current.source).toBe("preview")
+    if (mode === "retry") {
+      expect(view.result.current.source).toBe("loading")
+      expect(view.result.current.retrying).toBe(true)
+      await act(async () => { next.resolve(set31Response("Fresh Scope")) })
+      expect(view.result.current.source).toBe("live")
+      expect(view.result.current.retrying).toBe(false)
+    }
+    expect(vi.getTimerCount()).toBe(0)
+    await act(async () => { old.reject(new DOMException("old canceled", "AbortError")) })
+    if (mode === "preview") expect(view.result.current.source).toBe("preview")
+    if (mode === "retry") expect(view.result.current.manifest.brand.name).toBe("Fresh Scope")
+  })
+
+  it.each(["fetch", "body"] as const)("does not swallow an unowned %s AbortError and leave retrying forever", async (stage) => {
+    const response = set31Response("Canceled Elsewhere")
+    const error = new DOMException("upstream aborted", "AbortError")
+    vi.spyOn(response, "json").mockRejectedValue(error)
+    const fetchMock = vi.fn().mockResolvedValueOnce(set31Response("Initial Site"))
+    if (stage === "fetch") fetchMock.mockRejectedValueOnce(error)
+    else fetchMock.mockResolvedValueOnce(response)
+    vi.stubGlobal("fetch", fetchMock)
+    const view = set31Render()
+    await set31Flush()
+    expect(view.result.current.source).toBe("live")
+    act(() => view.result.current.retry())
+    await set31Flush()
+    expect(view.result.current.source).toBe("error")
+    expect(view.result.current.retrying).toBe(false)
+    expect(view.result.current.manifest).toEqual(PRODUCT_RUNTIME_MANIFEST)
+    expect(document.title).toBe("Kokoro Web")
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

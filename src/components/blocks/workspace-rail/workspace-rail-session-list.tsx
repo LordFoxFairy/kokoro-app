@@ -253,6 +253,7 @@ type ConversationGroupProps = Omit<WorkspaceRailSessionListProps, "renameInputRe
 
 /** Each rendered list owns its edit/order state independently of selection. */
 export function ConversationGroup({ scopeKey, onRenameConversation, onReorderConversations, ...props }: ConversationGroupProps) {
+  const t = useT()
   const railRootRef = useRef<HTMLDivElement>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftTitle, setDraftTitle] = useState("")
@@ -300,6 +301,7 @@ export function ConversationGroup({ scopeKey, onRenameConversation, onReorderCon
   }
 
   const { orderedConversations, dragProps, dragState, dragOverKey } = useWorkspaceRailActions({
+    draggableItemLabel: t("rail.draggableItem"),
     projectItems: [], conversations: props.conversations, conversationScopeKey: scopeKey,
     ...(onReorderConversations === undefined ? {} : { onReorderConversations }),
   })

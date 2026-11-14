@@ -21,6 +21,7 @@ import { useT } from "@/i18n/context"
 import { endProductSession } from "@/ui/auth/product-auth-client"
 import { browserBillingClient } from "@/ui/shell/page-clients"
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { useProductReadRecheck } from "@/ui/auth/product-read-recheck-context"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import { NotificationPanel } from "@/ui/notifications/notification-panel"
 import notificationStyles from "@/ui/notifications/notification-panel.module.css"
@@ -55,11 +56,16 @@ export function WorkspaceRailAccount({
 }: WorkspaceRailAccountProps) {
   const t = useT()
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
-  const [adminAccess, setAdminAccess] = useState<{ manageUrl: string } | null>(null)
+  const reportRead401 = useProductReadRecheck()
   const actor = readCreditActor()
   const admitted = readBoundary?.admitted === true
   const subject = readBoundary?.subject ?? null
   const generation = readBoundary?.generation ?? null
+  const adminScope = useMemo(() => ({ preview, admitted, subject, generation }), [preview, admitted, subject, generation])
+  const adminEligible = !preview && admitted && typeof subject === "string" && subject.trim().length > 0
+    && generation !== null && Number.isSafeInteger(generation) && generation >= 0
+  const [adminProjection, setAdminProjection] = useState<{ scope: typeof adminScope; access: { manageUrl: string } | null } | null>(null)
+  const adminAccess = adminEligible && adminProjection?.scope === adminScope ? adminProjection.access : null
   // A new object retires the prior attempt even if an old A tuple returns after B.
   const creditScope = useMemo(() => ({ preview, admitted, subject, generation, actor }), [preview, admitted, subject, generation, actor])
   const creditEligible = preview || (admitted && typeof subject === "string" && subject.trim().length > 0
@@ -92,17 +98,26 @@ export function WorkspaceRailAccount({
   }, [])
 
   useEffect(() => {
+    if (!adminEligible) return
     const controller = new AbortController()
     void fetch("/api/admin-access", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => response.ok ? await response.json() as unknown : null)
-      .then((value) => {
-        if (controller.signal.aborted || typeof value !== "object" || value === null) return
-        const access = value as { platform_admin?: unknown; manage_url?: unknown }
-        setAdminAccess(access.platform_admin === true && typeof access.manage_url === "string" ? { manageUrl: access.manage_url } : null)
+      .then(async (response) => {
+        if (controller.signal.aborted) return null
+        if (response.status === 401 && adminScope.generation !== null)
+          reportRead401?.({ subject: adminScope.subject, generation: adminScope.generation, signal: controller.signal })
+        return response.ok ? await response.json() as unknown : null
       })
-      .catch(() => undefined)
+      .then((value) => {
+        if (controller.signal.aborted) return
+        const access = typeof value === "object" && value !== null
+          ? value as { platform_admin?: unknown; manage_url?: unknown; user_id?: unknown; tenant_id?: unknown } : null
+        const allowed = access?.platform_admin === true && access.manage_url === "/manage"
+          && access.user_id === adminScope.subject && typeof access.tenant_id === "string" && access.tenant_id.trim().length > 0
+        setAdminProjection({ scope: adminScope, access: allowed ? { manageUrl: "/manage" } : null })
+      })
+      .catch(() => { if (!controller.signal.aborted) setAdminProjection({ scope: adminScope, access: null }) })
     return () => controller.abort()
-  }, [])
+  }, [adminScope, adminEligible, reportRead401])
 
   useEffect(() => {
     if (previousCompactDesktopRef.current === compactDesktop) return

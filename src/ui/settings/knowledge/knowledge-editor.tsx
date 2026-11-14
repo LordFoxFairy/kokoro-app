@@ -129,6 +129,7 @@ export function KnowledgeEditor({
               state={state}
               admitted={admitted}
               onAdopt={onClose}
+              showSaved={false}
             />
           </div>
           <div className={styles.dialogFooter}>
@@ -178,6 +179,7 @@ export function KnowledgeRemoveDialog({
           state={state}
           admitted={admitted}
           onAdopt={onClose}
+          showSaved={false}
         />
         <div className={styles.recoveryActions}>
           <Button variant="outline" onClick={onClose}>

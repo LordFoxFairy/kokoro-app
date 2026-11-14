@@ -5,6 +5,7 @@ import { buildThreadItems, currentRunProgressTodos, groupSegments } from "@/core
 import { messagePartsPageSchema, parseSessionSnapshot } from "@/contract/http"
 import { applyChatProjectionEvents, appendUserMessage, mergeMessageParts } from "@/core/reducer"
 import { createSessionStreamState, type SessionStep } from "@/core/state"
+import type { RunProcessActivity } from "@/contract/chat"
 
 import { AGENT_FAILURE_PROFILES, makeAgentFailureEvent, makeEvent, makePublic4Snapshot, makeSnapshot, resetFixtureSeq } from "./fixtures"
 
@@ -151,7 +152,35 @@ describe("groupSegments", () => {
     expect(segments.map((segment) => segment.segmentId)).toEqual(["seg_1", "seg_2"])
     expect(segments[0]?.thinking).toBe("think late")
     expect(segments[0]?.tools.map((tool) => tool.id)).toEqual(["tool_1"])
-    expect(segments[0]?.thinking).toBe("think late")
+  })
+
+  it("keeps typed tool/subagent/tool activities in first-seen order after a status update without reordering input", () => {
+    const tool = { activity: "tool", activity_id: `act_${"1".repeat(64)}`, segment_id: `seg_${"2".repeat(64)}`,
+      status: "running", display_code: "tool.execution" } satisfies RunProcessActivity
+    const subagent = { activity: "subagent", activity_id: `act_${"3".repeat(64)}`, segment_id: `seg_${"4".repeat(64)}`,
+      status: "running", display_code: "subagent.execution" } satisfies RunProcessActivity
+    const nextTool = { ...tool, activity_id: `act_${"5".repeat(64)}`, segment_id: `seg_${"6".repeat(64)}` } satisfies RunProcessActivity
+    const initial = applyChatProjectionEvents(createSessionStreamState(), [
+      makeEvent("run.created", { run_id: "run_1" }, { seq: 1 }),
+      makeEvent("activity.updated", tool, { seq: 2 }),
+      makeEvent("activity.updated", subagent, { seq: 3 }),
+      makeEvent("activity.updated", nextTool, { seq: 4 }),
+    ])
+    const updated = applyChatProjectionEvents(initial, [
+      makeEvent("activity.updated", { ...tool, status: "completed" }, { seq: 5 }),
+    ])
+    const steps = updated.stepsByRun.run_1 ?? []
+    const beforeSteps = structuredClone(steps)
+    const beforeActivities = structuredClone(updated.executionProcess?.activities)
+    const original = groupSegments(initial.stepsByRun.run_1 ?? [])
+    const segments = groupSegments(steps)
+    expect(segments.map(segment => segment.segmentId)).toEqual(original.map(segment => segment.segmentId))
+    expect(segments.flatMap(segment => segment.activities)).toEqual([
+      { ...tool, status: "completed" }, subagent, nextTool,
+    ])
+    expect(segments.flatMap(segment => segment.activities.map(activity => activity.activity))).toEqual(["tool", "subagent", "tool"])
+    expect(steps).toEqual(beforeSteps)
+    expect(updated.executionProcess?.activities).toEqual(beforeActivities)
   })
 
   it.each([

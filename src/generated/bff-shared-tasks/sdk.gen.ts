@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CreateShareData, CreateShareErrors, CreateShareResponses, ListOwnedSharedTasksData, ListOwnedSharedTasksErrors, ListOwnedSharedTasksResponses, RevokeShareData, RevokeShareErrors, RevokeShareResponses } from './types.gen';
+import type { CreateShareData, CreateShareErrors, CreateShareResponses, GetSessionShareMetadataData, GetSessionShareMetadataErrors, GetSessionShareMetadataResponses, ListOwnedSharedTasksData, ListOwnedSharedTasksErrors, ListOwnedSharedTasksResponses, RevokeShareData, RevokeShareErrors, RevokeShareResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -29,6 +29,13 @@ export const listOwnedSharedTasks = <ThrowOnError extends boolean = false>(optio
  * Revoke a session share
  */
 export const revokeShare = <ThrowOnError extends boolean = false>(options: Options<RevokeShareData, ThrowOnError>): RequestResult<RevokeShareResponses, RevokeShareErrors, ThrowOnError> => (options.client ?? client).delete<RevokeShareResponses, RevokeShareErrors, ThrowOnError>({ url: '/v1/sessions/{id}/share', ...options });
+
+/**
+ * Read the current owned session share
+ *
+ * Read-only owner metadata. An accessible unshared, revoked or expired session returns share null; inaccessible sessions return the same not-found result. Never creates a share or updates expiry state.
+ */
+export const getSessionShareMetadata = <ThrowOnError extends boolean = false>(options: Options<GetSessionShareMetadataData, ThrowOnError>): RequestResult<GetSessionShareMetadataResponses, GetSessionShareMetadataErrors, ThrowOnError> => (options.client ?? client).get<GetSessionShareMetadataResponses, GetSessionShareMetadataErrors, ThrowOnError>({ url: '/v1/sessions/{id}/share', ...options });
 
 /**
  * Create a session share

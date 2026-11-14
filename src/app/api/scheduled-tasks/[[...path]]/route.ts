@@ -14,7 +14,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const MUTATION_METHODS = new Set(["POST", "PATCH", "DELETE"])
-const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
+const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key", "if-match"] as const
 const bffErrorEnvelopeSchema = z
   .object({
     error: z.object({ code: z.string().min(1), message: z.string().min(1) }).strict(),

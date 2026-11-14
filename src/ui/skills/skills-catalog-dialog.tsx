@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import type { ManusSkillHubClient } from "./manus-skill-client";
 import type { CatalogSkillCategory, SkillCard, SkillCatalog, SkillCatalogCard } from "@/hub/schemas";
-import { useT } from "@/i18n/context";
+import { useLocale } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import { useResource } from "@/lib/query";
 import { formatSkillDate } from "./skills-format";
@@ -109,7 +109,7 @@ export function SkillCatalogDialog({
   /** Renders inside Settings so its left navigation remains visible. */
   inline?: boolean;
 }) {
-  const t = useT();
+  const { t, locale } = useLocale();
   const [query, setQuery] = useState("");
   const [committedQuery, setCommittedQuery] = useState("");
   useEffect(() => {
@@ -525,8 +525,15 @@ export function SkillCatalogDialog({
           <AlertDescription>{t("skills.addError")}</AlertDescription>
         </Alert>
       ) : null}
-      {catalog.error !== undefined && displayedCatalog !== undefined ? (
-        <span className="sr-only" role="status">{t("skills.loadError")}</span>
+      {catalog.error !== undefined ? (
+        <Alert variant="destructive" className={styles.catalogFeedback}>
+          <AlertDescription>
+            {t("skills.loadError")}
+            <Button type="button" variant="outline" onClick={retry} disabled={catalog.loading}>
+              {t("skills.retry")}
+            </Button>
+          </AlertDescription>
+        </Alert>
       ) : null}
       <div
         className={styles.catalogGrid}
@@ -534,7 +541,7 @@ export function SkillCatalogDialog({
         aria-busy={catalogRefreshing || undefined}
       >
         {displayedCatalog === undefined || catalog.data === undefined && filtered.length === 0 ? (
-          <span className="sr-only" role="status">{t(catalog.error === undefined ? "skills.loading" : "skills.loadError")}</span>
+          catalog.error === undefined ? <span className="sr-only" role="status">{t("skills.loading")}</span> : null
         ) : filtered.length > 0 ? (
           filtered.map((skill) => {
             const stateKey = skillStateKey(skill.scope, skill.name, skill.skill_id);
@@ -577,7 +584,7 @@ export function SkillCatalogDialog({
                         <p className={styles.installedCardMeta}>
                           <ShieldCheck aria-hidden="true" />
                           {t("skills.updatedAt", {
-                            date: formatSkillDate(skill.updated_at),
+                            date: formatSkillDate(skill.updated_at, locale),
                           })}
                         </p>
                       ) : null}
@@ -630,7 +637,11 @@ export function SkillCatalogDialog({
       </div>
       {catalog.data !== undefined && displayedCatalog?.next_cursor ? (
         <div ref={catalogMoreRef} className={styles.catalogMore}>
-          {loadMoreFailed ? <span className="sr-only" role="status">{t("skills.loadError")}</span> : null}
+          {loadMoreFailed ? (
+            <Alert variant="destructive">
+              <AlertDescription>{t("skills.loadError")}</AlertDescription>
+            </Alert>
+          ) : null}
           <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={loadingMore} aria-busy={loadingMore}>
             {t("rail.loadMore")}
           </Button>

@@ -6,7 +6,7 @@ import { useT } from "@/i18n/context";
 import { McpAvailabilityStatus } from "./mcp-availability-status";
 import { McpServerIcon } from "./mcp-server-icon";
 import { McpSearchHighlight } from "./mcp-search-highlight";
-import { providerArtwork } from "./mcp-projection-types";
+import { isDisconnectedMcpConfiguration, providerArtwork } from "./mcp-projection-types";
 import styles from "./mcp-projection-read.module.css";
 import galleryStyles from "./mcp-custom-api-gallery.module.css";
 
@@ -38,7 +38,8 @@ export function McpConnectorCard({ connector, provider, mediaRevision = 0, prese
           {description ? <small className={plaza ? styles.providerDescription : undefined}>{description}</small> : null}
         </span>
       </span>
-      <McpAvailabilityStatus availability={connector.availability} className={styles.status} availableIconClassName={styles.statusCheck} />
+      {isDisconnectedMcpConfiguration(connector) ? <span role="status" className={styles.status}>{t("mcp.disconnectedBadge")}</span>
+        : <McpAvailabilityStatus availability={connector.availability} className={styles.status} availableIconClassName={styles.statusCheck} />}
     </button>
   </li>;
 }

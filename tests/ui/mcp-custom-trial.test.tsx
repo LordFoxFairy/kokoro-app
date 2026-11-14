@@ -90,7 +90,7 @@ it("a refused trial from configuration keeps the editor with visible feedback", 
 
 it.each([
   ["服务器名称", "Unsaved MCP", "QA MCP"],
-  ["备注 （可选）", "Unsaved note", ""],
+  ["备注 （选填）", "Unsaved note", ""],
   ["服务器 URL", "https://other.example.test/mcp", server.server_url],
 ])("configuration Try protects unsaved %s and re-enables after undo", async (label, edited, original) => {
   const { trial } = show()
@@ -150,8 +150,8 @@ it("a revoked header name can be explicitly configured again without a repeated 
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
   expect(screen.queryByText("已配置")).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "添加自定义 header" }))
-  fireEvent.change(screen.getByLabelText("Header name"), { target: { value: "x-revoked" } })
-  fireEvent.change(screen.getByLabelText("Header value"), { target: { value: "new-fixture-value" } })
+  fireEvent.change(screen.getByLabelText("Header 名称"), { target: { value: "x-revoked" } })
+  fireEvent.change(screen.getByLabelText("Header 值"), { target: { value: "new-fixture-value" } })
   expect(save).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   expect(save).toHaveBeenCalledExactlyOnceWith({ display_name: "QA MCP", notes: "", server_url: server.server_url,
@@ -173,7 +173,7 @@ async function submitConfiguration(transport: McpPrivateServer["transport"] = "s
     server: { ...server, transport, prepare_status: "pending_prepare", connection_id: undefined } })
   fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
-  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Submitted note" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （选填）" }), { target: { value: "Submitted note" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   expect(save).toHaveBeenCalledOnce()
   return { ...shown, save }
@@ -187,8 +187,8 @@ it.each([
   shown.update({ server: null, connector: null, configurationSaved: confirmation })
   expect(screen.getByLabelText(`传输类型 ${label}`)).toHaveTextContent(label)
   expect(screen.queryByText("正在加载…")).not.toBeInTheDocument()
-  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Submitted note")
-  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveAttribute("readonly")
+  expect(screen.getByRole("textbox", { name: "备注 （选填）" })).toHaveValue("Submitted note")
+  expect(screen.getByRole("textbox", { name: "备注 （选填）" })).toHaveAttribute("readonly")
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   expect(screen.getByRole("button", { name: "连接" })).toBeDisabled()
   expect(screen.getByRole("button", { name: "复制 UUID" })).toBeDisabled()
@@ -239,7 +239,7 @@ it("an unknown Prepare retains only its own confirmed SSE label, never prior tri
   const image = screen.getByRole("img", { name: "连接器图标" }) as HTMLImageElement
   Object.defineProperties(image, { currentSrc: { configurable: true, value: image.src }, naturalWidth: { configurable: true, value: 24 } })
   fireEvent.load(image)
-  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Submitted note" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （选填）" }), { target: { value: "Submitted note" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   expect(save).toHaveBeenCalledOnce()
   const confirmation = {}
@@ -284,7 +284,7 @@ it("HTTP unknown Prepare permits configuration Save but not either publication e
   fireEvent.click(publication)
   expect(publish).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole("menuitem", { name: "编辑配置" }))
-  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Independent note" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （选填）" }), { target: { value: "Independent note" } })
   expect(screen.getByRole("button", { name: "保存" })).toBeEnabled()
   expect(screen.getByRole("button", { name: "保存选项" })).toBeDisabled()
   // A menu already opened while eligible also loses publication permission.
@@ -304,7 +304,7 @@ it("a previously selected Save-and-publish cannot publish when Prepare becomes u
   const shown = show({ iconBoundary: savedBoundary, publicationAvailable: true, onPublish: publish, onSaveConfiguration: save })
   fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
-  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Saved before unknown" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （选填）" }), { target: { value: "Saved before unknown" } })
   fireEvent.keyDown(screen.getByRole("button", { name: "保存选项" }), { key: "Enter" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "发布到项目" }))
   expect(save).toHaveBeenCalledOnce()

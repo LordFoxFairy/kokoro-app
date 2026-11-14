@@ -10,7 +10,7 @@ import styles from "./project-mcp-recommendations-picker.module.css"
 
 export type ProjectMcpRecommendationsPickerProps = {
   open: boolean
-  items: readonly { id: string; label: string; icon?: ReactNode }[]
+  items: readonly { id: string; label: string; selectable?: boolean; icon?: ReactNode }[]
   query: string
   selectedIds: readonly string[]
   readReady: boolean
@@ -81,8 +81,8 @@ export function ProjectMcpRecommendationsPicker({
               <span className={styles.icon} aria-hidden="true">{item.icon}</span>
               <span className={styles.name} title={item.label}>{item.label}</span>
               <Checkbox id={`${prefix}-${index}`} aria-label={item.label} checked={selected.has(item.id)}
-                disabled={locked} className={styles.checkbox}
-                onCheckedChange={() => { if (!locked) onToggle(item.id) }} />
+                disabled={locked || (!selected.has(item.id) && item.selectable === false)} className={styles.checkbox}
+                onCheckedChange={() => { if (!locked && (selected.has(item.id) || item.selectable !== false)) onToggle(item.id) }} />
             </label>
           ))}
           {readReady && !pending && items.length === 0 && !hasMore

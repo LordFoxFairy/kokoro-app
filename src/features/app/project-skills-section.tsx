@@ -17,13 +17,14 @@ import { ProjectSkillSourcePicker } from "./project-skill-source-picker"
 import { useProjectSkills, type ProjectSkillCommand } from "./use-project-skills"
 import styles from "./project-skills.module.css"
 
-type Props = Pick<EmptyStateProps, "projectDetail" | "projectReadBoundary" | "onOpenSettings" | "preview"> & { active?: boolean }
+type Props = Pick<EmptyStateProps, "projectDetail" | "projectReadBoundary" | "onOpenSettings" | "preview"> & { active?: boolean; readOnly?: boolean }
 export function ProjectSkillsSection({
   projectDetail,
   projectReadBoundary,
   onOpenSettings,
   preview = false,
   active = true,
+  readOnly = false,
 }: Props) {
   const t = useT()
   const [open, setOpen] = useState(false)
@@ -67,9 +68,11 @@ export function ProjectSkillsSection({
   }
   if (confirmation && confirmation.facts !== model.facts) setConfirmation(null)
   const confirm = confirmation?.facts === model.facts ? confirmation : null
-  const locked =
+  const locked = readOnly ||
     !model.allowed || model.status !== "ready" || model.listStatus !== "ready" || model.pending !== null
   const readBusy = !preview && (model.status === "blocked" || model.status === "loading" || model.listStatus === "loading")
+  const readFailed = !preview && model.pending === null &&
+    (model.status === "error" || (model.status === "ready" && model.listStatus === "error"))
   const changed = selection !== null && JSON.stringify(ids) !== JSON.stringify(selection.installation_ids)
   const settings = () => {
     setOpen(false)
@@ -178,6 +181,14 @@ export function ProjectSkillsSection({
                 ) : null}
               </div>
             ) : null}
+            {readFailed ? (
+              <div className={styles.feedback} role="alert">
+                <p>{t("projectSkills.readFailed")}</p>
+                <Button variant="outline" disabled={!model.allowed || readBusy} onClick={model.reload}>
+                  {t("projectSkills.reload")}
+                </Button>
+              </div>
+            ) : null}
             {source !== null && projectReadBoundary !== undefined ? (
               <ProjectSkillSourcePicker
                 mode={source}
@@ -198,12 +209,9 @@ export function ProjectSkillsSection({
                   <p className="sr-only" role="status">
                     {model.status === "blocked" ? t("projectSkills.checking") : t("projectSkills.loading")}
                   </p>
-                ) : model.status === "error" ? (
-                  <p className="sr-only" role="status">{t("projectSkills.readFailed")}</p>
-                ) : (
+                ) : model.status === "error" ? null : (
                   <>
-                    {model.listStatus === "loading" ? <p className="sr-only" role="status">{t("projectSkills.loading")}</p>
-                      : model.listStatus === "error" ? <p className="sr-only" role="status">{t("projectSkills.readFailed")}</p> : null}
+                    {model.listStatus === "loading" ? <p className="sr-only" role="status">{t("projectSkills.loading")}</p> : null}
                     {model.listStatus === "ready" && model.facts?.items.length === 0 ? (
                       emptyContent
                     ) : (

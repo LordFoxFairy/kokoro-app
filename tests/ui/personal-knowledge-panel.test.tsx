@@ -105,15 +105,22 @@ const fill = () => {
   });
 };
 describe("knowledge settings journey", () => {
-  it("keeps toolbar stable, reads real empty facts and does not imply Agent application", async () => {
+  it("reads real empty facts and explains the next-message knowledge preference without writing", async () => {
     render(view());
     await screen.findByText("尚无知识");
     expect(screen.getByRole("switch", { name: "使用知识" })).not.toBeChecked();
     expect(screen.getByRole("button", { name: "新增" })).toBeEnabled();
-    expect(screen.getByText(/任务中的知识应用仍待接通/)).toBeInTheDocument();
+    expect(screen.getByText("开启后供之后的新消息参考；关闭后仍保留已保存的知识。")).toBeInTheDocument();
     expect(
       fetcher.mock.calls.filter((c) => c[1]?.method === "PUT"),
     ).toHaveLength(0);
+  });
+  it("shows the current knowledge preference hint in English without saving it", async () => {
+    window.localStorage.setItem("kokoro.locale", "en");
+    render(view());
+    expect(await screen.findByText("When enabled, saved knowledge can inform new messages. Turning it off keeps your saved knowledge.")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Use knowledge" })).not.toBeChecked();
+    expect(fetcher.mock.calls.filter((c) => c[1]?.method === "PUT")).toHaveLength(0);
   });
   it("requires all fields, saves exact text, then reads back before closing", async () => {
     render(view());

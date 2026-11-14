@@ -8,6 +8,7 @@ export type ProjectMcpRecommendationOption = {
   id: string
   ref: ProjectMcpRecommendationRef
   label: string
+  selectable?: boolean
   search: string
   source: { kind: "provider"; value: McpConnectorProvider } | { kind: "mcp_connector"; value: McpConnector } | { kind: "custom_api"; value: CustomApiProfile }
 }
@@ -52,15 +53,15 @@ export async function readProjectMcpRecommendationOptions(hub: HubClient, caller
       ])
       signal.throwIfAborted()
       const options: ProjectMcpRecommendationOption[] = []
-      const add = (ref: ProjectMcpRecommendationRef, label: string, description: string | undefined, source: ProjectMcpRecommendationOption["source"]) => {
+      const add = (ref: ProjectMcpRecommendationRef, label: string, description: string | undefined, source: ProjectMcpRecommendationOption["source"], selectable = true) => {
         // A catalog entry outside the formal recommendation locator grammar is not selectable.
         if (!projectMcpRecommendationRefSchema.safeParse(ref).success) return
-        options.push({ id: projectMcpRecommendationKey(ref), ref, label, search: `${label}\n${description ?? ""}`.toLocaleLowerCase(), source })
+        options.push({ selectable, id: projectMcpRecommendationKey(ref), ref, label, search: `${label}\n${description ?? ""}`.toLocaleLowerCase(), source })
       }
       for (const value of providers) add({ kind: "provider", provider_key: value.provider_key }, value.display_name, value.description, { kind: "provider", value })
       for (const value of connectors) if (value.connector_type === "mcp" && value.status !== "revoked")
         add({ kind: "mcp_connector", connector_id: value.connector_id }, value.display_name ?? value.provider_key, value.description, { kind: "mcp_connector", value })
-      for (const value of profiles) add({ kind: "custom_api", profile_id: value.profile_id }, value.name, value.instructions, { kind: "custom_api", value })
+      for (const value of profiles) add({ kind: "custom_api", profile_id: value.profile_id }, value.name, value.instructions, { kind: "custom_api", value }, value.governance_status === "active")
       return options
     }
     return await Promise.race([work(), cancelled])

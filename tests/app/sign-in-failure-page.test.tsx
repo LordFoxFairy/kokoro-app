@@ -28,12 +28,13 @@ import SignInFailurePage from "@/app/auth/sign-in/failed/page"
 beforeEach(() => { Object.assign(proof, { config: true, host: "web.example.test", native: false, nativeAdmitted: false, unavailable: false }); vi.clearAllMocks() })
 afterEach(cleanup)
 
-it("redirects a native IAM-admitted session from the failure URL to fixed /app", async () => {
+it("keeps this tab's original navigation intent even with an active native Session", async () => {
   proof.native = true
   proof.nativeAdmitted = true
-  await expect(Promise.resolve().then(() => SignInFailurePage())).rejects.toThrow("redirect:/app")
-  expect(proof.redirect).toHaveBeenCalledExactlyOnceWith("/app")
-  expect(proof.inspect).toHaveBeenCalledOnce()
+  render(await SignInFailurePage())
+  expect(screen.getByRole("heading", { level: 1, name: "恢复工作区" })).toBeInTheDocument()
+  expect(proof.inspect).not.toHaveBeenCalled()
+  expect(proof.redirect).not.toHaveBeenCalled()
 })
 
 it.each(["missing-cookie", "invalid-or-unadmitted", "exception", "host", "configuration"])("keeps explicit GET-only recovery for %s", async kind => {
@@ -49,5 +50,5 @@ it.each(["missing-cookie", "invalid-or-unadmitted", "exception", "host", "config
   expect(container.querySelector("script")).toBeNull()
   expect(container.querySelector("input")).toBeNull()
   expect(proof.redirect).not.toHaveBeenCalled()
-  expect(proof.inspect).toHaveBeenCalledTimes(kind === "host" || kind === "configuration" || kind === "missing-cookie" ? 0 : 1)
+  expect(proof.inspect).not.toHaveBeenCalled()
 })

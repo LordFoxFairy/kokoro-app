@@ -157,3 +157,16 @@ it("loads further candidates only on explicit action and preserves controlled fe
   expect(screen.getByRole("button", { name: "更多" })).toBeDisabled()
   expect(screen.getByRole("checkbox", { name: "已读取连接器" })).toBeVisible()
 })
+
+it("blocks newly selecting an unavailable API but keeps an already selected reference removable", () => {
+  const input = { ...props(), items: [{ id: "api", label: "Isolated API", selectable: false }] };
+  const view = render(<ProjectMcpRecommendationsPicker {...input} />);
+  expect(screen.getByRole("checkbox", { name: "Isolated API" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Isolated API" }));
+  expect(input.onToggle).not.toHaveBeenCalled();
+  view.rerender(<ProjectMcpRecommendationsPicker {...input} selectedIds={["api"]} />);
+  expect(screen.getByRole("checkbox", { name: "Isolated API" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Isolated API" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Isolated API" }));
+  expect(input.onToggle).toHaveBeenCalledExactlyOnceWith("api");
+});

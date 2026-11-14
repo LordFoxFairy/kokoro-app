@@ -46,6 +46,7 @@ export function useAnswerActionScope(input: {
 export function canRegenerateAnswer(boundary: AnswerActionBoundary, target: AnswerActionTarget, checkOtherIntents = true): boolean {
   if (!boundary.isCurrent() || !boundary.engine.regenerateAnswer) return false
   const snapshot = boundary.engine.getSnapshot(), thread = snapshot.thread
+  if (thread.projectAccess && !thread.messages.some(message => message.runId === target.runId && message.canRegenerate === true)) return false
   const tail = thread.messages.at(-1)
   return snapshot.ownerConfirmedSessionId === target.sessionId && !snapshot.hydrating && snapshot.connection.status === "connected" &&
     snapshot.machine.phase === "idle" && thread.executionHead === null && thread.activeRunId === null &&

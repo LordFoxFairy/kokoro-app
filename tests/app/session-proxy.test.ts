@@ -287,3 +287,34 @@ describe("exact private message parts GET adapter", () => {
     expect((await GET(new Request("http://localhost/api/session/sessions/s/messages/m/parts", {headers: {cookie: "kokoro-issuer.session_token=fixture"}}), params(path))).status).toBe(502)
   })
 })
+
+it.each([null, { share_id: "published-id", created_at: "2026-11-12T00:00:00Z", expires_at: null }])("Share metadata GET returns the exact %j projection through native admission with no receipt/key/write", async share => {
+  requestWithDomain.mockImplementation(async (_url, _domain, init) => {
+    const id = new Headers(init.headers).get("x-kokoro-request-id")!
+    return new Response(JSON.stringify({ data: { share }, meta: { request_id: id } }), { headers: { "content-type": "application/json", "cache-control": "private, no-store", "x-request-id": id } })
+  })
+  const { GET } = await import("@/app/api/session/[...path]/route")
+  const response = await GET(new Request("http://localhost/api/session/sessions/session/share?scope=direct", {
+    headers: { host: "localhost", cookie: sessionCookie(), authorization: "Bearer browser", "x-kokoro-principal-id": "forged" },
+  }), params(["sessions", "session", "share"]))
+  expect(response.status).toBe(200); expect(await response.json()).toEqual({ share }); expect(requestWithDomain).toHaveBeenCalledOnce()
+  const [url, , init] = requestWithDomain.mock.calls[0]!
+  expect(url).toBe("http://bff.test/v1/sessions/session/share?scope=direct"); expect(init.method).toBe("GET"); expect(init.body).toBeUndefined()
+  const outgoing = new Headers(init.headers); expect(outgoing.has("idempotency-key")).toBe(false); expect(outgoing.has("authorization")).toBe(false); expect(outgoing.has("x-kokoro-principal-id")).toBe(false)
+  expect(outgoing.get("cookie")).toBe(sessionCookie()); expect(outgoing.get("origin")).toBe("http://localhost")
+})
+it("Share metadata rejects cross-site or command-shaped GETs locally, and invalid owner reads are errors rather than unpublished", async () => {
+  const { GET } = await import("@/app/api/session/[...path]/route")
+  const target = "http://localhost/api/session/sessions/session/share"
+  for (const extra of [{ origin: "https://other.test" }, { "sec-fetch-site": "cross-site" }, { "idempotency-key": "write-key" }, { "content-type": "application/json" }]) {
+    const response = await GET(new Request(target, { headers: { host: "localhost", cookie: sessionCookie(), ...extra } }), params(["sessions", "session", "share"]))
+    expect([400, 403]).toContain(response.status)
+  }
+  expect(requestWithDomain).not.toHaveBeenCalled()
+  requestWithDomain.mockImplementation(async (_url, _domain, init) => {
+    const id = new Headers(init.headers).get("x-kokoro-request-id")!
+    return new Response(JSON.stringify({ data: { share: null, secret: "unexpected" }, meta: { request_id: id } }), { headers: { "content-type": "application/json", "cache-control": "private, no-store", "x-request-id": id } })
+  })
+  const response = await GET(new Request(target, { headers: { host: "localhost", cookie: sessionCookie() } }), params(["sessions", "session", "share"]))
+  expect(response.status).toBe(502); expect(await response.json()).toHaveProperty("error.code", "session_share_response_invalid"); expect(requestWithDomain).toHaveBeenCalledOnce()
+})

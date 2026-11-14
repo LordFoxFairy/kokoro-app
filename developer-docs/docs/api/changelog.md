@@ -1,5 +1,29 @@
 # 变更记录
 
+## 2026-11-13 · Public29.1
+
+- 固定 BFF `bec8584f0b185a3ce0a32366199142b945d8812b` 的 Public29.1 正式契约。完整 owner artifact 的228项操作中，222项 public 进入门户，原6项 browser-private 继续排除；版本与原始契约摘要由既有 catalog 绑定。
+- 新增 `GET /v1/admin/identity/audit-events`，仅读取当前 Product tenant 的 IAM 安全审计元数据。每页沿当前原生 Session 与平台管理员准入，IAM 再于事件页同一有界快照核当前用户、active tenant、成员及管理员事实；tenant-bound cursor 不是权限凭据，不开放浏览器 tenant/site 选择。
+- 不公开审计 details、正文或秘密，不扩展全平台／跨 owner 日志，也不混入 Provider 命令审计。此次固定来源及静态文档更新，不代替正常管理后台旅程的真实环境验收。
+
+## 2026-11-13 · Public29
+
+- 固定 BFF `509597f935519cd1d4ac81e6db397794bc43d25d` 的 Public29 原始契约，沿现生成链发布 API v1 参考；完整 owner artifact 的 227 项操作中，221 项 public 进入门户，6 项 browser-private 保持排除。
+- 新增 Project 当前访问、授权列表、设置与撤销授权，以及六项 Custom API 管理操作。项目 owner、Conversation creator、Run actor 与当前读取者分别判定，项目角色不替代执行资格或管理员资格。
+- Scheduled task 更新与 retry 现在要求当前 revision 对应的 `If-Match`；当前详情与不可变命令回执分别读取。跨成员修改执行配置后的暂停与明确启用规则见[定时任务](concepts/scheduled-tasks.md)。这是消费者需要承接的条件写入变化，不是自动重试或旧写入的宽容分支。
+- 普通原生 Session、独立 `skill.list` Key/OpenApp 与 Share／提供方回调等例外不变。门户固定来源不改 App 业务 client，也不代表所有共享执行、结果或后台管理旅程已完成真实环境验收。
+
+## 2026-11-13 · Public28.38
+
+- 固定 BFF `396897b8e5a97cbb546fe265f93bc2b1b80ad7d2` 已发布的 Public28.38，正规生成同一 API v1 参考。新增模型草稿修订的条件 PATCH；只修改未发布修订，不自动发布或重选版本。
+- 纠正参考首页遗留的“普通产品接口仍声明 Bearer”提示；普通工作台原生 Session 与独立 `skill.list` 外部身份继续分开。未新增认证实现或更改 App 业务 client pin。
+
+## 2026-11-12 · Public28.37
+
+- 固定 BFF `0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97` 的完整 Public28.37（216 operations），包含只读会话分享 metadata GET 与 Team Skill delete_series 权限枚举。
+- 普通产品 operation 的认证 metadata 与现原生 Session／受信 adapter envelope 对齐；外部 skill.list、公共分享、webhook 和 service-only 例外保持各自边界。机器声明不是正常部署或全部产品旅程的验收证明。
+- browser-private 新授权不进入公开 API 目录。
+
 ## 2026-11-11 · 产品指南与 Public 28.35.0
 
 - 复用现有门户新增工作台产品指南：聊天／附件／结果、项目／定时与支持范围。产品阅读入口和开发者 API 入口分开，搜索继续复用。

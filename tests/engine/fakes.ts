@@ -106,6 +106,7 @@ export function createFakeClient(): FakeClient {
     },
     listSessions: () => Promise.resolve({ sessions: [], next_cursor: null }),
     listModels: () => Promise.resolve({ models: [], next_cursor: null }),
+    readShare: () => Promise.resolve({ share: null }),
     createShare: () => Promise.resolve({ share_id: "shr_fake000000000000000000000000000" }),
     revokeShare: () => Promise.resolve({ share_id: "shr_fake000000000000000000000000000" }),
     createMessage: (sessionId, body) => {

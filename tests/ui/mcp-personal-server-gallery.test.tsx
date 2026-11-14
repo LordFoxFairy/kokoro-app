@@ -59,7 +59,7 @@ it("keeps an unread or cyclic personal scan unknown rather than claiming the who
   await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
   expect(screen.queryByText("No connector providers are available to add right now.")).not.toBeInTheDocument()
   await act(async () => { resolve({ items: [personal], next_cursor: "cycle" }) })
-  await screen.findByText("Failed to load connections")
+  await screen.findByText("Added connections could not load")
   expect(screen.queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
   expect(screen.queryByText("No connector providers are available to add right now.")).not.toBeInTheDocument()
   expect(screen.queryByText("No matching connections")).not.toBeInTheDocument()
@@ -76,6 +76,39 @@ it("uses only a positive typed server locator and searches owner name/descriptio
   expect(visiblePersonalMcpServers({ ...props, query: " MY SAVED " })).toEqual([personal])
   for (const gate of [{ admitted: false }, { confirmed: false }, { category: "efficiency" }, { query: personal.connector_id }])
     expect(visiblePersonalMcpServers({ ...props, ...gate })).toEqual([])
+})
+it("keeps a disabled revoked MCP configuration visible without treating Provider or enabled revoked rows as saved servers", () => {
+  const saved = { ...personal, status: "revoked" as const, enabled: false }
+  const provider = { ...saved, connector_id: "provider-only", server_id: undefined }
+  const builtin = { ...saved, connector_id: "builtin", connector_type: "builtin" as const }
+  expect(visiblePersonalMcpServers({ connectors: [saved, provider, builtin, { ...saved, enabled: true }],
+    admitted: true, confirmed: true, category: "all", query: "documentation" })).toEqual([saved])
+})
+
+it.each(["catalog", "connections"] as const)("opens a saved disconnected configuration through exact private reads only (%s)", async view => {
+  const saved = { ...personal, status: "revoked" as const, enabled: false, state_version: "4" }
+  const client = clientFor(vi.fn().mockResolvedValue({ items: [saved], next_cursor: null }))
+  client.getMcpConnector.mockResolvedValue(saved)
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={{ subject: `saved-${view}`, admitted: true, generation: 0 }}>
+    <McpProjectionRead client={client} identity={`saved-${view}`} embedded initialView={view} />
+  </ConnectorCommandProvider></LocaleProvider>)
+  const card = await screen.findByRole("button", { name: saved.display_name })
+  expect(card).toHaveTextContent("Disconnected")
+  expect(within(card).queryByText("Currently unavailable")).toBeNull()
+  expect(client.getPrivateMcpServer).not.toHaveBeenCalled()
+  fireEvent.click(card)
+  const detail = await screen.findByRole("dialog", { name: saved.display_name })
+  expect(client.getMcpConnector).toHaveBeenCalledExactlyOnceWith(saved.connector_id, expect.any(AbortSignal))
+  expect(client.getPrivateMcpServer).toHaveBeenCalledExactlyOnceWith(saved.server_id, expect.any(AbortSignal))
+  expect(within(detail).getByText("https://mcp.example.test/mcp")).toBeVisible()
+  expect(within(detail).getByText("Disconnected")).toBeVisible()
+  expect(within(detail).getByText("This connection has been disconnected. Saved configuration is read-only. Create a new authorization, then connect again.")).toBeVisible()
+  expect(within(detail).queryByText("Currently unavailable")).toBeNull()
+  expect(within(detail).queryByRole("button", { name: "Manage" })).toBeNull()
+  expect(within(detail).queryByRole("button", { name: /Connect|连接|试用/ })).toBeNull()
+  expect(client.createMcpConnector).not.toHaveBeenCalled()
+  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
+  expect(client.updatePrivateMcpServer).not.toHaveBeenCalled()
 })
 it("uses exact connector identities for duplicate personal names without turning an empty gallery into an empty-directory assertion", () => {
   const other = { ...personal, connector_id: "other-exact", server_id: "other-server", description: "Other description" }
@@ -99,7 +132,7 @@ it.each(["actor", "generation", "admission"] as const)("retires the prior confir
     expect(screen.queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
   }
   view.rerender(plaza(client, change === "actor" ? "next-personal-actor" : "personal-retire", true, change === "generation" ? 1 : 0))
-  await screen.findByText("Failed to load connections")
+  await screen.findByText("Added connections could not load")
   expect(screen.queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
   expect(screen.queryByText("No connector providers are available to add right now.")).not.toBeInTheDocument()
 })
@@ -107,7 +140,7 @@ it("keeps exhausted relation pagination unknown without publishing a partial per
   let page = 0
   const list = vi.fn<HubClient["listMcpConnectors"]>().mockImplementation(async () => ({ items: [personal], next_cursor: `page-${++page}` }))
   render(plaza(clientFor(list), "personal-page-budget"))
-  await screen.findByText("Failed to load connections")
+  await screen.findByText("Added connections could not load")
   expect(list).toHaveBeenCalledTimes(50)
   expect(screen.queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
   expect(screen.queryByText("No connector providers are available to add right now.")).not.toBeInTheDocument()
@@ -117,7 +150,7 @@ it("keeps the shared ten-second scan deadline unknown even if its current list p
   const list = vi.fn<HubClient["listMcpConnectors"]>().mockImplementation(() => new Promise(() => {}))
   render(plaza(clientFor(list), "personal-deadline"))
   await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
-  expect(screen.getByText("Failed to load connections")).toBeInTheDocument()
+  expect(screen.getByText("Added connections could not load")).toBeInTheDocument()
   expect(list).toHaveBeenCalledTimes(1)
   expect(list.mock.calls[0]?.[1]?.aborted).toBe(true)
   expect(screen.queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
@@ -151,13 +184,13 @@ it.each(["delete_server", "disconnect", "late_delete_ack"] as const)("a Settings
   const settings = screen.getByTestId("independent-settings")
   fireEvent.click(await within(settings).findByRole("button", { name: personal.display_name }))
   const dialog = await screen.findByRole("dialog")
-  await waitFor(() => expect(within(dialog).getByRole("button", { name: "管理" })).toBeEnabled())
-  fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "Enter" })
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "Manage" })).toBeEnabled())
+  fireEvent.keyDown(within(dialog).getByRole("button", { name: "Manage" }), { key: "Enter" })
   if (scenario === "disconnect") {
-    fireEvent.click(await screen.findByRole("menuitem", { name: "断开连接" }))
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Disconnect" }))
     await waitFor(() => expect(client.removeMcpConnector).toHaveBeenCalledOnce())
   } else {
-    fireEvent.click(await screen.findByRole("menuitem", { name: "删除" }))
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }))
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirm removal" }))
     await waitFor(() => expect(client.deletePrivateMcpServer).toHaveBeenCalledOnce())
   }
@@ -168,17 +201,45 @@ it.each(["delete_server", "disconnect", "late_delete_ack"] as const)("a Settings
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
     view.rerender(both(false))
   }
-  await within(screen.getByTestId("retained-plaza")).findByText("Failed to load connections")
+  await within(screen.getByTestId("retained-plaza")).findByText("Added connections could not load")
   expect(originalPlaza).not.toBeInTheDocument()
   expect(within(screen.getByTestId("retained-plaza")).queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
   if (scenario === "disconnect") {
     // A stale pre-revocation active row is not restoration; a later connector CAS is.
     removed = false
     view.rerender(both(false, 1))
-    await waitFor(() => expect(within(screen.getByTestId("retained-plaza")).queryByText("Failed to load connections")).not.toBeInTheDocument())
+    await waitFor(() => expect(within(screen.getByTestId("retained-plaza")).queryByText("Added connections could not load")).not.toBeInTheDocument())
     expect(within(screen.getByTestId("retained-plaza")).queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
+    current = { ...personal, status: "revoked", enabled: false, state_version: "2" }
+    const callsBeforeStaleRevoked = list.mock.calls.length
+    await act(async () => { view.rerender(both(false, 2)) })
+    expect(list.mock.calls.length).toBeGreaterThan(callsBeforeStaleRevoked)
+    expect(within(screen.getByTestId("retained-plaza")).queryByRole("button", { name: personal.display_name })).not.toBeInTheDocument()
+    current = { ...personal, status: "revoked", enabled: false, state_version: "3" }
+    view.rerender(both(false, 3))
+    expect(await within(screen.getByTestId("retained-plaza")).findByRole("button", { name: personal.display_name })).toBeInTheDocument()
     current = { ...personal, state_version: "4" }
-    view.rerender(both(false, 2))
+    view.rerender(both(false, 4))
     expect(await within(screen.getByTestId("retained-plaza")).findByRole("button", { name: personal.display_name })).toBeInTheDocument()
   }
+})
+
+// Native IndexedDB is verified separately; these UI journeys use the existing explicit journal port.
+vi.mock("@/ui/mcp/mcp-preparation-recovery", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/ui/mcp/mcp-preparation-recovery")>();
+  const { createTestPreparationJournal } = await import("./fixtures/mcp-preparation-journal");
+  return { ...actual, createBrowserMcpPreparationRecovery: () => createTestPreparationJournal(actual) };
+});
+
+it("keeps an old read-only window locked when its exact owner read is active", async () => {
+  const saved = { ...personal, status: "revoked" as const, enabled: false, state_version: "4" }
+  const client = clientFor(vi.fn().mockResolvedValue({ items: [saved], next_cursor: null }))
+  client.getMcpConnector.mockResolvedValue({ ...personal, state_version: "4" })
+  render(plaza(client, "old-readonly-active"))
+  fireEvent.click(await screen.findByRole("button", { name: saved.display_name }))
+  const dialog = await screen.findByRole("dialog")
+  await within(dialog).findByText("Added connectors could not load")
+  expect(within(dialog).queryByRole("button", { name: "Create new authorization" })).toBeNull()
+  expect(within(dialog).queryByRole("button", { name: /Connect|管理/ })).toBeNull()
+  expect(client.preparePrivateMcpServer).not.toHaveBeenCalled()
 })

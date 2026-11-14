@@ -178,6 +178,38 @@ describe("fixed-tenant Team Product UI", () => {
     ).toBeGreaterThan(1);
   });
 
+  it.each(["create", "cancel"] as const)("exposes only the invitation command allowed by a custom %s permission", async (permission) => {
+    const custom: TeamRole = {
+      role_id: "role-invitation-limited",
+      name: "invitation_limited",
+      kind: "custom",
+      permissions: { member: ["read"], invitation: ["read", permission] },
+    };
+    const api = client({
+      listMembers: vi.fn().mockResolvedValue({
+        items: members.map((member) => member.user_id === "user-me" ? { ...member, roles: [custom.name] } : member),
+        nextCursor: null,
+        requestId: "req-limited-members",
+      }),
+      listRoles: vi.fn().mockResolvedValue({ items: [...roles, custom], nextCursor: null, requestId: "req-limited-roles" }),
+    });
+    show(api);
+    const invitation = await screen.findByTestId("invitation-row-inv-1");
+    const allowed = permission === "create" ? "resend" : "cancel";
+    const forbidden = permission === "create" ? "cancel" : "resend";
+    const button = within(invitation).getByTestId(`invitation-${allowed}-inv-1`);
+    expect(button).toBeEnabled();
+    expect(within(invitation).queryByTestId(`invitation-${forbidden}-inv-1`)).not.toBeInTheDocument();
+    fireEvent.click(button);
+    const action = permission === "create" ? api.resendInvitation : api.cancelInvitation;
+    const other = permission === "create" ? api.cancelInvitation : api.resendInvitation;
+    await waitFor(() => expect(action).toHaveBeenCalledWith("inv-1", expect.any(AbortSignal)));
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(other).not.toHaveBeenCalled();
+    expect(api.createInvitation).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.listRoles).toHaveBeenCalledTimes(2));
+  });
+
   it("replaces roles[] and removes by member_id, not IAM user_id", async () => {
     const api = client();
     show(api);
@@ -249,6 +281,30 @@ describe("fixed-tenant Team Product UI", () => {
     expect(api.listMembers).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 25, cursor: "opaque+2" }),
     );
+  });
+
+  it.each(["members", "invitations"] as const)("recovers %s from an invalid next-page cursor through an explicit first-page read only", async (part) => {
+    const list = vi.fn()
+      .mockResolvedValueOnce({ items: part === "members" ? members : invitations, nextCursor: "expired-cursor", requestId: "first" })
+      .mockRejectedValueOnce(new TeamClientError("Invalid cursor", "team_query_invalid", 400, "invalid-cursor"))
+      .mockResolvedValue({ items: part === "members" ? [members[0]] : [], nextCursor: null, requestId: "fresh" });
+    const api = client(part === "members" ? { listMembers: list } : { listInvitations: list });
+    show(api);
+    const more = await screen.findByTestId(`${part}-more`);
+    expect(screen.queryByTestId("team-notice")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("team-reconcile")).not.toBeInTheDocument();
+    fireEvent.click(more);
+    const recovery = await screen.findByTestId("team-reconcile");
+    expect(list.mock.calls[1]?.[0]).toEqual(expect.objectContaining({ cursor: "expired-cursor" }));
+    fireEvent.click(recovery);
+    await waitFor(() => expect(screen.queryByTestId("team-notice")).not.toBeInTheDocument());
+    expect(list).toHaveBeenCalledTimes(3);
+    expect(list.mock.calls[2]?.[0]).toEqual(expect.objectContaining({ limit: 25 }));
+    expect(list.mock.calls[2]?.[0]).not.toHaveProperty("cursor");
+    expect(screen.queryByTestId(`${part}-more`)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(part === "members" ? "member-row-member-bob" : "invitation-row-inv-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("team-continue")).not.toBeInTheDocument();
+    for (const mutation of [api.createInvitation, api.resendInvitation, api.cancelInvitation, api.replaceMemberRoles, api.removeMember, api.leave]) expect(mutation).not.toHaveBeenCalled();
   });
 
   it("finds the actor and all roles beyond the first pages before deriving controls", async () => {

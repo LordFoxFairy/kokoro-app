@@ -11,6 +11,7 @@ import styles from "./kokoro-project-workspace.module.css"
 import layoutStyles from "./project-workspace-layout.module.css"
 
 type ContextCardAction = {
+  disabled?: boolean | undefined
   id?: string
   label: string
   icon: LucideIcon
@@ -89,9 +90,10 @@ export function ProjectContextSection({
       {emptyVisual ? <div className={styles.emptyVisual} data-slot="project-context-artwork">{emptyVisual}</div> : null}
       {actions ? (
         <CardFooter className={styles.cardActions}>
-          {actions.map(({ id, label, icon: ActionIcon, trailingIcon: TrailingIcon }) => (
+          {actions.map(({ id, label, disabled, icon: ActionIcon, trailingIcon: TrailingIcon }) => (
             <Button
               key={id ?? label}
+              disabled={disabled}
               type="button"
               variant="outline"
               size="sm"

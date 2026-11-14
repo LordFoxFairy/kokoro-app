@@ -6,11 +6,11 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExterna
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import type { createConnectorCommand } from "./connector-command";
 
-type Lifecycle = Pick<ReturnType<typeof createConnectorCommand>, "subscribe" | "getSnapshot" | "matches" | "finish">;
+type Lifecycle<Completion> = Pick<ReturnType<typeof createConnectorCommand<unknown, Completion>>, "subscribe" | "getSnapshot" | "matches" | "finish" | "getCompletion">;
 
 /** The shared form lifetime owns close recovery, not network commands or drafts. */
-export function useConnectorCreationForm(flow: Lifecycle, boundary: ProjectReadBoundary,
-  onDone: () => Promise<void>, onAcknowledged: () => void) {
+export function useConnectorCreationForm<Completion>(flow: Lifecycle<Completion>, boundary: ProjectReadBoundary,
+  onDone: (result: Completion, current: () => boolean) => Promise<void>, onAcknowledged: () => void) {
   const subscribe = useCallback((listener: () => void) => flow.subscribe(() => {
     // Clear the actual draft at the ACK transition, including a late ACK after
     // recheck. Merely masking the DOM would reveal it again when finish resets.
@@ -24,6 +24,8 @@ export function useConnectorCreationForm(flow: Lifecycle, boundary: ProjectReadB
   const scope = useMemo(() => ({ flow, boundary: { admitted: boundaryAdmitted, subject, generation } }), [flow, boundaryAdmitted, subject, generation]);
   const committed = useRef<typeof scope | null>(null);
   const waiting = useRef<{ scope: typeof scope; controller: AbortController } | null>(null);
+  const completed = useRef<{ flow: typeof flow; value: Completion } | null>(null);
+  const closing = useRef(false);
   useLayoutEffect(() => {
     committed.current = scope;
     return () => {
@@ -52,17 +54,32 @@ export function useConnectorCreationForm(flow: Lifecycle, boundary: ProjectReadB
   const cancel = (onCancel: () => void) => {
     if (committed.current !== scope) return;
     if (waiting.current?.scope === scope) waiting.current.controller.abort();
+    committed.current = null;
     onCancel();
   };
   const done = async () => {
-    if (committed.current !== scope || !admitted || completion === "closing") return;
+    if (committed.current !== scope || !admitted || completion === "closing" || closing.current) return;
     if (completion === "idle" && flow.getSnapshot().kind !== "completed") return;
+    if (completion === "idle") {
+      const value = flow.getCompletion(boundary);
+      if (value === undefined) return;
+      completed.current = { flow, value };
+    }
+    const result = completed.current;
+    if (!result || result.flow !== flow) return;
+    const current = () => committed.current === scope && boundary.admitted && flow.matches(boundary);
+    closing.current = true;
     setCompletion("closing");
-    if (completion === "idle" && !flow.finish(boundary)) { setCompletion("idle"); return; }
-    try { await onDone(); }
+    if (completion === "idle" && !flow.finish(boundary)) { closing.current = false; setCompletion("idle"); return; }
+    try {
+      if (!current()) throw new Error("Connector completion retired");
+      await onDone(result.value, current);
+      if (!current()) throw new Error("Connector completion retired");
+    }
     // Closing state belongs to this mounted form/flow, not a read generation.
     // A recheck must not leave it stuck, while a new form has a different ref.
     catch { if (committed.current?.flow === flow) setCompletion("retry"); }
+    finally { closing.current = false; }
   };
 
   const maySubmit = () => connectorCommandMayResume(state.failure) && admitted && committed.current === scope && !submitting && completion === "idle";

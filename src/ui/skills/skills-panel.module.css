@@ -1359,7 +1359,7 @@
   padding: 0 1.5rem;
 }
 
-.catalogFeedback { flex: 0 0 auto; margin: 0.75rem 1.5rem 0; }
+.catalogFeedback { flex: 0 0 auto; width: auto; margin: 0.75rem 1.5rem 0; }
 
 .catalogScope { display: flex; gap: 0.25rem; }
 .catalogScope > button { height: 2rem; min-height: 2rem; padding: 0 0.625rem; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 400; }

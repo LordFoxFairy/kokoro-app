@@ -4,7 +4,7 @@ import type { McpIconClient } from "@/hub/mcp-icon-client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { useMcpIconDraft } from "./use-mcp-icon-draft";
 import { McpIconPicker } from "./mcp-icon-picker";
-import { type FormEvent, type RefObject, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, type RefObject, useMemo, useRef, useState } from "react";
 import { Copy, Plus, Trash2 } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -50,11 +50,13 @@ export function CustomApiDetailDialog({
   onSave,
   onDelete,
   pendingError = false,
+  readFeedback,
 }: {
   iconClient?: McpIconClient | undefined;
   iconBoundary?: ProjectReadBoundary | undefined;
   profile: CustomApiProfile | null;
   pendingError?: boolean;
+  readFeedback?: ReactNode | undefined;
   actionError: boolean;
   busy: boolean;
   admitted: boolean;
@@ -82,7 +84,10 @@ export function CustomApiDetailDialog({
   const ready = profile !== null && admitted;
   const unresolved = command?.kind === "running" || command?.kind === "unknown" || command?.kind === "completed";
   const locked = unresolved || busy || !ready;
-  const icon = useMcpIconDraft(iconClient, iconBoundary ?? { subject: null, admitted: false, generation: 0 }, locked, command?.kind === "completed", profile);
+  const governedReadOnly = profile !== null && profile.governance_status !== "active";
+  const editable = ready && canUpdate && !governedReadOnly;
+  const editLocked = locked || !editable;
+  const icon = useMcpIconDraft(iconClient, iconBoundary ?? { subject: null, admitted: false, generation: 0 }, editLocked, command?.kind === "completed", profile);
   const [observedKind, setObservedKind] = useState(command?.kind);
   if (observedKind !== command?.kind) {
     setObservedKind(command?.kind);
@@ -111,7 +116,7 @@ export function CustomApiDetailDialog({
   const changed = profile !== null && (name !== profile.name || instructions !== (profile.instructions ?? "") || secretWrites.length > 0 || removedNames.length > 0 || icon.state.dirty);
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (locked || !canUpdate || !valid || !changed || !icon.draft.canSave() || !profile) return;
+    if (locked || !editable || !valid || !changed || !icon.draft.canSave() || !profile) return;
     icon.draft.protectForSave();
     onSave({
       ...icon.draft.change(),
@@ -150,7 +155,7 @@ export function CustomApiDetailDialog({
         onCloseAutoFocus={closeFocus}
         onOpenAutoFocus={(event) => {
           const field = nameRef.current;
-          if (!field) return;
+          if (!field || field.disabled) return;
           event.preventDefault();
           field.focus({ preventScroll: true });
         }}
@@ -164,78 +169,81 @@ export function CustomApiDetailDialog({
             <header className={styles.apiConfigurationHeader}>
               <div>
                 <div className={styles.titleRow}>
-                  <DialogTitle>编辑自定义 API</DialogTitle>
+                  <DialogTitle>{t("connectorCatalog.customApiEditTitle")}</DialogTitle>
                   <Button type="button" variant="outline" size="sm" disabled={!ready}
                     onClick={() => { if (ready && profile) void navigator.clipboard?.writeText(profile.profile_id); }}>
-                    <Copy aria-hidden="true" />复制 UUID
+                    <Copy aria-hidden="true" />{t("connectorCatalog.copyUuid")}
                   </Button>
                 </div>
                 <DialogDescription>
-                  使用自定义 API 连接器集成任何支持密钥或令牌授权的外部服务。
+                  {t("connectorCatalog.customApiCreateDescription")}
                 </DialogDescription>
               </div>
             </header>
             <div className={styles.apiConfigurationBody}>
+              {profile ? <p role="status">{t(`customApi.governance.${profile.governance_status}`)}{profile.governance_status !== "active" ? ` · ${t("customApi.governance.readOnly")}` : ""}</p> : null}
               {commandStatus}
-              {!ready ? <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span> : null}
+              {readFeedback ?? (!ready ? <span className={pendingError ? undefined : "sr-only"} role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span> : null)}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>
                 </Alert>
               ) : null}
               <div className={styles.field}>
-                <Label htmlFor="custom-api-detail-name">名称</Label>
+                <Label htmlFor="custom-api-detail-name">{t("connectorCatalog.name")}</Label>
                 <Input
-                  readOnly={locked}
+                  readOnly={editLocked}
+                  disabled={governedReadOnly}
                   id="custom-api-detail-name"
                   ref={nameRef}
                   value={name}
                   maxLength={400}
-                  onChange={(event) => !locked && setName(event.target.value)}
+                  onChange={(event) => !editLocked && setName(event.target.value)}
                   required
                 />
               </div>
-              <McpIconPicker draft={icon.draft} state={icon.state} current={profile?.icon} disabled={locked} />
+              <McpIconPicker draft={icon.draft} state={icon.state} current={profile?.icon} disabled={editLocked} />
               <div className={styles.field}>
                 <Label htmlFor="custom-api-detail-instructions">
-                  备注（可选）
+                  {t("connectorCatalog.notesOptional")}
                 </Label>
                 <Textarea
-                  readOnly={locked}
+                  readOnly={editLocked}
+                  disabled={governedReadOnly}
                   id="custom-api-detail-instructions"
                   value={instructions}
                   maxLength={4000}
-                  onChange={(event) => !locked && setInstructions(event.target.value)}
+                  onChange={(event) => !editLocked && setInstructions(event.target.value)}
                 />
               </div>
-              <fieldset className={styles.headers}>
-                <legend>密钥（环境变量）</legend>
-                <p className={styles.secretHint}>已保存的密钥不会显示；留空保持原值，输入新值后保存以替换。</p>
+              <fieldset className={styles.headers} disabled={governedReadOnly}>
+                <legend>{t("connectorCatalog.secretsLegend")}</legend>
+                <p className={styles.secretHint}>{t("connectorCatalog.savedSecretsHint")}</p>
                 {(profile?.environment ?? []).map(({ name: environmentName, configured }) => {
                   const removed = removedNames.includes(environmentName);
                   return <div className={styles.secretCard} key={environmentName}>
                     <div className={styles.secretField}>
-                      <Label htmlFor={`api-existing-${environmentName}-name`}><span className="sr-only">{environmentName} </span>密钥名称</Label>
-                      <Input id={`api-existing-${environmentName}-name`} aria-label={`${environmentName} 密钥名称`} value={environmentName} readOnly />
+                      <Label htmlFor={`api-existing-${environmentName}-name`}><span className="sr-only">{environmentName} </span>{t("connectorCatalog.secretName")}</Label>
+                      <Input id={`api-existing-${environmentName}-name`} aria-label={t("connectorCatalog.namedSecretName", { name: environmentName })} value={environmentName} readOnly />
                     </div>
                     <div className={styles.secretField}>
-                      <Label htmlFor={`api-existing-${environmentName}-value`}>值</Label>
-                      <Textarea id={`api-existing-${environmentName}-value`} aria-label={`${environmentName} 密钥值`}
-                        value={replacementValues[environmentName] ?? ""} readOnly={locked || removed}
-                        placeholder={removed ? "保存后移除" : configured ? "已配置，留空保持不变" : "输入密钥值"}
+                      <Label htmlFor={`api-existing-${environmentName}-value`}>{t("connectorCatalog.secretValue")}</Label>
+                      <Textarea id={`api-existing-${environmentName}-value`} aria-label={t("connectorCatalog.namedSecretValue", { name: environmentName })}
+                        value={replacementValues[environmentName] ?? ""} readOnly={editLocked || removed}
+                        placeholder={t(removed ? "connectorCatalog.secretRemovedOnSave" : configured ? "connectorCatalog.secretConfiguredPlaceholder" : "connectorCatalog.secretEnterPlaceholder")}
                         maxLength={4096} autoComplete="off" spellCheck={false}
-                        onChange={(event) => { if (!locked && !removed) setReplacementValues(current => ({ ...current, [environmentName]: event.target.value })); }} />
+                        onChange={(event) => { if (!editLocked && !removed) setReplacementValues(current => ({ ...current, [environmentName]: event.target.value })); }} />
                     </div>
                     <div className={styles.secretActions}>
-                      {removed ? <span role="status">保存后移除</span> : null}
-                      <Button type="button" variant="ghost" size="sm" disabled={locked}
-                        aria-label={`${removed ? "撤销移除" : "移除密钥"} ${environmentName}`}
+                      {removed ? <span role="status">{t("connectorCatalog.secretRemovedOnSave")}</span> : null}
+                      <Button type="button" variant="ghost" size="sm" disabled={editLocked}
+                        aria-label={t(removed ? "connectorCatalog.namedUndoSecretRemoval" : "connectorCatalog.namedRemoveSecret", { name: environmentName })}
                         onClick={() => {
-                          if (locked) return;
+                          if (editLocked) return;
                           setReplacementValues(current => ({ ...current, [environmentName]: "" }));
                           setRemovedNames(current => removed ? current.filter(item => item !== environmentName) : [...current, environmentName]);
                         }}>
-                        {!removed ? <Trash2 aria-hidden="true" /> : null}{removed ? "撤销移除" : "移除"}
+                        {!removed ? <Trash2 aria-hidden="true" /> : null}{t(removed ? "connectorCatalog.undoSecretRemoval" : "connectorCatalog.remove")}
                       </Button>
                     </div>
                   </div>;
@@ -243,16 +251,17 @@ export function CustomApiDetailDialog({
                 {secrets.map((secret) => (
                   <div className={styles.secretCard} key={secret.id}>
                     <div className={styles.secretField}>
-                    <Label htmlFor={`api-secret-${secret.id}-name`}>密钥名称</Label>
+                    <Label htmlFor={`api-secret-${secret.id}-name`}>{t("connectorCatalog.secretName")}</Label>
                     <Input
-                      readOnly={locked}
+                      readOnly={editLocked}
+                      disabled={governedReadOnly}
                       id={`api-secret-${secret.id}-name`}
-                      aria-label="密钥名称"
+                      aria-label={t("connectorCatalog.secretName")}
                       value={secret.name}
                       maxLength={128}
                       autoComplete="off"
                       onChange={(event) =>
-                        !locked && setSecrets((items) =>
+                        !editLocked && setSecrets((items) =>
                           items.map((item) =>
                             item.id === secret.id
                               ? { ...item, name: event.target.value }
@@ -263,17 +272,18 @@ export function CustomApiDetailDialog({
                     />
                     </div>
                     <div className={styles.secretField}>
-                    <Label htmlFor={`api-secret-${secret.id}-value`}>值</Label>
+                    <Label htmlFor={`api-secret-${secret.id}-value`}>{t("connectorCatalog.secretValue")}</Label>
                     <Textarea
-                      readOnly={locked}
+                      readOnly={editLocked}
+                      disabled={governedReadOnly}
                       id={`api-secret-${secret.id}-value`}
-                      aria-label="密钥值"
+                      aria-label={t("connectorCatalog.secretValueLabel")}
                       value={secret.value}
                       maxLength={4096}
                       autoComplete="off"
                       spellCheck={false}
                       onChange={(event) =>
-                        !locked && setSecrets((items) =>
+                        !editLocked && setSecrets((items) =>
                           items.map((item) =>
                             item.id === secret.id
                               ? { ...item, value: event.target.value }
@@ -288,16 +298,16 @@ export function CustomApiDetailDialog({
                       type="button"
                       size="sm"
                       variant="ghost"
-                      disabled={locked}
-                      aria-label="移除新增密钥"
+                      disabled={editLocked}
+                      aria-label={t("connectorCatalog.removeNewSecret")}
                       onClick={() =>
-                        !locked && setSecrets((items) =>
+                        !editLocked && setSecrets((items) =>
                           items.filter((item) => item.id !== secret.id),
                         )
                       }
                     >
                       <Trash2 aria-hidden="true" />
-                      移除
+                      {t("connectorCatalog.remove")}
                     </Button>
                     </div>
                   </div>
@@ -305,22 +315,22 @@ export function CustomApiDetailDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={locked}
+                  disabled={editLocked}
                   onClick={() =>
-                    !locked && setSecrets((items) => [
+                    !editLocked && setSecrets((items) => [
                       ...items,
                       { id: crypto.randomUUID(), name: "", value: "" },
                     ])
                   }
                 >
                   <Plus aria-hidden="true" />
-                  添加密钥
+                  {t("connectorCatalog.addSecret")}
                 </Button>
               </fieldset>
             </div>
             <footer className={styles.apiConfigurationFooter}>
               {deleteArmed ? <div className={styles.deleteConfirm}>
-                <span>确认删除此自定义 API？</span>
+                <span>{t("connectorCatalog.customApiDeleteConfirm")}</span>
                 <Button type="button" variant="destructive" disabled={locked || !canRemove} onClick={onDelete}>{t("mcp.deleteConfirm")}</Button>
                 <Button type="button" variant="outline" disabled={locked || !canRemove} onClick={() => setDeleteArmed(false)}>{t("mcp.cancel")}</Button>
               </div> : <Button type="button" variant="outline" className={styles.apiRemove} disabled={locked || !canRemove} onClick={() => setDeleteArmed(true)}>
@@ -328,7 +338,7 @@ export function CustomApiDetailDialog({
               </Button>}
               <div className={styles.actions}>
                 <Button type="button" variant="outline" onClick={() => { icon.draft.cancel(); onClose(); }}>{t("mcp.cancel")}</Button>
-                <Button type="submit" disabled={locked || !canUpdate || !valid || !changed || !icon.draft.canSave()}>
+                <Button type="submit" disabled={locked || !editable || !valid || !changed || !icon.draft.canSave()}>
                   {busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.save")}
                 </Button>
               </div>

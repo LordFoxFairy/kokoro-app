@@ -1,3 +1,4 @@
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { currentRunProgressTodos } from "@/core/projections"
 import type { ComponentType, ReactNode } from "react"
 
@@ -34,6 +35,7 @@ export type AppFrameMainSurfaceProps = {
   projectContext?: ProjectContextControl
   projectInstruction?: ProjectInstructionControl
   projectDelete?: ProjectDeleteControl
+  projectAccess?: import("@/features/app/use-project-access").ProjectAccessModel
   projectRef: string | undefined
   resolvedRailCollapsed: boolean
   narrowWeb: boolean
@@ -47,11 +49,13 @@ export type AppFrameMainSurfaceProps = {
   conversationMissing?: boolean
   machineError: string | null
   connection: EngineSnapshot["connection"]
+  onReconnect: () => void
   projectCreation: { pending: boolean; error: boolean; retryable: boolean }
   onRetryProjectCreation: () => void
   retryConversationHydration: () => void
   onOpenSettings: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
-  shareClient: Pick<SessionClient, "createShare" | "revokeShare">
+  shareReadBoundary?: ProjectReadBoundary
+  shareClient: Pick<SessionClient, "readShare" | "createShare" | "revokeShare">
   thread: Thread
   conversationProps: ConversationThreadProps
   emptyState: ComponentType<EmptyStateProps>
@@ -118,11 +122,14 @@ export function AppFrameMainSurface({
   conversationMissing = false,
   machineError,
   connection,
+  onReconnect,
   projectCreation,
   onRetryProjectCreation,
   retryConversationHydration,
   onOpenSettings,
   shareClient,
+  shareReadBoundary,
+  projectAccess,
   thread,
   conversationProps,
   emptyState: EmptyState,
@@ -147,8 +154,10 @@ export function AppFrameMainSurface({
       {/* 会话头部（SHARE-1）：有活跃会话且已开聊时显分享入口——创建可撤销只读链接。 */}
       {mounted && !hideWorkspaceHeader ? (
         <WorkspaceHeader
+          {...(projectAccess ? { projectAccess } : {})}
           activeId={activeId}
           shareClient={shareClient}
+          {...(shareReadBoundary === undefined ? {} : { shareReadBoundary })}
           onOpenSettings={onOpenSettings}
           {...(brandName === undefined ? {} : { brandName })}
           emptyWorkspace={!showConversation}
@@ -181,7 +190,7 @@ export function AppFrameMainSurface({
         </div>
       ) : null}
       {mounted && !standaloneSurface && connection.status !== "connected" ? (
-        <AppFrameConnectionStatus connection={connection} />
+        <AppFrameConnectionStatus connection={connection} onReconnect={onReconnect} />
       ) : null}
       <div
         className={statusStyles.timelineStage}

@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { endProductSession, openProductSignIn } from "@/ui/auth/product-auth-client"
+import { endProductSession, openProductSignIn, readProductSignInReturnTarget } from "@/ui/auth/product-auth-client"
 
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   window.history.replaceState({}, "", "/")
+  window.sessionStorage.clear()
 })
 
 describe("native product auth browser client", () => {
@@ -78,3 +79,33 @@ describe("native sign-in return target", () => {
     expect(navigate).toHaveBeenCalledExactlyOnceWith("/login")
   })
 })
+
+describe("tab-local login recovery intent", () => {
+  it("retains only a validated navigation target across the failed login document", () => {
+    const target = "/app/library?tab=files&type=documents&view=list#/account/settings/account";
+    window.history.replaceState({}, "", target);
+    openProductSignIn(vi.fn());
+    window.history.replaceState({}, "", "/auth/sign-in/failed");
+    expect(readProductSignInReturnTarget()).toBe(target);
+  });
+
+  it.each(["expired", "unbounded", "external", "malformed"])("discards %s recovery intent", (kind) => {
+    window.history.replaceState({}, "", "/app#/account/settings/mcp");
+    openProductSignIn(vi.fn());
+    const key = window.sessionStorage.key(0)!;
+    const raw = JSON.parse(window.sessionStorage.getItem(key)!);
+    if (kind === "expired") raw.expiresAt = Date.now() - 1;
+    if (kind === "unbounded") raw.expiresAt = Date.now() + 86_400_000;
+    if (kind === "external") raw.target = "https://example.invalid/";
+    window.sessionStorage.setItem(key, kind === "malformed" ? "{" : JSON.stringify(raw));
+    expect(readProductSignInReturnTarget()).toBeNull();
+  });
+
+  it("still starts normal login when tab storage is unavailable", () => {
+    window.history.replaceState({}, "", "/app#/account/settings/team");
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+    const navigate = vi.fn();
+    openProductSignIn(navigate);
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(`/login?${new URLSearchParams({ return_to: "/app#/account/settings/team" })}`);
+  });
+});

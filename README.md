@@ -1,3 +1,9 @@
+## Task B 当前源码（2026-11-13）
+
+当前源码 `0d38eec6` 的独立前端工程门已验：完整默认6885 PASS／0 SKIP、1593输入起终核等，相关lint/types/build/contract及门户55例、62页21556链接通过。原PR范围包含配置与读取恢复、账户/团队、Skills、分享、个性化、Project协作/本人Run控制、原CAS Scheduled写入、Admin具名桥及多语言/门户；具名native片已验配置创建回读、团队治理、设置CAS/个性化生效、双身份Project角色/降权撤权、历史恢复和审计桥，不将部分旅程扩大为所有E2E完成。
+
+Docker/Storage依赖下的共享成功Run→安全FINAL/Artifact旅程仍待；Project安装原503/unknown保留原body/key，鲜读空列表不当旧写回执，资源恢复后仅续原命令。本轮QA不可逆操作仍各待单项确认，外部授权末端/完整云E2B沿已接受边界暂存；独立前端交付不关闭整体TaskB或这些组合缺口。分阶段事实见[CURRENT](docs/CURRENT.md)，正式边界见[API_CONTRACT](docs/API_CONTRACT.md)；下方保留历史检查点。
+
 ## T-01 标准认证消费者（2026-11-03，本地候选）
 
 固定 BFF `34c9f997a4d86f33be2f815c43cd155ed338fe86` / browser-private auth-session1.0.0 的原字节和生成 codec；状态 strict data 只含匿名 false 或真实 subject/tenant/RFC3339 UTC expiry。普通业务不再经 Web 假claims 或前后/me；原生登录/退出/CSRF交互安全、原body/key/CAS/receipt与unknown显式恢复保持。UI寿命和跨标签无秘密失效不成为认证证明。

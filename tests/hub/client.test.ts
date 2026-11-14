@@ -2385,3 +2385,24 @@ it.each([
   const card = skillCatalogSchema.safeParse({ skills: [{ name: "Skill", description: "", content_hash: "revision", scope: "third_party", installed: false, enabled: false, ...facts }] }).success
   expect({ hub, card }).toEqual({ hub: false, card: false })
 })
+
+it("separates required fresh Custom API governance from immutable optional ACK governance", async () => {
+  const { customApiGetSchema, customApiPageSchema, customApiCreateSchema, customApiUpdateSchema } = await import("@/hub/custom-api.schema");
+  const base = { profile_id: "governed", name: "API", state_version: "7", created_at: "2026-11-13T00:00:00Z", updated_at: "2026-11-13T00:00:00Z", environment: [] };
+  for (const state of ["active", "quarantined", "revoked"]) {
+    const profile = { ...base, governance_status: state };
+    expect(customApiGetSchema.safeParse({ custom_api: profile }).success).toBe(true);
+    expect(customApiPageSchema.safeParse({ items: [profile], page: { next_cursor: null } }).success).toBe(true);
+    expect(customApiCreateSchema.parse({ custom_api: profile, replayed: true }).custom_api).toEqual(profile);
+  }
+  for (const state of [undefined, "", "unknown", null]) {
+    const profile = { ...base, ...(state === undefined ? {} : { governance_status: state }) };
+    expect(customApiGetSchema.safeParse({ custom_api: profile }).success).toBe(false);
+    expect(customApiPageSchema.safeParse({ items: [profile], page: { next_cursor: null } }).success).toBe(false);
+  }
+  for (const schema of [customApiCreateSchema, customApiUpdateSchema]) {
+    const ack = schema.parse({ custom_api: base, replayed: true });
+    expect(ack.custom_api).toEqual(base); expect(Object.hasOwn(ack.custom_api, "governance_status")).toBe(false);
+    expect(schema.safeParse({ custom_api: { ...base, governance_status: "" }, replayed: true }).success).toBe(false);
+  }
+});

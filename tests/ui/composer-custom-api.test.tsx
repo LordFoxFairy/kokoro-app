@@ -13,7 +13,7 @@ import { useComposerConnections } from "@/ui/shell/use-composer-connections"
 import { createFakeClient, createMemoryStorage, settle } from "../engine/fakes"
 vi.mock("next/navigation", () => ({ usePathname: () => "/app", useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }))
 const boundary = { admitted: true, subject: "actor:a", generation: 1 }
-const profile = { profile_id: "same:id", state_version: "7", name: "Weather API", created_at: "2026-10-29T00:00:00Z", updated_at: "2026-10-29T00:00:00Z", environment: [{ name: "API_KEY", configured: true, state_version: "1", status: "active" as const }] }
+const profile = { governance_status: "active" as const, profile_id: "same:id", state_version: "7", name: "Weather API", created_at: "2026-10-29T00:00:00Z", updated_at: "2026-10-29T00:00:00Z", environment: [{ name: "API_KEY", configured: true, state_version: "1", status: "active" as const }] }
 const makeEngine = () => createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null) })
 const reader = () => ({ listMcpConnections: vi.fn().mockResolvedValue({ connections: [] }), getMcpConnector: vi.fn(), listCustomApis: vi.fn().mockResolvedValue({ items: [profile], page: { next_cursor: null } }) })
 const originalUrl = window.location.href
@@ -47,7 +47,7 @@ it("does not publish API candidates or late selection callbacks after actor reti
 })
 it("renders API and MCP controls independently even when their raw IDs collide", async () => {
   const toggle = vi.fn(), toggleCustomApi = vi.fn()
-  render(<LocaleProvider><ComposerConnections controller={{ items: [{ id: "same:id", name: "Docs MCP", selectable: true, availability: "available" }], selectedIds: ["same:id"], status: "ready", refresh: vi.fn(), loadMore: vi.fn(), nextCursor: undefined, toggle, customApiItems: [{ id: "same:id", name: "Weather API", stateVersion: "7" }], selectedCustomApiProfiles: [], toggleCustomApi }} onAdd={vi.fn()} onManage={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ComposerConnections controller={{ items: [{ id: "same:id", name: "Docs MCP", selectable: true, availability: "available" }], selectedIds: ["same:id"], status: "ready", refresh: vi.fn(), loadMore: vi.fn(), nextCursor: undefined, toggle, customApiStatus: "ready", customApiItems: [{ id: "same:id", name: "Weather API", stateVersion: "7" }], selectedCustomApiProfiles: [], toggleCustomApi }} onAdd={vi.fn()} onManage={vi.fn()} /></LocaleProvider>)
   fireEvent.click(screen.getByRole("button", { name: /Connectors/ }))
   expect(screen.getByRole("switch", { name: "Docs MCP" })).toHaveAttribute("aria-checked", "true")
   const api = screen.getByRole("switch", { name: "Weather API" })
@@ -155,3 +155,19 @@ it.each(["error", "loading"] as const)("keeps ready API pagination reachable ind
   fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
   expect(loadMore).toHaveBeenCalledTimes(1)
 })
+
+it.each(["quarantined", "revoked"])("does not add %s API choices or silently remove/rebase an existing draft", async governance_status => {
+  const engine = makeEngine(), client = reader();
+  client.listCustomApis.mockResolvedValue({ items: [{ ...profile, governance_status }], page: { next_cursor: null } });
+  const hook = renderHook(() => useComposerConnections({ engine, client, boundary, enforceSubjectMarker: false }));
+  await waitFor(() => expect(hook.result.current.customApiItems?.length).toBe(1));
+  expect(hook.result.current.customApiItems?.[0]?.selectable).toBe(false);
+  act(() => hook.result.current.toggleCustomApi!(profile.profile_id));
+  expect(engine.getSnapshot().selectedCustomApiProfiles).toEqual([]);
+  act(() => engine.setSelectedCustomApiProfiles!([{ profileId: profile.profile_id, expectedStateVersion: "6" }]));
+  await act(async () => { hook.result.current.refresh(); await settle(); });
+  expect(engine.getSnapshot().selectedCustomApiProfiles).toEqual([{ profileId: profile.profile_id, expectedStateVersion: "6" }]);
+  act(() => hook.result.current.toggleCustomApi!(profile.profile_id));
+  expect(engine.getSnapshot().selectedCustomApiProfiles).toEqual([]);
+  hook.unmount(); engine.dispose();
+});

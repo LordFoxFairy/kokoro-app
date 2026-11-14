@@ -240,6 +240,7 @@ export class AgUiEventMapper {
         this.#clearRun(metadata.session_id, event.runId)
         const projectionEvent = projectionEnvelope(cursor, event, "run.created", {
           run_id: event.runId,
+          ...(metadata.can_control === undefined ? {} : { can_control: metadata.can_control }),
         })
         return {
           cursor,

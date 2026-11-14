@@ -139,3 +139,11 @@ it("default mapping requires exact available connections, rejects ambiguous prov
   expect(projectMcpDefaultSelection([{ kind: "mcp_connector", connector_id: "personal" }], [{ ...eligible("one"), availability: "unavailable" }])).toEqual([])
   expect(projectMcpDefaultSelection([{ kind: "mcp_connector", connector_id: "personal" }, { kind: "provider", provider_key: "github" }], [eligible("one")])).toEqual(["one"])
 })
+
+it("keeps nonactive API metadata as disabled options instead of losing saved recommendation locators", async () => {
+  const hub = directory();
+  hub.listCustomApis.mockResolvedValue({ items: ["active", "quarantined", "revoked"].map(governance_status => ({ profile_id: governance_status, governance_status, name: governance_status, state_version: "7", environment: [], created_at: "2026-11-13T00:00:00Z", updated_at: "2026-11-13T00:00:00Z" })), page: { next_cursor: null } });
+  const options = await readProjectMcpRecommendationOptions(hub, new AbortController().signal);
+  expect(options.map(value => [value.ref.kind, value.label, value.selectable])).toEqual([["custom_api", "active", true], ["custom_api", "quarantined", false], ["custom_api", "revoked", false]]);
+  expect(hub.listCustomApis).toHaveBeenCalledOnce();
+});

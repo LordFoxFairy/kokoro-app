@@ -50,6 +50,11 @@ export const zSharedTasksError503 = z.object({
     })
 });
 
+/**
+ * Request correlation identifier echoed by every v1 envelope.
+ */
+export const zRequestId = z.string().min(1).max(256);
+
 export const zSharedTaskItem = z.object({
     session_id: z.string().min(1),
     title: z.string(),
@@ -64,8 +69,21 @@ export const zSharedTasksResponse = z.object({
     })
 });
 
-export const zShareReceipt = z.object({
-    share_id: z.string().min(1)
+export const zSessionShareMetadata = z.object({
+    share_id: z.string().min(1),
+    created_at: z.string().datetime(),
+    expires_at: z.string().datetime().nullable()
+});
+
+export const zRequestMeta = z.object({
+    request_id: zRequestId
+});
+
+export const zSessionShareMetadataResponse = z.object({
+    data: z.object({
+        share: zSessionShareMetadata.nullable()
+    }),
+    meta: zRequestMeta
 });
 
 export const zErrorDetail = z.object({
@@ -73,13 +91,13 @@ export const zErrorDetail = z.object({
     message: z.string().min(1)
 });
 
-/**
- * Request correlation identifier echoed by every v1 envelope.
- */
-export const zRequestId = z.string().min(1).max(256);
+export const zErrorEnvelope = z.object({
+    error: zErrorDetail,
+    meta: zRequestMeta
+});
 
-export const zRequestMeta = z.object({
-    request_id: zRequestId
+export const zShareReceipt = z.object({
+    share_id: z.string().min(1)
 });
 
 export const zShareReceiptResponse = z.object({
@@ -87,12 +105,10 @@ export const zShareReceiptResponse = z.object({
     meta: zRequestMeta
 });
 
-export const zErrorEnvelope = z.object({
-    error: zErrorDetail,
-    meta: zRequestMeta
-});
-
-export const zIdempotencyKey = z.string();
+/**
+ * Opaque chat session identifier.
+ */
+export const zSessionId = z.string().min(1);
 
 /**
  * On the Conversation collection, omitted or empty keeps the admitted owner's full visible set while direct restricts results to project_ref IS NULL. On resource routes it does not alter the existing project-bound authorization. It never overrides the admitted tenant and subject.
@@ -104,6 +120,8 @@ export const zDirectScopeQuery = z.enum(['', 'direct']);
  */
 export const zProjectRefQuery = z.string().min(1);
 
+export const zIdempotencyKey = z.string();
+
 /**
  * Safe current owner page
  */
@@ -113,6 +131,11 @@ export const zListOwnedSharedTasksResponse = zSharedTasksResponse;
  * Share receipt
  */
 export const zRevokeShareResponse = zShareReceiptResponse;
+
+/**
+ * Current active share or an accessible unshared session.
+ */
+export const zGetSessionShareMetadataResponse = zSessionShareMetadataResponse;
 
 /**
  * Share receipt

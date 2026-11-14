@@ -4,14 +4,35 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 const navigation = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn() }))
 vi.mock("next/navigation", () => ({ useRouter: () => navigation }))
 import { SignInRecovery } from "@/ui/auth/sign-in-recovery"
+import { openProductSignIn } from "@/ui/auth/product-auth-client"
 
 const active = () => ({ data: { authenticated: true, subject: "recovery-actor", tenant_id: "tenant", expires_at: "2030-01-01T00:00:00Z" } })
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(finish => { resolve = finish }); return { promise, resolve } }
 async function settle() { await act(async () => { for (let i = 0; i < 8; i++) await Promise.resolve() }) }
 async function tick(ms: number) { await act(async () => { await vi.advanceTimersByTimeAsync(ms) }) }
 function visibility(value: "visible" | "hidden") { Object.defineProperty(document, "visibilityState", { configurable: true, value }); fireEvent(document, new Event("visibilitychange")) }
-beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" }) })
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); window.sessionStorage.clear(); Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" }) })
+afterEach(() => { cleanup(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+it("keeps the original whitelisted path, query and settings tab on explicit relogin", async () => {
+  const target = "/app/library?tab=files&type=documents&view=list#/account/settings/account"
+  window.history.replaceState({}, "", target); openProductSignIn(vi.fn())
+  window.history.replaceState({}, "", "/auth/sign-in/failed")
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ authenticated: false })))
+  render(<SignInRecovery />); await settle()
+  expect(screen.getByRole("link", { name: "重新登录" })).toHaveAttribute("href", `/login?${new URLSearchParams({ return_to: target })}`)
+  expect(navigation.replace).not.toHaveBeenCalled()
+})
+
+it("returns an already verified session to the same tab-local target without replaying OAuth", async () => {
+  const target = "/app#/account/settings/mcp"
+  window.history.replaceState({}, "", target); openProductSignIn(vi.fn())
+  window.history.replaceState({}, "", "/auth/sign-in/failed")
+  const fetcher = vi.fn().mockResolvedValue(Response.json(active()))
+  vi.stubGlobal("fetch", fetcher); render(<SignInRecovery />); await settle()
+  expect(navigation.replace).toHaveBeenCalledExactlyOnceWith(target)
+  expect(fetcher).toHaveBeenCalledOnce()
+})
 
 it("reads only the current Session and replaces fixed /app after strict success, without storing identity or invoking login", async () => {
   const writes = vi.spyOn(Storage.prototype, "setItem")

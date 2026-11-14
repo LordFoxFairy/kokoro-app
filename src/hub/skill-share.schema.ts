@@ -16,7 +16,7 @@ export const sharedSkillSchema = z.object({
   original_name: z.string().min(1).optional(), author: z.object({ user_id: shareIdSchema, display_name: z.string().min(1) }).strict().optional(), cover_image: z.string().optional(),
 }).strict().refine(v => v.cover_image === undefined || v.cover_image === `/api/v1/skills/${encodeURIComponent(v.skill_id)}/cover`)
 export const shareSummarySchema = z.object({ share_id: shareIdSchema, source_ref: source, skill: sharedSkillSchema }).strict().refine(v => v.source_ref === `skill:${v.skill.skill_id}`)
-export const shareSchemas = { create: shareAckSchema, resolve: shareAckSchema, summary: shareSummarySchema, download: skillDownloadSchema } as const
+export const shareSchemas = { create: shareAckSchema, resolve: shareAckSchema, revoke: shareAckSchema, summary: shareSummarySchema, download: skillDownloadSchema } as const
 export type ShareOperation = keyof typeof shareSchemas
 export type ShareAck = z.infer<typeof shareAckSchema>
 export type SharedSkill = z.infer<typeof sharedSkillSchema>
@@ -32,6 +32,6 @@ export function shareErrorAllowed(operation: ShareOperation, status: number, cod
 export function shareMatches(operation: ShareOperation, data: ShareAck | ShareSummary | SkillDownload, identity: string, origin: string): boolean {
   if (operation === "download") return "download_info" in data && Date.parse(data.download_info.expires_at) > Date.now()
   if (operation === "summary") return "share_id" in data && data.share_id === identity && "skill" in data && data.source_ref === `skill:${data.skill.skill_id}`
-  if (!("url" in data) || (operation === "create" ? data.source_ref !== identity : data.share_id !== identity) || data.revoked_at !== null || data.expires_at !== null && Date.parse(data.expires_at) <= Date.now()) return false
+  if (!("url" in data) || (operation === "create" ? data.source_ref !== identity : data.share_id !== identity) || (operation === "revoke" ? data.revoked_at === null : data.revoked_at !== null || data.expires_at !== null && Date.parse(data.expires_at) <= Date.now())) return false
   try { const url = new URL(data.url); return url.origin === origin && url.href === `${origin}/skills/shared/${encodeURIComponent(data.share_id)}` } catch { return false }
 }

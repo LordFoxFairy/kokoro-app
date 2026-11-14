@@ -50,6 +50,12 @@ function describeUnknown(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function requireRevision(value: number): void {
+  if (!Number.isSafeInteger(value) || value < 1 || value >= Number.MAX_SAFE_INTEGER) {
+    throw new ScheduledTaskClientError("parse", "Read the current task revision before editing or retrying", null)
+  }
+}
+
 function toRecord(task: ScheduledTaskRecordResponse): ScheduledTaskRecord {
   const record: ScheduledTaskRecord = {
     id: task.id,
@@ -59,6 +65,8 @@ function toRecord(task: ScheduledTaskRecordResponse): ScheduledTaskRecord {
     nextRun: task.next_run_at,
   }
   if (task.project_id !== undefined) record.projectId = task.project_id
+  if (task.revision !== undefined) record.revision = task.revision
+  if (task.execution_actor_id !== undefined) record.executionActorId = task.execution_actor_id
   if (task.prompt !== undefined) record.prompt = task.prompt
   if (task.timezone !== undefined) record.timezone = task.timezone
   if (task.expires_at !== undefined) record.expiresAt = task.expires_at
@@ -201,6 +209,7 @@ async function request<T>(
 type MutationRequest<T> = {
   operation: "create" | "update" | "retry" | "delete"
   taskId?: string
+  expectedRevision?: number
   body?: unknown
   url: string
   method: "POST" | "PATCH" | "DELETE"
@@ -210,6 +219,7 @@ type MutationRequest<T> = {
 
 type CommandIdentity = {
   key: string
+  target: string
   unknown: boolean
   pending?: Promise<unknown>
 }
@@ -221,14 +231,22 @@ async function requestMutation<T>(
   admission?: () => number | null,
 ): Promise<T> {
   const serializedBody = mutation.body === undefined ? "" : JSON.stringify(mutation.body)
-  const fingerprint = `${mutation.operation}:${mutation.taskId ?? "new"}:${serializedBody}`
+  const target = `${mutation.operation}:${mutation.taskId ?? "new"}`
+  const fingerprint = `${target}:${mutation.expectedRevision ?? "none"}:${serializedBody}`
+  for (const [key, pending] of identities) {
+    if (mutation.expectedRevision !== undefined && pending.target === target && pending.unknown && key !== fingerprint) {
+      throw new ScheduledTaskClientError("network", "Recover the original scheduled command before changing its body or revision", null)
+    }
+  }
   const identity: CommandIdentity = identities.get(fingerprint) ?? {
     key: createIdempotencyKey(`scheduled-${mutation.operation}`, mutation.taskId),
+    target,
     unknown: false,
   }
   if (identity.pending) return mutation.schema.parse(await identity.pending)
   identities.set(fingerprint, identity)
   const headers: Record<string, string> = { "Idempotency-Key": identity.key }
+  if (mutation.expectedRevision !== undefined) headers["If-Match"] = `"${mutation.expectedRevision}"`
   if (mutation.body !== undefined) headers["content-type"] = "application/json"
   identity.pending = (async () => {
     try {
@@ -347,13 +365,15 @@ export function createScheduledTaskClient(
       return { executions, nextCursor: response.next_cursor }
     },
     createScheduledTask: (input) => createTask(fetcher, commandIdentities, creates, admission, input),
-    updateScheduledTask: async (taskId, patch) => {
+    updateScheduledTask: async (taskId, patch, expectedRevision) => {
+      requireRevision(expectedRevision)
       const response = await requestMutation(
         fetcher,
         commandIdentities,
         {
           operation: "update",
           taskId,
+          expectedRevision,
           accepts: (response) => response.task.id === taskId,
           url: scheduledTaskPath(taskId),
           method: "PATCH",
@@ -364,13 +384,15 @@ export function createScheduledTaskClient(
       )
       return toRecord(response.task)
     },
-    retryScheduledTask: async (taskId) => {
+    retryScheduledTask: async (taskId, expectedRevision) => {
+      requireRevision(expectedRevision)
       const response = await requestMutation(
         fetcher,
         commandIdentities,
         {
           operation: "retry",
           taskId,
+          expectedRevision,
           accepts: (response) => response.task.id === taskId,
           url: scheduledTaskRetryPath(taskId),
           method: "POST",

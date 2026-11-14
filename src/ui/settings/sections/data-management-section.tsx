@@ -44,6 +44,8 @@ function DataContent({
   onArchiveChanged?: (state:ArchiveState)=>void;
   t: ReturnType<typeof useLocale>["t"];
 }) {
+  const { locale } = useLocale();
+  const date = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
   const archived=useArchivedTasks({preview,...(readBoundary?{boundary:readBoundary}:{}),...(onArchiveChanged?{onChanged:onArchiveChanged}:{})});
   const managementId = useId();
   const data = useSharedTasks(preview, readBoundary),
@@ -104,12 +106,12 @@ function DataContent({
                 <li key={item.session_id}>
                   <span>{item.title}</span>
                   <time dateTime={item.shared_at}>
-                    {new Date(item.shared_at).toLocaleString()}
+                    {date.format(new Date(item.shared_at))}
                   </time>
                   <span>
                     {item.expires_at === null
                       ? t("data.noExpiry")
-                      : new Date(item.expires_at).toLocaleString()}
+                      : date.format(new Date(item.expires_at))}
                   </span>
                   <Button variant="outline" size="sm"
                     type="button"
@@ -166,7 +168,7 @@ function DataContent({
         {!archived.available ? <p>{t("data.unavailable")}</p> : <>
           <p role={archived.error?"alert":"status"}>{archived.busy?t("data.loading"):archived.blocked?t("data.unknown"):archived.error?t("data.error"):archived.pages>0&&archived.items.length===0?t("archive.empty"):null}</p>
           {archived.review?<Button variant="outline" size="sm" type="button" disabled={archived.busy} onClick={archived.proceed}>{t("data.continue")}</Button>:null}
-          <ul>{archived.items.map(item=><li key={item.session_id}><span>{item.title}</span><time dateTime={item.archived_at}>{new Date(item.archived_at).toLocaleString()}</time><Button variant="outline" size="sm" type="button" disabled={archived.busy||archived.blocked||!archiveIdAvailable(item.session_id)} title={!archiveIdAvailable(item.session_id)?t("archive.idUnavailable"):undefined} onClick={()=>void archived.restore(item.session_id)}>{t("archive.restore")}</Button>{!archiveIdAvailable(item.session_id)?<span>{t("archive.idUnavailable")}</span>:null}</li>)}</ul>
+          <ul>{archived.items.map(item=><li key={item.session_id}><span>{item.title}</span><time dateTime={item.archived_at}>{date.format(new Date(item.archived_at))}</time><Button variant="outline" size="sm" type="button" disabled={archived.busy||archived.blocked||!archiveIdAvailable(item.session_id)} title={!archiveIdAvailable(item.session_id)?t("archive.idUnavailable"):undefined} onClick={()=>void archived.restore(item.session_id)}>{t("archive.restore")}</Button>{!archiveIdAvailable(item.session_id)?<span>{t("archive.idUnavailable")}</span>:null}</li>)}</ul>
           {archived.cursor?<Button variant="outline" size="sm" type="button" disabled={archived.busy||archived.blocked} onClick={()=>void archived.more()}>{t("data.more")}</Button>:null}
         </>}
       </section>

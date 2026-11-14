@@ -1,3 +1,11 @@
+## 2026-11-13 Project 协作当前写区
+
+Public29候选及实际验收边界见 `docs/CURRENT.md`。Project Access正规codec位于`src/generated/bff-project-access.ts`，浏览器读取和同tab原命令分别在`src/features/app/project-access-client.ts`、`project-grant-command.ts`；Project header只承接UI，后端资格仍由BFF判定。Chat沿原engine→AI SDK，Scheduled沿原feature client/operations与显式revision，没有第二业务owner或认证层。
+
+2026-11-13：文档语言只由src/i18n/context.tsx现LocaleProvider维护，Runtime Manifest不再写html.lang；服务端metadata locale不替代用户UI语言。API门户catalog已消费发行Public28.38，当前事实与验证见docs/CURRENT.md。
+
+2026-11-12：原Task B PR在隔离checkout普通整合当前main，保Public28.35/native/Task A事实；API/JSON ACK以安全locator承接fresh exact详情与读取恢复。未发行owner能力不激活，原历史保留。当前证据／未验边界见docs/CURRENT.md，API无增量。
+
 2026-11-12：Composer 菜单按内容／视口布局、完整长名与持久选中态；成功空目录／锁定缺席不冒默认模型。关闭 overlay 不再预读 connector 目录，真实打开仍归 Settings／目录自身，Composer 原 reader 不变。验证与范围见 docs/CURRENT.md；无 API／Schema／依赖变化。
 
 2026-11-12：实时与历史正文收敛为同一 AI SDK reader；命令／cursor／恢复仍由现 engine 拥有，安全过程与成果不变。首页仅补读取反馈和既有重试。当前本地验证／真实浏览器范围见 docs/CURRENT.md，网络边界见 docs/API_CONTRACT.md；无新增公开协议或执行框架。

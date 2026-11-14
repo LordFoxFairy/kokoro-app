@@ -1,6 +1,6 @@
 "use client"
 
-import { useLayoutEffect, useRef, useState, type RefObject } from "react"
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { HubClientError } from "@/hub/client"
@@ -16,40 +16,44 @@ import styles from "./personal-skill-history-dialog.module.css"
 
 type Read<T>={data?:T;error?:unknown}
 /** Selecting history is read-only; only an explicit confirmation starts a new-version publish. */
-export function PersonalSkillHistoryDialog({base,client,open,onOpenChange,returnFocusRef,admitted=true,onIntentChanged,onRestored}: {
- base:ManagedPersonalSkill; client:SkillPublishClient;open:boolean;onOpenChange:(open:boolean)=>void;returnFocusRef:RefObject<HTMLInputElement|null>;admitted?:boolean;onIntentChanged?:(pending:boolean)=>void;onRestored?:()=>void
+export function PersonalSkillHistoryDialog({base,client,open,onOpenChange,returnFocusRef,admitted=true,generation=0,onIntentChanged,onRestored}: {
+ base:ManagedPersonalSkill; client:SkillPublishClient;open:boolean;onOpenChange:(open:boolean)=>void;returnFocusRef:RefObject<HTMLInputElement|null>;admitted?:boolean;generation?:number;onIntentChanged?:(pending:boolean)=>void;onRestored?:()=>void
 }){
  const {t,locale}=useLocale()
  const [restore,setRestore]=useState<{version:PersonalSkillHistoryVersion;publication:NonNullable<SkillPublicationPrecondition>}|null>(null)
  const restoreFocus=useRef<HTMLElement|null>(null)
- const [attempt,setAttempt]=useState(0),[page,setPage]=useState<Read<PersonalSkillHistoryPage>>({})
+ const [attempt,setAttempt]=useState(0)
+ const readOwner=useMemo(()=>({open,admitted,generation,skillId:base.skill_id,seriesId:base.series_id,client,attempt,restore}),[open,admitted,generation,base.skill_id,base.series_id,client,attempt,restore])
+ const [pageState,setPage]=useState<Read<PersonalSkillHistoryPage>&{owner?:typeof readOwner}>({})
+ const page=pageState.owner===readOwner?pageState:{}
  const [selected,setSelected]=useState<PersonalSkillHistoryVersion|null>(null)
- const [more,setMore]=useState<{busy:boolean;error?:unknown}>({busy:false})
- const [continuation,setContinuation]=useState<{cursor:string;before:PersonalSkillHistoryPage}|null>(null)
+ const [moreState,setMore]=useState<{owner?:typeof readOwner;busy:boolean;error?:unknown}>({busy:false})
+ const more=moreState.owner===readOwner?moreState:{busy:false}
+ const [continuation,setContinuation]=useState<{owner:typeof readOwner;cursor:string;before:PersonalSkillHistoryPage}|null>(null)
  useLayoutEffect(()=>{
   if(!open||!admitted||restore!==null)return
   const controller=new AbortController()
   void client.listHistory(base.skill_id,undefined,controller.signal).then(data=>{
    if(controller.signal.aborted)return
    if(data.series_id!==base.series_id)throw new Error("History series mismatch")
-   setPage({data});setSelected(data.versions.find(v=>v.is_current)??data.versions[0]??null)
-  }).catch(error=>{if(!controller.signal.aborted)setPage({error})})
+   setPage({owner:readOwner,data});setSelected(data.versions.find(v=>v.is_current)??data.versions[0]??null)
+  }).catch(error=>{if(!controller.signal.aborted)setPage({owner:readOwner,error})})
   return ()=>controller.abort()
- },[open,admitted,restore,base.skill_id,base.series_id,client,attempt])
+ },[open,admitted,restore,base.skill_id,base.series_id,client,attempt,readOwner])
  useLayoutEffect(()=>{
-  if(!open||!admitted||restore!==null||continuation===null)return
+  if(!open||!admitted||restore!==null||continuation===null||continuation.owner!==readOwner)return
   const {cursor,before}=continuation,controller=new AbortController()
   void client.listHistory(base.skill_id,cursor,controller.signal).then(data=>{
    if(controller.signal.aborted)return
    if(data.series_id!==before.series_id||JSON.stringify(data.publication)!==JSON.stringify(before.publication)||data.next_cursor===cursor||data.next_cursor!==null&&data.versions.length===0)throw new Error("History snapshot changed")
    const versions=[...before.versions,...data.versions]
    if(new Set(versions.map(v=>v.skill_id)).size!==versions.length||versions.some((v,i)=>i>0&&BigInt(v.revision)>=BigInt(versions[i-1]!.revision)))throw new Error("History continuation overlaps")
-   setPage({data:{...before,versions,next_cursor:data.next_cursor}});setMore({busy:false});setContinuation(null)
-  }).catch(error=>{if(!controller.signal.aborted){setMore({busy:false,error});setContinuation(null)}})
+   setPage({owner:readOwner,data:{...before,versions,next_cursor:data.next_cursor}});setMore({owner:readOwner,busy:false});setContinuation(null)
+  }).catch(error=>{if(!controller.signal.aborted){setMore({owner:readOwner,busy:false,error});setContinuation(null)}})
   return ()=>controller.abort()
- },[open,admitted,restore,continuation,base.skill_id,client])
+ },[open,admitted,restore,continuation,base.skill_id,client,readOwner])
  const refresh=()=>{setPage({});setSelected(null);setMore({busy:false});setContinuation(null);setAttempt(v=>v+1)}
- const retryMore=()=>{if(page.data?.next_cursor){setMore({busy:true});setContinuation({cursor:page.data.next_cursor,before:page.data})}}
+ const retryMore=()=>{if(page.data?.next_cursor){setMore({owner:readOwner,busy:true});setContinuation({owner:readOwner,cursor:page.data.next_cursor,before:page.data})}}
  return <Dialog open={admitted&&open&&restore===null} onOpenChange={onOpenChange}>
   <DialogContent closeLabel={t("skills.publishClose")} className={styles.dialog} onCloseAutoFocus={event=>{event.preventDefault();returnFocusRef.current?.focus()}}>
    <header className={styles.heading}><DialogTitle>{t("skills.history.title")}</DialogTitle><DialogDescription className="sr-only">{base.name}</DialogDescription></header>
@@ -61,14 +65,14 @@ export function PersonalSkillHistoryDialog({base,client,open,onOpenChange,return
      {version.is_current?<span className={styles.current}>{t("skills.history.current")}</span>:null}
      {version.status!=="active"?<span className={styles.current}>{t(`skills.history.${version.status}`)}</span>:null}
      {version.is_current&&page.data?.publication?.withdrawn_at&&version.status!=="withdrawn"?<span className={styles.current}>{t("skills.history.withdrawn")}</span>:null}
-     <span>{new Intl.DateTimeFormat(locale,{hour:"numeric",minute:"2-digit"}).format(new Date(version.created_at))}</span><span className="sr-only">{t("skills.history.revision")} {version.revision}</span>
+     <span>{t("skills.revLabel",{revision:version.revision})}</span><time dateTime={version.created_at}>{new Intl.DateTimeFormat(locale,{dateStyle:"medium",timeStyle:"short"}).format(new Date(version.created_at))}</time>
     </button>
      {base.product.source_kind==="personal"&&page.data?.publication&&version.status!=="quarantined"&&(!version.is_current||version.status!=="active"||page.data.publication.withdrawn_at!==null)?<Button variant="outline" size="sm" className={styles.restore} onClick={event=>{restoreFocus.current=event.currentTarget;setRestore({version:{...version},publication:{current_version_id:page.data!.publication!.current_version_id,state_version:page.data!.publication!.state_version}})}}>{t("skills.history.restore")}</Button>:null}
     </div>)}
     {more.error?<p role="alert">{t("skills.history.pageFailed")}<Button variant="ghost" onClick={refresh}>{t("skills.history.refresh")}</Button></p>:null}
     {page.data?.next_cursor?<Button variant="ghost" disabled={more.busy} onClick={retryMore}>{t("skills.history.more")}</Button>:null}
    </section>
-   {selected?<HistoryPackage key={selected.skill_id} version={selected}/>:null}
+   {page.data&&selected?<HistoryPackage key={selected.skill_id} version={selected}/>:null}
   </DialogContent>
    {restore?<PersonalSkillRestoreDialog version={restore.version} seriesId={base.series_id} publication={restore.publication} client={client} admitted={admitted} open={open}
      returnFocusRef={restoreFocus} onStarted={()=>onIntentChanged?.(true)}

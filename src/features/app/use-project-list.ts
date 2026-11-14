@@ -144,13 +144,14 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
         (error: unknown) => {
           if (!active()) return
           report401(error, controller.signal)
-          // Either denial revokes both projections for this generation.
-          if (denied(error)) setCollection({ key, state: { status: "error", retryable: false } })
+          // Authentication loss retires the collection; Project denial retires only that target.
+          if (error instanceof ProjectReadError && error.status === 401) setCollection({ key, state: { status: "error", retryable: false } })
+          if (error instanceof ProjectReadError && [403, 404].includes(error.status ?? 0)) retireProject(projectRef)
           setDetail({ key: detailKey, state: { status: "error", retryable: !denied(error) && !(error instanceof ProjectReadError && error.status === 404) } })
         },
       )
     })
-  }, [detailKey, key, projectRef, readDetail, report401])
+  }, [detailKey, key, projectRef, readDetail, report401, retireProject])
 
   const sameRouteRefresh = refreshRequest.route === route && exact?.status !== "loading"
   const settledMissing = sameRouteRefresh && rawList.status === "ready" && knownProject === undefined && exact?.status !== "ready"
@@ -164,26 +165,28 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
       (error: unknown) => {
         if (!live || controller.signal.aborted) return
         report401(error, controller.signal)
-        if (denied(error)) setCollection({ key, state: { status: "error", retryable: false } })
+        if (error instanceof ProjectReadError && error.status === 401) setCollection({ key, state: { status: "error", retryable: false } })
+        if (error instanceof ProjectReadError && [403, 404].includes(error.status ?? 0)) retireProject(projectRef)
         setHistory({ key: detailKey, state: { status: "error", retryable: !denied(error) && !(error instanceof ProjectReadError && error.status === 404) } })
       },
     )
     return () => { live = false; controller.abort() }
-  }, [detailKey, key, projectRef, readHistory, report401])
+  }, [detailKey, key, projectRef, readHistory, report401, retireProject])
 
   const priorDetail = detail?.key.route === route && detail.key.key.revision >= (collection?.key.revision ?? 0) ? detail.state : undefined
   const retainedProject = sameRouteRefresh && rawList.status === "loading"
     ? priorDetail?.status === "ready" ? priorDetail.data : priorDetail?.status === "error" ? undefined : previouslyKnown
     : undefined
   const project = knownProject ?? retainedProject
-  const current: ProjectReadState<Project> = !admitted || projectRef === undefined || projectRetired
+  const current: ProjectReadState<Project> = !admitted || projectRef === undefined
     ? { status: "blocked" }
-    : collectionDenied ? rawList
+    : projectRetired ? { status: "error", retryable: false }
+      : collectionDenied ? rawList
       : exact?.status === "ready" || exact?.status === "error" && !exact.retryable ? exact
         : knownProject === undefined && exact?.status === "error" ? exact
           : project !== undefined ? { status: "ready", data: project } : { status: "loading" }
 
-  const instructionHistory: ProjectReadState<ProjectInstructionRevisionWire[]> = !readInstructions || !admitted || projectRef === undefined || projectRetired
+  const instructionHistory: ProjectReadState<ProjectInstructionRevisionWire[]> = !readInstructions || !admitted || projectRef === undefined
     ? { status: "blocked" }
     : current.status === "error" ? current
       : rawList.status === "error" ? rawList
@@ -228,7 +231,8 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
     } catch (error) {
       check()
       if (denied(error)) {
-        setCollection({ key, state: { status: "error", retryable: false } })
+        if (error instanceof ProjectReadError && error.status === 401) setCollection({ key, state: { status: "error", retryable: false } })
+        retireProject(target)
         setDetail({ key: detailKey, state: { status: "error", retryable: false } })
       }
       throw error
@@ -238,7 +242,7 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
       readFence.controllers.delete(controller)
       renameFence.controllers.delete(controller)
     }
-  }, [admitted, projectRef, detailKey, key])
+  }, [admitted, projectRef, detailKey, key, retireProject])
 
   const unavailable = list.status === "error" || current.status === "error"
   const context = useMemo(() => ({ generation, subject, admitted, projectRef, preview, unavailable }), [generation, subject, admitted, projectRef, preview, unavailable])

@@ -8,8 +8,8 @@ import type { HubClient } from "@/hub/client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { type McpPreparationCommands } from "./mcp-preparation-commands";
 import { createBrowserMcpPreparationRecovery } from "./mcp-preparation-recovery";
-import { createCustomApiCreateFlow, type CustomApiCreateFlow } from "./custom-api-create-flow";
-import { createMcpJsonImportFlow, type McpJsonImportFlow } from "./mcp-json-import-flow";
+import { createCustomApiCreateFlow, type CustomApiCreateFlow, type CustomApiCreationCompletion } from "./custom-api-create-flow";
+import { createMcpJsonImportFlow, type McpJsonImportFlow, type McpJsonImportCompletion } from "./mcp-json-import-flow";
 import { JsonMcpImportForm } from "./mcp-json-import-form";
 import { invalidateMcpConnectorProjection } from "./use-mcp-projection";
 import { createMcpServerCreationFlow, type McpServerCreationFlow, type McpServerCreationCompletion } from "./mcp-server-creation-flow";
@@ -72,13 +72,13 @@ export function ConnectorCommandProvider({ client, boundary, children }: {
   return <Commands.Provider value={value}>{children}</Commands.Provider>;
 }
 
-export function CustomApiCreationForm({ onCancel, onDone }: { onCancel: () => void; onDone: () => Promise<void> }) {
+export function CustomApiCreationForm({ onCancel, onDone }: { onCancel: () => void; onDone: (result: CustomApiCreationCompletion, current: () => boolean) => Promise<void> }) {
   const value = useContext(Commands);
   if (value === null) throw new Error("Custom API creation requires its actor-owned shell provider");
   return <CustomApiForm key={value.api.instanceId} flow={value.api} iconClient={value.client.mcpIcons} boundary={value.boundary} onCancel={onCancel} onDone={onDone} />;
 }
 
-export function JsonMcpCreationForm({ onCancel, onDone }: { onCancel: () => void; onDone: () => Promise<void> }) {
+export function JsonMcpCreationForm({ onCancel, onDone }: { onCancel: () => void; onDone: (result: McpJsonImportCompletion, current: () => boolean) => Promise<void> }) {
   const value = useContext(Commands);
   if (value === null) throw new Error("MCP JSON creation requires its actor-owned shell provider");
   return <JsonMcpImportForm key={value.json.instanceId} flow={value.json} boundary={value.boundary} onCancel={onCancel} onDone={onDone} />;

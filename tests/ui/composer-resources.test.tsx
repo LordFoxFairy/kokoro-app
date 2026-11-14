@@ -58,7 +58,7 @@ beforeEach(() => {
   vi.mocked(listLibraryArtifacts).mockResolvedValue({ items: [artifact], nextCursor: null })
   readRecentTaskSnapshot.mockImplementation(async id => recentSnapshot(id))
 })
-afterEach(() => { cleanup(); vi.resetAllMocks(); localStorage.clear() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.resetAllMocks(); localStorage.clear() })
 
 it("selects only public opaque refs, disables duplicates, and removes without submitting", async () => {
   const onChange = vi.fn()
@@ -198,6 +198,12 @@ it.each([false, true])("restores the unsent composer selection in a new AppFrame
   history.replaceState(null, "", path)
   const admission = { ...boundary, tenant: "resource-tenant" }
   expect(admitBrowserAuthSessionIndexes(admission.subject, admission.subject, admission.tenant)).toBe(true)
+  if (project) vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const path = new URL(String(input), window.location.origin).pathname
+    const descriptor = { id: projectRef, name: "Project", slug: "project", description: "", created_at: "2026-11-13T00:00:00Z", updated_at: "2026-11-13T00:00:00Z" }
+    if (path === `/api/hub/projects/${projectRef}/access`) return Response.json({ data: { project_id: projectRef, role: "owner", expires_at: null, access_version: "1", capabilities: ["read", "edit", "manage"] }, meta: { request_id: "access" } })
+    return Response.json({ data: path === "/api/hub/projects" ? { projects: [descriptor] } : { project: descriptor }, meta: { request_id: "project" } })
+  })
   const client = createFakeClient()
   const storage = createMemoryStorage<ConversationStore>()
   const mount = () => {
@@ -225,6 +231,7 @@ it.each([false, true])("restores the unsent composer selection in a new AppFrame
     expect(input()).toHaveValue(prompt)
     expect(screen.getByRole("list", { name: "Selected attachments" })).toBeVisible()
     expect(client.createCalls).toHaveLength(0)
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled())
     fireEvent.click(screen.getByRole("button", { name: "Send message" }))
     await waitFor(() => expect(client.createCalls).toHaveLength(1))
     expect(client.createCalls[0]?.body).toMatchObject({

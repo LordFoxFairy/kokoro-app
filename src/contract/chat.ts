@@ -1,3 +1,4 @@
+import { projectAccessSchema, projectCanControlSchema, projectCanRegenerateSchema, projectDeliverySchema } from "@/generated/bff-project-access"
 import { selectedCustomApiProfilesWireSchema, selectedResourceRefsWireSchema } from "@/generated/bff-tool-display"
 // Canonical v1 runtime contract. Keep these schemas synchronized with the checked-in API documentation and contract tests.
 
@@ -48,6 +49,7 @@ export type SelectedResourceRef = z.infer<typeof selectedResourceRefsSchema>[num
 export const messageRecordSchema = z
   .object({
     message_id: z.string().min(1),
+    can_regenerate: projectCanRegenerateSchema.optional(),
     role: z.enum(["user", "assistant"]),
     content: z.string(),
     status: z.enum(["pending", "streaming", "completed", "failed"]),
@@ -95,7 +97,7 @@ const privateInlineMessageReadSchema = messageRecordSchema.innerType().extend({
   }
 })
 export const orderedAssistantMessageReadSchema = z.object({
-  message_id: z.string().min(1), role: z.literal("assistant"), content: z.null(),
+  message_id: z.string().min(1), can_regenerate: projectCanRegenerateSchema.optional(), role: z.literal("assistant"), content: z.null(),
   status: z.enum(["pending", "streaming", "completed", "failed"]), created_at: z.string().min(1),
   run_id: z.string().min(1), failure: agentFailureProfileSchema.optional(),
   terminal_status: z.literal(BFF_PRIVATE_CANCELLED_STATUS).optional(),
@@ -133,9 +135,11 @@ export type MessagePartsPage = z.infer<typeof messagePartsPageSchema>
 export const pendingPauseSchema = interactionStateSchema.refine((state) => state.phase === "waiting" || state.phase === "resuming")
 export type PendingPause = z.infer<typeof pendingPauseSchema>
 export const executionHeadSchema = z.object({
+  can_control: projectCanControlSchema.optional(),
   run_id: z.string().min(1), state: z.enum(["queued", "active", "waiting", "resuming"]), pending_pauses: z.array(pendingPauseSchema).max(1),
 }).strict().superRefine((head, context) => {
   const pending = head.state === "waiting" || head.state === "resuming"
+  if (head.can_control === false && (pending || head.pending_pauses.length)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Peer head must be safe busy only" })
   if (pending ? head.pending_pauses.length !== 1 || head.pending_pauses[0]?.phase !== head.state : head.pending_pauses.length !== 0) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: "Head must match its complete pending state" })
   }
@@ -198,15 +202,23 @@ export const selectedMcpConnectionIdsSchema = z
 export const selectedCustomApiProfilesSchema = selectedCustomApiProfilesWireSchema
 
 export const sessionSnapshotSchema = sharedSessionSnapshotSchema.extend({
+  project_access: projectAccessSchema.optional(),
   messages: z.array(chatMessageReadSchema).optional(),
-  deliveries: z.array(privateDeliverySchema),
+  deliveries: z.array(z.union([privateDeliverySchema, projectDeliverySchema])),
   execution_process: runExecutionProcessSchema.nullable(),
   composer_selection: z.object({
     source_message_id: z.string().min(1),
     selected_mcp_connection_ids: selectedMcpConnectionIdsSchema,
     selected_custom_api_profiles: selectedCustomApiProfilesSchema.optional(),
   }).strict().optional(),
-}).strict()
+ }).strict().superRefine((value, context) => {
+  if (value.project_access) {
+    if (value.messages?.some(message => message.can_regenerate === undefined) || value.execution_head && value.execution_head.can_control === undefined)
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Project read requires explicit current controls" })
+    if (value.execution_head?.can_control === false && value.execution_process !== null)
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Peer process is private" })
+  } else if (value.deliveries.some(delivery => !("asset_id" in delivery))) context.addIssue({ code: z.ZodIssueCode.custom, message: "Direct delivery requires private identity" })
+})
 export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>
 
 export function parseSessionSnapshot(input: unknown): SessionSnapshot {

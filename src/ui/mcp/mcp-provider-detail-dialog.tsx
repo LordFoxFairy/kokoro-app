@@ -2,7 +2,7 @@
 
 import { McpAvailabilityStatus } from "./mcp-availability-status";
 
-import { useState, type RefObject } from "react";
+import { useState, type ReactNode, type RefObject } from "react";
 
 import Image from "next/image";
 import { Copy, Link2, MessageCircle, Plus, Power, Trash2 } from "lucide-react";
@@ -47,15 +47,18 @@ export function McpProviderDetailDialog({
   onClose,
   onConnect,
   onReconnect,
+  onEditConnection,
   onToggleEnabled,
   onRemoveConnection,
   onPrompt,
   open,
   pendingError = false,
+  readFeedback,
 }: {
   provider: McpConnectorProvider | null;
   open?: boolean;
   pendingError?: boolean;
+  readFeedback?: ReactNode | undefined;
   /** An admitted installed row or an exact selected locator; never an inferred provider-key binding. */
   connection?: McpConnector | null;
   connectionLookup?: McpProviderConnectionLookup;
@@ -71,6 +74,7 @@ export function McpProviderDetailDialog({
   onClose: () => void;
   onConnect: (provider: McpConnectorProvider) => void;
   onReconnect?: (connection: McpConnector, provider: McpConnectorProvider) => void;
+  onEditConnection?: (connection: McpConnector) => void;
   onToggleEnabled?: (connection: McpConnector) => void;
   onRemoveConnection?: (connection: McpConnector) => void;
   onPrompt?: (prompt: string) => void;
@@ -109,6 +113,7 @@ export function McpProviderDetailDialog({
           );
         }}
       >
+        {readFeedback}
         {provider ? (
           <>
             <header
@@ -209,13 +214,14 @@ export function McpProviderDetailDialog({
                   </ul>
                 </section>
               ) : null}
-              {connected ? <section className={styles.connectedProviderManagement} aria-label="连接器管理">
-                <h3>连接器详情</h3>
-                <dl><div><dt>连接器类型</dt><dd>{provider.connection_server_id !== undefined ? "OAuth 连接器" : "应用连接器"}</dd></div><div><dt>UUID</dt><dd><code>{connection.connector_id}</code><Button type="button" size="icon" variant="ghost" aria-label="复制 UUID" onClick={() => void navigator.clipboard?.writeText(connection.connector_id)}><Copy aria-hidden="true" /></Button></dd></div></dl>
+              {connected ? <section className={styles.connectedProviderManagement} aria-label={t("mcp.connectionManagement")}>
+                <h3>{t("mcp.connectionDetails")}</h3>
+                <dl><div><dt>{t("mcp.detailConnectorType")}</dt><dd>{t(provider.connection_server_id !== undefined ? "mcp.oauthConnector" : "mcp.appConnector")}</dd></div><div><dt>UUID</dt><dd><code>{connection.connector_id}</code><Button type="button" size="icon" variant="ghost" aria-label={t("connectorCatalog.copyUuid")} onClick={() => void navigator.clipboard?.writeText(connection.connector_id)}><Copy aria-hidden="true" /></Button></dd></div></dl>
                 <div className={styles.connectedProviderActions}>
+                  {!connection.server_id && connection.status !== "revoked" && onEditConnection ? <Button type="button" variant="outline" disabled={locked || creationLocked} onClick={() => onEditConnection(connection)}>{t("mcp.edit")}</Button> : null}
                   {provider.connection_server_id !== undefined && (connection.status === "active" || connection.status === "pending" || connection.status === "error") && onReconnect ? <Button type="button" variant="outline" disabled={locked} onClick={() => onReconnect(connection, provider)}><Link2 aria-hidden="true" />{t(connection.status === "active" ? "thread.reconnect" : "mcp.retry")}</Button> : null}
                   {onToggleEnabled ? <Button type="button" variant="outline" disabled={locked} onClick={() => onToggleEnabled(connection)}><Power aria-hidden="true" />{connection.enabled ? t("mcp.disable") : t("mcp.enable")}</Button> : null}
-                  {onRemoveConnection ? confirmDisconnect ? <><Button type="button" variant="destructive" disabled={locked} onClick={() => onRemoveConnection(connection)}>确认断开</Button><Button type="button" variant="outline" disabled={locked} onClick={() => setConfirmDisconnect(false)}>{t("mcp.cancel")}</Button></> : <Button type="button" variant="ghost" className={styles.disconnectAction} disabled={locked} onClick={() => setConfirmDisconnect(true)}><Trash2 aria-hidden="true" />断开连接</Button> : null}
+                  {onRemoveConnection ? confirmDisconnect ? <><Button type="button" variant="destructive" disabled={locked} onClick={() => onRemoveConnection(connection)}>{t("mcp.confirmDisconnect")}</Button><Button type="button" variant="outline" disabled={locked} onClick={() => setConfirmDisconnect(false)}>{t("mcp.cancel")}</Button></> : <Button type="button" variant="ghost" className={styles.disconnectAction} disabled={locked} onClick={() => setConfirmDisconnect(true)}><Trash2 aria-hidden="true" />{t("mcp.disconnectConnection")}</Button> : null}
                 </div>
               </section> : null}
             </section>
@@ -224,7 +230,7 @@ export function McpProviderDetailDialog({
           <section className={styles.providerDetailBody} aria-busy={!pendingError}>
             <McpManagementStatus command={managementCommand} admitted={admitted} onResume={onResumeManagement} />
             <DialogTitle>{t("rail.navPlugins")}</DialogTitle>
-            <span className="sr-only" role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span>
+            {!readFeedback ? <span className={pendingError ? undefined : "sr-only"} role="status">{t(pendingError ? "mcp.loadError" : "mcp.loading")}</span> : null}
           </section>
         )}
       </DialogContent>

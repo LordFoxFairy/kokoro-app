@@ -1,3 +1,4 @@
+import { projectArtifactItemSchema } from "@/generated/bff-project-access"
 import { z } from "zod"
 import { canonicalProjectIdSchema } from "./conversation-move"
 
@@ -29,7 +30,7 @@ export const libraryArtifactListResponseSchema = z.object({ data: z.union([empty
 const libraryArtifactDetailSchema = libraryArtifactItemSchema.extend({
   project_ref: canonicalProjectIdSchema.nullable().optional(),
 })
-export const libraryArtifactDetailResponseSchema = z.object({ data: libraryArtifactDetailSchema, meta }).strict()
+export const libraryArtifactDetailResponseSchema = z.object({ data: z.union([libraryArtifactDetailSchema, projectArtifactItemSchema]), meta }).strict()
 
 export type LibraryArtifactWire = z.infer<typeof libraryArtifactItemSchema>
-export type LibraryArtifactDetailWire = z.infer<typeof libraryArtifactDetailSchema>
+export type LibraryArtifactDetailWire = z.infer<typeof libraryArtifactDetailResponseSchema>["data"]

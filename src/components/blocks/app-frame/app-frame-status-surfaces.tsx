@@ -33,20 +33,29 @@ export function AppFrameLoadingSurface() {
 
 export function AppFrameConnectionStatus({
   connection,
+  onReconnect,
 }: {
   connection: Exclude<EngineSnapshot["connection"], { status: "connected" }>
+  onReconnect: () => void
 }) {
   const t = useT()
   const unavailable = connection.status === "unavailable"
   const label = unavailable ? t("thread.connectionUnavailable") : t("thread.reconnecting")
   return (
     <div
-      className="sr-only"
+      className={unavailable ? styles.connectionStatus : "sr-only"}
       data-connection-status={connection.status}
       role="status"
       aria-label={label}
       aria-live="polite"
-    />
+    >
+      {unavailable ? <>
+        <span>{label}</span>
+        <Button type="button" variant="outline" size="sm" onClick={onReconnect}>
+          {t("thread.reconnect")}
+        </Button>
+      </> : null}
+    </div>
   )
 }
 

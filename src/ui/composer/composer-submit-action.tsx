@@ -6,6 +6,7 @@ import { useT } from "@/i18n/context"
 import styles from "./composer-controls.module.css"
 
 type ComposerSubmitActionProps = {
+  canStop?: boolean
   isStreaming: boolean
   isAwaitingApproval: boolean
   showSend: boolean
@@ -14,12 +15,12 @@ type ComposerSubmitActionProps = {
   onStop: () => void
 }
 
-export function ComposerSubmitAction({ isStreaming, isAwaitingApproval, showSend, canSend, activeDelivery, onStop }: ComposerSubmitActionProps) {
+export function ComposerSubmitAction({ canStop = true, isStreaming, isAwaitingApproval, showSend, canSend, activeDelivery, onStop }: ComposerSubmitActionProps) {
   const t = useT()
   const sendLabel = t(activeDelivery === "interrupt" ? "settingsServices.interruptAndSend"
     : activeDelivery === "steer" ? "settingsServices.sendWithoutInterrupt"
     : isStreaming ? "settings.taskDeliveryQueue" : "composer.send")
-  const stop = isStreaming ? (
+  const stop = isStreaming && canStop ? (
     <Button variant="outline" size="icon-sm" className={`${styles.send} ${styles.sendStop}`} data-composer-action="stop" type="button" aria-label={t(isAwaitingApproval ? "hitl.cancelWaiting" : "composer.stop")} title={t(isAwaitingApproval ? "hitl.cancelWaiting" : "composer.stop")} onClick={onStop}>
       {isAwaitingApproval ? <X className={styles.glyph} data-icon="inline-start" aria-hidden="true" /> : <Square className={styles.glyph} data-icon="inline-start" />}
     </Button>

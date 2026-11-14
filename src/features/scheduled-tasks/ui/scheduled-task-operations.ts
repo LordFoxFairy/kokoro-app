@@ -11,6 +11,12 @@ export function missingScheduledClientError(): Error {
   return new Error("Scheduled task client is not configured")
 }
 
+function currentRevision(task: ScheduledTaskRecord): number {
+  const revision = task.revision
+  if (revision === undefined || !Number.isSafeInteger(revision) || revision < 1) throw new Error("Current scheduled task revision is unavailable")
+  return revision
+}
+
 function createDraft(value: ScheduledTaskEditorValue, projectId?: string): ScheduledTaskDraft {
   return {
     ...(projectId === undefined ? {} : { projectId }),
@@ -63,7 +69,7 @@ export async function saveScheduledTask(
       return
     }
     if (!runtime.client) throw missingScheduledClientError()
-    await runtime.client.updateScheduledTask(editingTask.id, patch)
+    await runtime.client.updateScheduledTask(editingTask.id, patch, currentRevision(editingTask))
     if (isCurrent()) await reload()
     return
   }
@@ -101,7 +107,7 @@ export async function updateScheduledTaskStatus(
     return
   }
   if (!runtime.client) throw missingScheduledClientError()
-  await runtime.client.updateScheduledTask(task.id, patch)
+  await runtime.client.updateScheduledTask(task.id, patch, currentRevision(task))
   await reload()
 }
 
@@ -121,7 +127,7 @@ export async function retryScheduledTask(
     return
   }
   if (!runtime.client) throw missingScheduledClientError()
-  await runtime.client.retryScheduledTask(task.id)
+  await runtime.client.retryScheduledTask(task.id, currentRevision(task))
   await reload()
 }
 

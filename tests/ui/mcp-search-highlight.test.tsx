@@ -12,7 +12,7 @@ import { McpCustomApiCard } from "@/ui/mcp/mcp-custom-api-card"
 afterEach(cleanup)
 const name = "QA [MCP]+ / [mcp]+ <img src=x>"
 const connector: McpConnector = { connector_id: "search-connector", server_id: "search-server", provider_key: "search-provider", connector_type: "mcp", display_name: name, description: "Literal search description", status: "active", enabled: true, availability: "available", approved_scopes: [], state_version: "2" }
-const api: CustomApiProfile = { profile_id: "search-api", name, instructions: "Literal search description", state_version: "2", environment: [], created_at: "2026-10-26T00:00:00Z", updated_at: "2026-10-26T00:00:00Z" }
+const api: CustomApiProfile = { governance_status: "active" as const, profile_id: "search-api", name, instructions: "Literal search description", state_version: "2", environment: [], created_at: "2026-10-26T00:00:00Z", updated_at: "2026-10-26T00:00:00Z" }
 const provider: McpConnectorProvider = { provider_key: "search-provider", display_name: name, directory_type: "app", category_keys: [], example_prompts: [], enabled: true, state_version: "1" }
 
 it.each(["personal", "api", "provider"] as const)("highlights literal query hits in %s plaza names without changing the accessible action or inserting markup", kind => {

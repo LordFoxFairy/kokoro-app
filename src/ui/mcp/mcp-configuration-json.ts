@@ -5,13 +5,22 @@ import { mcpPrivateJsonImportInputSchema, mcpPrivateServerRegistrationInputSchem
 const documentSchema = z.object({ mcpServers: z.record(z.unknown()) }).strict();
 const entrySchema = z.object({ type: z.enum(["streamableHttp", "sse"]), url: z.string(), headers: z.record(z.string()).optional() }).strict();
 export type McpConfigurationJsonFields = { name: string; serverUrl: string; headers: Array<{ name: string; value: string }> };
+export type McpConfigurationJsonErrorCode = "headers_duplicate" | "headers_invalid" | "immutable_transport" | "invalid_configuration";
+
+/** Local validation classification only; never carry submitted text or secrets. */
+export class McpConfigurationJsonError extends Error {
+  constructor(readonly code: McpConfigurationJsonErrorCode) {
+    super(code);
+    this.name = "McpConfigurationJsonError";
+  }
+}
 
 export function mergeConfigurationJsonHeaders(existing: readonly { name: string; value: string }[], provided: readonly { name: string; value: string }[]) {
   const merged = new Map(existing.map(item => [item.name.trim().toLowerCase(), { name: item.name.trim().toLowerCase(), value: item.value }]));
-  if (merged.size !== existing.length) throw new Error("自定义 headers 名称重复。");
+  if (merged.size !== existing.length) throw new McpConfigurationJsonError("headers_duplicate");
   for (const item of provided) merged.set(item.name, item);
   try { return mcpPrivateServerRegistrationInputSchema.shape.headers.parse([...merged.values()]) ?? []; }
-  catch { throw new Error("自定义 headers 无效或超过允许的数量和大小。"); }
+  catch { throw new McpConfigurationJsonError("headers_invalid"); }
 }
 
 /** Local editing representation only. Saved secret descriptors never become values. */
@@ -28,14 +37,13 @@ export function parseConfigurationJson(text: string, transport: McpPrivateServer
     if (entries.length !== 1) throw Error("single_server_required");
     const [name, raw] = entries[0]!;
     const entry = entrySchema.parse(raw);
-    if (entry.type !== (transport === "sse_compat" ? "sse" : "streamableHttp")) throw Error("immutable_transport");
+    if (entry.type !== (transport === "sse_compat" ? "sse" : "streamableHttp")) throw new McpConfigurationJsonError("immutable_transport");
     const parsed = mcpPrivateServerRegistrationInputSchema.parse({ display_name: name, server_url: entry.url,
       transport, headers: Object.entries(entry.headers ?? {}).map(([name, value]) => ({ name: name.toLowerCase(), value })) });
     if (!parsed.display_name.trim()) throw Error("invalid_name");
     return { name: parsed.display_name, serverUrl: parsed.server_url, headers: parsed.headers ?? [] };
   } catch (error) {
     // Never reflect submitted text, header values or a parser's payload in feedback.
-    throw new Error(error instanceof Error && error.message === "immutable_transport"
-      ? "当前连接器的传输类型不可修改。" : "请输入仅含一个 MCP 服务器的有效配置；只支持 type、url 和合法 headers。");
+    throw error instanceof McpConfigurationJsonError ? error : new McpConfigurationJsonError("invalid_configuration");
   }
 }

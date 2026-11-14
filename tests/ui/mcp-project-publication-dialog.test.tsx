@@ -35,6 +35,28 @@ function setup(pins: McpProjectPin[] = []) {
  };
  return { client, publication, create, onDone, view, form };
 }
+// Recovery is a read of the original locator, not a revived creation CAS or publication replay.
+async function recoverRetiredPublicationDetail({ client, publication }: Pick<ReturnType<typeof setup>, "client" | "publication">) {
+ const currentName = "Current owner source";
+ client.getMcpConnector.mockResolvedValue({ ...connector, display_name: currentName, state_version: "6" });
+ client.getPrivateMcpServer.mockResolvedValue({ ...server, display_name: currentName, state_version: "6" });
+ const connectorReads = client.getMcpConnector.mock.calls.length;
+ const serverReads = client.getPrivateMcpServer.mock.calls.length;
+ const detail = screen.getByRole("dialog", { name: "详情" });
+ const retry = within(detail).getByRole("button", { name: "重新加载已添加的连接器" });
+ expect(retry).toBeVisible();
+ act(() => { fireEvent.click(retry); fireEvent.click(retry); });
+ expect(await screen.findByRole("dialog", { name: currentName })).toBeVisible();
+ expect(client.getMcpConnector).toHaveBeenCalledTimes(connectorReads + 1);
+ expect(client.getPrivateMcpServer).toHaveBeenCalledTimes(serverReads + 1);
+ expect(client.getMcpConnector.mock.calls.every(([id]) => id === connector.connector_id)).toBe(true);
+ expect(client.getPrivateMcpServer.mock.calls.every(([id]) => id === server.server_id)).toBe(true);
+ expect(screen.queryByText("已添加的连接器加载失败")).toBeNull();
+ expect(client.registerPrivateMcpServer).toHaveBeenCalledOnce();
+ expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
+ expect(client.beginMcpConnectorAuthorization).not.toHaveBeenCalled();
+ expect(publication.publish).not.toHaveBeenCalled();
+}
 it("create ACK opens observed project picker; cancel preserves the exact newly saved detail and performs no publication/authorization", async () => {
  const { create, client, publication } = setup(); const popup = vi.spyOn(window, "open"); const picker = await create();
  await within(picker).findByRole("checkbox", { name: project.name });
@@ -102,7 +124,7 @@ it("a repeated cursor cannot be treated as an absent pin or cause a publish", as
 });
 
 it("a confirmed mutation retires the creation observation before cancel; failed fresh reads do not revive it", async () => {
- const { create, client } = setup(); const picker = await create();
+ const { create, client, publication } = setup(); const picker = await create();
  await within(picker).findByRole("checkbox", { name: project.name });
  const reads = client.getMcpConnector.mock.calls.length;
  client.getMcpConnector.mockRejectedValue(Error("fresh owner read rejected"));
@@ -110,11 +132,12 @@ it("a confirmed mutation retires the creation observation before cancel; failed 
  fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
  expect(screen.queryByRole("dialog", { name: server.display_name })).toBeNull();
  const detail = screen.getByRole("dialog", { name: "详情" });
- await waitFor(() => expect(within(detail).getByRole("status")).toHaveTextContent("连接列表加载失败"));
+ await waitFor(() => expect(within(detail).getByRole("status")).toHaveTextContent("已添加的连接器加载失败"));
  expect(within(detail).queryByRole("button", { name: "管理" })).toBeNull();
  expect(within(detail).queryByRole("button", { name: "连接" })).toBeNull();
  expect(client.getMcpConnector).toHaveBeenCalledTimes(reads + 1);
  expect(within(detail).queryByRole("button", { name: server.server_id })).toBeNull();
+ await recoverRetiredPublicationDetail({ client, publication });
 });
 it("starting a new source observation retires the handoff even when confirmation fails and is cancelled", async () => {
  const { create, client, publication } = setup(); const picker = await create();
@@ -127,14 +150,15 @@ it("starting a new source observation retires the handoff even when confirmation
  fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
  expect(screen.queryByRole("dialog", { name: server.display_name })).toBeNull();
  const detail = screen.getByRole("dialog", { name: "详情" });
- await waitFor(() => expect(within(detail).getByRole("status")).toHaveTextContent("连接列表加载失败"));
+ await waitFor(() => expect(within(detail).getByRole("status")).toHaveTextContent("已添加的连接器加载失败"));
  expect(within(detail).queryByRole("button", { name: "管理" })).toBeNull();
  expect(within(detail).queryByRole("button", { name: "连接" })).toBeNull();
  expect(client.getMcpConnector).toHaveBeenCalledTimes(reads + 1);
  expect(publication.publish).not.toHaveBeenCalled();
+ await recoverRetiredPublicationDetail({ client, publication });
 });
 it("an already displayed handoff retires synchronously when its mutation revision changes", async () => {
- const { create, client } = setup(); const picker = await create();
+ const { create, client, publication } = setup(); const picker = await create();
  await within(picker).findByRole("checkbox", { name: project.name });
  fireEvent.click(within(picker).getByRole("button", { name: "取消" }));
  expect(screen.getByRole("dialog", { name: server.display_name })).toBeVisible();
@@ -142,9 +166,10 @@ it("an already displayed handoff retires synchronously when its mutation revisio
  act(() => invalidateMcpConnectorProjection(client, boundary.subject));
  expect(screen.queryByRole("dialog", { name: server.display_name })).toBeNull();
  const detail = screen.getByRole("dialog", { name: "详情" });
- await waitFor(() => expect(within(detail).getByRole("status")).toHaveTextContent("连接列表加载失败"));
+ await waitFor(() => expect(within(detail).getByRole("status")).toHaveTextContent("已添加的连接器加载失败"));
  expect(within(detail).queryByRole("button", { name: "管理" })).toBeNull();
  expect(within(detail).queryByRole("button", { name: "连接" })).toBeNull();
+ await recoverRetiredPublicationDetail({ client, publication });
 });
 
 it("a newer source version observed during confirmation never falls back to the creation version on cancel", async () => {

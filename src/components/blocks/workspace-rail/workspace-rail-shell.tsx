@@ -173,6 +173,7 @@ export function WorkspaceRailShell({
     dragState,
     dragOverKey,
   } = useWorkspaceRailActions({
+    draggableItemLabel: t("rail.draggableItem"),
     projectItems,
     conversations: [],
     conversationScopeKey,
@@ -399,7 +400,7 @@ export function WorkspaceRailShell({
 
         <SidebarContent className={railStyles.content}>
           <span id={DRAG_HELP_ID} className={railStyles.visuallyHidden}>
-            使用空格开始或放置拖动，使用上下箭头重新排序，按 Escape 取消。
+            {t("rail.dragHelp")}
           </span>
           <WorkspaceRailNavigation
             {...(navigation === undefined ? {} : { navigation })}

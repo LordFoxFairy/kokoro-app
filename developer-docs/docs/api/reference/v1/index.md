@@ -3,7 +3,7 @@
 本节是由固定的 `kokoro-bff` public contract artifact 自动生成的字段级参考。它不是手写 DTO 清单：operation、参数、请求体、响应体、响应头、嵌套字段、组合 schema、约束和 contract metadata 都从 owner OpenAPI 重新生成。
 
 ::: warning 接入范围
-公开参考描述 wire shape，不表示所有接口均可用 API Key 从外部调用。普通产品接口仍有旧 Bearer security 声明；当前运行边界与待纠正项见[认证与适用范围](/api/authentication)。
+公开参考描述 wire shape，不表示所有接口均可用 API Key 从外部调用。普通工作台接口使用受信适配器、原生 Session Cookie 与固定 Origin；独立 `skill.list` 接入才使用 User API Key／Open App Bearer。匿名分享、webhook 与 service-only 接口各遵循自身声明，详见[认证与适用范围](/api/authentication)。
 :::
 
 ## 阅读方式

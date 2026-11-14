@@ -96,7 +96,9 @@ async function handle(request: Request, context: Context): Promise<Response> {
   const config = productBffConfig()
   if (config === null) return failure(503, "admin_gateway_unavailable", requestId)
   const { path } = await context.params
-  const creditKind = path.length === 2 && path[0] === "identity" && path[1] === "members" && request.method === "GET" ? "members" : path.length === 2 && path[0] === "billing" && path[1] === "credit-grants" && request.method === "POST" ? "grant" : null
+  const creditKind = path.length === 2 && path[0] === "identity" && request.method === "GET"
+    ? path[1] === "members" ? "members" : path[1] === "audit-events" ? "audit" : null
+    : path.length === 2 && path[0] === "billing" && path[1] === "credit-grants" && request.method === "POST" ? "grant" : null
   if (creditKind !== null) return proxyAdminBilling(request, config, creditKind, requestId, discoveryDeadline)
   const meteringKind = path.length === 3 && path[0] === "billing" && path[1] === "metering"
     ? request.method === "GET" && path[2] === "pricing" ? "pricing"
@@ -108,10 +110,14 @@ async function handle(request: Request, context: Context): Promise<Response> {
   const uuid=/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffffffffffff)$/iu
   const modelDiscovery = request.method === "GET" && path.length === 3 && path[0] === "model-providers" && uuid.test(path[1] ?? "") && path[2] === "upstream-models"
   const modelPublish=request.method === "POST" && path.length===3 && path[0]==="model-revisions" && uuid.test(path[1]??"") && path[2]==="publish"
-  const modelWrite = modelPublish || (path.length===1 && request.method==="POST" && ["model-providers","model-definitions","model-revisions","model-labels"].includes(path[0]??"")) || (path.length===2 && uuid.test(path[1]??"") && ((request.method==="PUT" && path[0]==="model-routing") || (request.method==="PATCH" && path[0]==="model-labels")))
+  const modelWrite = modelPublish || (path.length===1 && request.method==="POST" && ["model-providers","model-definitions","model-revisions","model-labels"].includes(path[0]??"")) || (path.length===2 && uuid.test(path[1]??"") && ((request.method==="PUT" && path[0]==="model-routing") || (request.method==="PATCH" && ["model-labels","model-revisions"].includes(path[0]??""))))
+  const customApiRead = request.method === "GET" && path[0] === "custom-apis" &&
+    (path.length === 1 || path.length === 2 || (path.length === 3 && path[2] === "audit-events"))
+  const customApiWrite = request.method === "POST" && path.length === 3 && path[0] === "custom-apis" &&
+    ["quarantine", "restore", "revoke"].includes(path[2] ?? "")
   if (
     path.length === 0 ||
-    (!["mcp", "skills"].includes(path[0] ?? "") && !modelRead && !modelWrite && !modelDiscovery) ||
+    (!["mcp", "skills"].includes(path[0] ?? "") && !modelRead && !modelWrite && !modelDiscovery && !customApiRead && !customApiWrite) ||
     path.some((segment) => !ADMIN_SEGMENT.test(segment))
   )
     return failure(404, "admin_operation_not_found", requestId)
@@ -120,7 +126,7 @@ async function handle(request: Request, context: Context): Promise<Response> {
 
   if (modelDiscovery) return discoverModels(request, config, path, requestId, discoveryDeadline)
 
-  if (modelRead && ["if-match", "if-none-match", "idempotency-key", "content-type"].some((name) => request.headers.has(name)))
+  if ((modelRead || customApiRead) && ["if-match", "if-none-match", "idempotency-key", "content-type"].some((name) => request.headers.has(name)))
     return failure(400, "invalid_admin_request", requestId)
 
   const mutation = request.method !== "GET"

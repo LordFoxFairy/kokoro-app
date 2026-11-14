@@ -1,22 +1,96 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { createHubClient, HubClientError } from "@/hub/client"
+import { mcpReauthorizationDataSchema } from "@/hub/mcp-reauthorization.schema"
 import type { McpConnector, McpPrivateServer } from "@/hub/mcp-connector.schema"
 import type { McpIconBinding, McpIconIntent } from "@/hub/mcp-icon.schema"
 import type { McpIconClient } from "@/hub/mcp-icon-client"
 import { McpIconPicker } from "@/ui/mcp/mcp-icon-picker"
 import { createMcpIconDraft } from "@/ui/mcp/mcp-icon-draft"
 import { LocaleProvider } from "@/i18n/context"
+import { LOCALES, zh, type Locale } from "@/i18n/messages"
+import { OVERLAYS } from "@/i18n/overlays"
+import { resolveMessage } from "@/i18n/resolve"
 import { ConnectorCommandProvider } from "@/ui/mcp/connector-command-context"
 import { McpContent } from "@/ui/mcp/mcp-content"
 import { McpTrialProvider } from "@/ui/mcp/mcp-trial-context"
 import { CustomMcpDetailDialog } from "@/ui/mcp/custom-mcp-detail-dialog"
+import { McpConfigurationJsonDialog } from "@/ui/mcp/mcp-configuration-json-dialog"
+import { mergeConfigurationJsonHeaders } from "@/ui/mcp/mcp-configuration-json"
 import { ProductReadRecheckProvider, type ProductRead401 } from "@/ui/auth/product-read-recheck-context"
 
 beforeEach(() => localStorage.setItem("kokoro.locale", "zh"))
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
-async function jsonConfigurationFixture(unknown = false, icons?: McpIconClient, transport: McpPrivateServer["transport"] = "streamable_http") {
+it("a disconnected saved detail shows configuration facts with no command controls even when Prepare or management recovery exists", () => {
+  const connector: McpConnector = { availability: "unavailable", connector_id: "read-only-connector", server_id: "read-only-server",
+    provider_key: "ordinary-name", connector_type: "mcp", status: "revoked", enabled: false, state_version: "4", approved_scopes: [] }
+  const server: McpPrivateServer = { availability: "unavailable", server_id: "read-only-server", display_name: "Saved disconnected MCP",
+    server_url: "https://mcp.example.test/saved", notes: "Saved note", status: "registered", state_version: "9", transport: "sse_compat",
+    headers: [{ name: "x-configured", configured: true, status: "active", state_version: "2" }], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const command = vi.fn()
+  render(<LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} admitted readOnlyConfiguration
+    actionId={null} actionError={false} deleteId={connector.connector_id} managementCommand={undefined}
+    preparationState="unknown" preparationRecoveryReady={false} preparationRecoveryError
+    onRetryPreparationRecovery={command} onResumeManagement={command} onSaveConfiguration={command} onPrepare={command}
+    onTrial={command} onPublish={command} publicationAvailable publicationRecoveryError onRetryPublicationRecovery={command}
+    onAuthorize={command} onDisconnect={command} onDeleteIntent={command} onDelete={command} onCancelDelete={command}
+    returnFocusRef={{ current: null }} onClose={vi.fn()} /></LocaleProvider>)
+  const detail = screen.getByRole("dialog", { name: server.display_name })
+  expect(within(detail).getByText("已断开")).toBeVisible()
+  expect(within(detail).getByText("连接已断开，保存的配置仅供查看。重新连接暂不可用。")).toBeVisible()
+  expect(within(detail).queryByText("已停用")).toBeNull()
+  expect(within(detail).queryByText("暂不可用")).toBeNull()
+  for (const fact of [server.server_url, server.notes!, "x-configured", "SSE"])
+    expect(within(detail).getByText(fact)).toBeVisible()
+  expect(within(detail).queryByRole("button", { name: /管理|保存|连接|重试|删除|试用|发布|检查/ })).toBeNull()
+  expect(within(detail).queryByRole("textbox")).toBeNull()
+  expect(command).not.toHaveBeenCalled()
+})
+
+it("the coordinator rejects direct command callbacks from a disconnected configuration window", async () => {
+  const detailModule = await import("@/ui/mcp/custom-mcp-detail-dialog")
+  const OriginalDetail = detailModule.CustomMcpDetailDialog
+  let captured: Parameters<typeof CustomMcpDetailDialog>[0] | undefined
+  const capture = vi.spyOn(detailModule, "CustomMcpDetailDialog").mockImplementation(props => {
+    captured = props
+    return <OriginalDetail {...props} />
+  })
+  try {
+    const connector: McpConnector = { availability: "unavailable", connector_id: "callback-connector", server_id: "callback-server",
+      provider_key: "callback-provider", connector_type: "mcp", display_name: "Disconnected callbacks", status: "revoked", enabled: false, state_version: "4", approved_scopes: [] }
+    const server: McpPrivateServer = { availability: "unavailable", server_id: "callback-server", display_name: connector.display_name!,
+      server_url: "https://mcp.example.test/callback", status: "registered", state_version: "8", headers: [], transport: "streamable_http",
+      prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+    const command = vi.fn()
+    const client = { ...createHubClient(), listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+      listMcpConnectors: vi.fn().mockResolvedValue({ items: [connector], next_cursor: null }),
+      listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+      getMcpConnector: vi.fn().mockResolvedValue(connector), getPrivateMcpServer: vi.fn().mockResolvedValue(server),
+      updatePrivateMcpServer: command, preparePrivateMcpServer: command, setMcpConnectorEnabled: command,
+      removeMcpConnector: command, deletePrivateMcpServer: command, createMcpConnector: command,
+      beginMcpConnectorAuthorization: command, reconnectMcpConnectorAuthorization: command, createMcpConnection: command }
+    const boundary = { subject: "callback-owner", admitted: true, generation: 0 }
+    render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}>
+      <McpContent client={client} initialView="connections" readBoundary={boundary} />
+    </ConnectorCommandProvider></LocaleProvider>)
+    fireEvent.click(await screen.findByRole("button", { name: server.display_name }))
+    await screen.findByRole("dialog", { name: server.display_name })
+    expect(captured?.readOnlyConfiguration).toBe(true)
+    const current = captured!
+    await act(async () => {
+      current.onSaveConfiguration({ display_name: "Changed", notes: "Changed", server_url: "https://mcp.example.test/changed", header_upserts: [], header_removals: [] })
+      current.onPrepare(); current.onAuthorize(); current.onDisconnect(); current.onDeleteIntent(); current.onDelete()
+      current.onResumeManagement(); current.onPublish?.(); current.onTrial?.()
+      current.onRetryPreparationRecovery?.(); current.onRetryPublicationRecovery?.()
+    })
+    expect(command).not.toHaveBeenCalled()
+    expect(screen.queryByText("确认删除此自定义 MCP？")).toBeNull()
+  } finally { capture.mockRestore() }
+})
+
+async function jsonConfigurationFixture(unknown = false, icons?: McpIconClient, transport: McpPrivateServer["transport"] = "streamable_http", locale: Locale = "zh") {
+  localStorage.setItem("kokoro.locale", locale)
   let version = 3, name = "JSON editor MCP", url = "https://mcp.example.test/mcp", lostAck = false
   const server = (): McpPrivateServer => ({ availability: "available", server_id: "json-editor-server", display_name: name,
     server_url: url, notes: "Keep original note", status: "registered", state_version: String(version),
@@ -44,14 +118,18 @@ async function jsonConfigurationFixture(unknown = false, icons?: McpIconClient, 
   const view = render(content())
   fireEvent.click(await screen.findByRole("button", { name }))
   const detail = await screen.findByRole("dialog", { name })
-  fireEvent.keyDown(within(detail).getByRole("button", { name: "管理" }), { key: "Enter" })
-  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
+  if (locale === "en") {
+    for (const label of ["Details", "Category", "Uncategorized", "Connector type", "Custom MCP", "Give feedback"])
+      expect(within(detail).getByText(label)).toBeVisible()
+  }
+  fireEvent.keyDown(within(detail).getByRole("button", { name: resolveMessage(locale, "settings.manage") }), { key: "Enter" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: resolveMessage(locale, "mcp.configurationEdit") }))
   const openJson = async () => {
-    fireEvent.keyDown(screen.getByRole("button", { name: "管理" }), { key: "Enter" })
-    const entry = await screen.findByRole("menuitem", { name: "编辑 JSON" })
+    fireEvent.keyDown(screen.getByRole("button", { name: resolveMessage(locale, "settings.manage") }), { key: "Enter" })
+    const entry = await screen.findByRole("menuitem", { name: resolveMessage(locale, "mcp.configurationEditJson") })
     expect(entry).not.toHaveAttribute("aria-disabled", "true")
     fireEvent.click(entry)
-    return screen.findByRole("dialog", { name: "编辑配置 JSON" })
+    return screen.findByRole("dialog", { name: resolveMessage(locale, "mcp.configurationJsonTitle") })
   }
   return { update, prepare, register, importJson, openJson, change: (value: Partial<typeof boundary>) => {
     boundary = { ...boundary, ...value }; view.rerender(content())
@@ -60,7 +138,7 @@ async function jsonConfigurationFixture(unknown = false, icons?: McpIconClient, 
 
 it.each(["cancel", "escape"] as const)("opens the real JSON editor without saved secrets and %s preserves the outer draft with zero writes", async close => {
   const state = await jsonConfigurationFixture()
-  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Keep unsaved note" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （选填）" }), { target: { value: "Keep unsaved note" } })
   const dialog = await state.openJson()
   const text = within(dialog).getByRole("textbox")
   expect(JSON.parse((text as HTMLTextAreaElement).value)).toEqual({ mcpServers: { "JSON editor MCP": { type: "streamableHttp", url: "https://mcp.example.test/mcp" } } })
@@ -69,7 +147,7 @@ it.each(["cancel", "escape"] as const)("opens the real JSON editor without saved
   if (close === "cancel") fireEvent.click(within(dialog).getByRole("button", { name: "取消" }))
   else fireEvent.keyDown(dialog, { key: "Escape" })
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "编辑配置 JSON" })).toBeNull())
-  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Keep unsaved note")
+  expect(screen.getByRole("textbox", { name: "备注 （选填）" })).toHaveValue("Keep unsaved note")
   expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
   expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
 })
@@ -222,7 +300,7 @@ it.each([false, true])("JSON Save uses one existing Update identity and preserve
     expect(state.update.mock.calls[1]?.slice(0, 3)).toEqual(state.update.mock.calls[0]?.slice(0, 3))
   }
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "编辑配置 JSON" })).toBeNull())
-  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Keep original note")
+  expect(screen.getByRole("textbox", { name: "备注 （选填）" })).toHaveValue("Keep original note")
   expect(state.prepare).not.toHaveBeenCalled(); expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
 })
 
@@ -239,10 +317,10 @@ it.each([{}, { "x-saved-key": "explicit-new-value" }])("JSON headers are explici
 
 it.each(["cancel", "escape"] as const)("leaving configuration by %s returns to the same detail before closing its list entry", async close => {
   const state = await jsonConfigurationFixture()
-  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "discard local draft" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （选填）" }), { target: { value: "discard local draft" } })
   fireEvent.click(screen.getByRole("button", { name: "添加自定义 header" }))
-  fireEvent.change(screen.getByLabelText("Header name"), { target: { value: "x-unsaved" } })
-  fireEvent.change(screen.getByLabelText("Header value"), { target: { value: "discard-local-value" } })
+  fireEvent.change(screen.getByLabelText("Header 名称"), { target: { value: "x-unsaved" } })
+  fireEvent.change(screen.getByLabelText("Header 值"), { target: { value: "discard-local-value" } })
   const configuration = screen.getByRole("dialog", { name: "MCP 配置" })
   if (close === "cancel") fireEvent.click(within(configuration).getByRole("button", { name: "取消" }))
   else fireEvent.keyDown(configuration, { key: "Escape" })
@@ -251,8 +329,8 @@ it.each(["cancel", "escape"] as const)("leaving configuration by %s returns to t
   await waitFor(() => expect(within(detail).getByRole("button", { name: "管理" })).toHaveFocus())
   fireEvent.keyDown(within(detail).getByRole("button", { name: "管理" }), { key: "Enter" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
-  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Keep original note")
-  expect(screen.queryByLabelText("Header value")).toBeNull()
+  expect(screen.getByRole("textbox", { name: "备注 （选填）" })).toHaveValue("Keep original note")
+  expect(screen.queryByLabelText("Header 值")).toBeNull()
   fireEvent.keyDown(screen.getByRole("dialog", { name: "MCP 配置" }), { key: "Escape" })
   fireEvent.keyDown(screen.getByRole("dialog", { name: "JSON editor MCP" }), { key: "Escape" })
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
@@ -393,13 +471,13 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
   fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "First saved name" } })
   fireEvent.click(screen.getByRole("button", { name: "添加自定义 header" }))
-  fireEvent.change(screen.getByLabelText("Header name"), { target: { value: "x-test-key" } })
-  fireEvent.change(screen.getByLabelText("Header value"), { target: { value: "fixture-secret" } })
+  fireEvent.change(screen.getByLabelText("Header 名称"), { target: { value: "x-test-key" } })
+  fireEvent.change(screen.getByLabelText("Header 值"), { target: { value: "fixture-secret" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(update).toHaveBeenCalledOnce())
   if (mode === "unknown-then-replayed") {
     const retry = await screen.findByRole("button", { name: "重试原请求" })
-    expect(screen.getByLabelText("Header value")).toHaveValue("fixture-secret")
+    expect(screen.getByLabelText("Header 值")).toHaveValue("fixture-secret")
     expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveAttribute("readonly")
     fireEvent.click(retry)
     await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
@@ -408,17 +486,17 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   if (mode === "read-failed") {
     await within(dialog).findByText("连接列表加载失败")
     expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument()
-    expect(within(dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+    const retry = within(dialog).getByRole("button", { name: "重试" })
+    expect(retry).toBeEnabled()
     expect(screen.getByLabelText("传输类型 —")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
     expect(update).toHaveBeenCalledOnce()
-    // A normal owner invalidation can refresh this window; never resend Save.
-    const { invalidateMcpConnectorProjection } = await import("@/ui/mcp/use-mcp-projection")
-    act(() => invalidateMcpConnectorProjection(hub, "save-config-actor"))
+    // Recover the failed detail GET in place; never resend Save.
+    fireEvent.click(retry)
   }
   await waitFor(() => expect(read).toHaveBeenCalledTimes(mode === "read-failed" ? 3 : 2))
   expect(screen.getByRole("dialog", { name: "MCP 配置" })).toBe(dialog)
-  expect(screen.queryByLabelText("Header value")).not.toBeInTheDocument()
+  expect(screen.queryByLabelText("Header 值")).not.toBeInTheDocument()
   // A new name is not a configured descriptor until the fresh owner read.
   expect(screen.queryByText("x-test-key")).not.toBeInTheDocument()
   expect(screen.getByRole("textbox", { name: "服务器名称" })).toHaveValue("First saved name")
@@ -429,8 +507,10 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
     // read does not revive it; only that read's fresh owner facts may do so.
     expect(screen.getByLabelText("传输类型 —")).toHaveTextContent("—")
     const loadingAnnouncement = within(dialog).getByRole("status")
-    expect(loadingAnnouncement).toHaveTextContent("正在加载…")
-    expect(loadingAnnouncement).toHaveClass("sr-only")
+    expect(loadingAnnouncement).toHaveTextContent("连接列表加载失败")
+    expect(loadingAnnouncement).toBeVisible()
+    expect(loadingAnnouncement).toHaveAttribute("aria-busy", "true")
+    expect(within(loadingAnnouncement).getByRole("button", { name: "重试" })).toBeDisabled()
   } else {
     expect(screen.getByLabelText("传输类型 HTTP")).toHaveTextContent("HTTP")
     expect(within(dialog).queryByText("正在加载…")).not.toBeInTheDocument()
@@ -461,7 +541,7 @@ it.each(["confirmed", "unknown-then-replayed", "read-failed"])("configuration Sa
   fireEvent.click(screen.getByRole("button", { name: "试用一下" }))
   expect(trial).not.toHaveBeenCalled()
   expect(screen.getByRole("textbox", { name: "服务器 URL" })).toHaveValue("https://mcp.example.test/mcp")
-  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).toHaveValue("Saved note")
+  expect(screen.getByRole("textbox", { name: "备注 （选填）" })).toHaveValue("Saved note")
   expect(update.mock.calls[0]?.[1]).toEqual({ expected_state_version: "3", display_name: "First saved name", header_upserts: [{ name: "x-test-key", value: "fixture-secret" }] })
   expect(update.mock.calls[confirmedCalls]?.[1]).toEqual({ expected_state_version: "4", display_name: "Second saved name" })
   expect(update.mock.calls[confirmedCalls]?.[2]).not.toBe(update.mock.calls[0]?.[2])
@@ -507,7 +587,7 @@ it("an unresolved queried Prepare allows an independent fresh-CAS SSE Save witho
   fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "Enter" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
   expect(screen.getByRole("textbox", { name: "服务器名称" })).not.toHaveAttribute("readonly")
-  expect(screen.getByRole("textbox", { name: "备注 （可选）" })).not.toHaveAttribute("readonly")
+  expect(screen.getByRole("textbox", { name: "备注 （选填）" })).not.toHaveAttribute("readonly")
   expect(screen.getByRole("textbox", { name: "服务器 URL" })).not.toHaveAttribute("readonly")
   fireEvent.change(screen.getByRole("textbox", { name: "服务器名称" }), { target: { value: "Saved independently" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
@@ -601,7 +681,7 @@ async function confirmedPrimary(connected: boolean, headerDescriptors: McpPrivat
   if (iconOptions?.edit) await iconOptions.edit()
   const shownImage = screen.queryByRole("img", { name: "连接器图标" })
   if (shownImage && iconOptions?.loaded !== false) loadImage(shownImage, iconOptions?.loadSource)
-  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Submitted primary note" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （选填）" }), { target: { value: "Submitted primary note" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   expect(save).toHaveBeenCalledOnce()
   const confirmation = {}
@@ -729,7 +809,7 @@ async function pendingPrivateServerRead() {
   const dialog = await screen.findByRole("dialog", { name: "Proof MCP" })
   fireEvent.keyDown(within(dialog).getByRole("button", { name: "管理" }), { key: "Enter" })
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑配置" }))
-  fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Saved proof note" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "备注 （选填）" }), { target: { value: "Saved proof note" } })
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
   expect(patch).toHaveBeenCalledOnce()
@@ -745,13 +825,19 @@ it.each(["401", "403", "parse401", "network", "aborted"] as const)("the real sav
     "controlled private-server read", null, failure === "403" ? 403 : 401)
   await act(async () => { state.rejectRead(error) })
   expect(await within(state.dialog).findByText("连接列表加载失败")).toBeInTheDocument()
-  expect(within(state.dialog).queryByRole("button", { name: "重试" })).not.toBeInTheDocument()
+  const retry = within(state.dialog).getByRole("button", { name: "重试" })
+  expect(retry).toBeEnabled()
   expect(within(state.dialog).queryByRole("alert")).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "保存" })).toBeDisabled()
   expect(state.report).toHaveBeenCalledTimes(failure === "401" ? 1 : 0)
   expect(state.read).toHaveBeenCalledTimes(2)
   expect(state.patch).toHaveBeenCalledOnce()
   expect({ body: JSON.stringify(state.patch.mock.calls[0]?.[1]), key: state.patch.mock.calls[0]?.[2] }).toEqual(state.original)
+  fireEvent.click(retry)
+  await waitFor(() => expect(state.read).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled())
+  expect(state.patch).toHaveBeenCalledOnce()
+  expect(state.report).toHaveBeenCalledTimes(failure === "401" ? 1 : 0)
 })
 
 it.each(["actor", "generation", "close", "unmount"] as const)("a late private-server HTTP401 after %s never requests readmission or replays Save", async retirement => {
@@ -813,11 +899,11 @@ it.each(["notes", "rotate", "remove"] as const)("confirmed Header names keep the
   loadImage(confirmedImage)
   expect(screen.queryByText("x-revoked-key")).not.toBeInTheDocument()
   if (operation === "notes") {
-    fireEvent.change(screen.getByRole("textbox", { name: "备注 （可选）" }), { target: { value: "Updated note" } })
+    fireEvent.change(screen.getByRole("textbox", { name: "备注 （选填）" }), { target: { value: "Updated note" } })
   } else if (operation === "rotate") {
     fireEvent.click(screen.getByRole("button", { name: "添加自定义 header" }))
-    fireEvent.change(screen.getByLabelText("Header name"), { target: { value: "x-present-key" } })
-    fireEvent.change(screen.getByLabelText("Header value"), { target: { value: "write-only-rotation-fixture" } })
+    fireEvent.change(screen.getByLabelText("Header 名称"), { target: { value: "x-present-key" } })
+    fireEvent.change(screen.getByLabelText("Header 值"), { target: { value: "write-only-rotation-fixture" } })
   } else {
     fireEvent.click(screen.getByRole("button", { name: "移除 x-removed-key" }))
     expect(screen.queryByText("x-removed-key")).not.toBeInTheDocument()
@@ -825,7 +911,7 @@ it.each(["notes", "rotate", "remove"] as const)("confirmed Header names keep the
   fireEvent.click(screen.getByRole("button", { name: "保存" }))
   await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
   expect(patch).toHaveBeenCalledOnce()
-  expect(screen.queryByLabelText("Header value")).not.toBeInTheDocument()
+  expect(screen.queryByLabelText("Header 值")).not.toBeInTheDocument()
   expect(screen.getByText("x-present-key")).toBe(confirmedRow)
   expect(screen.getByRole("img", { name: "连接器图标" })).toBe(confirmedImage)
   expect(confirmedImage).toHaveAttribute("src", boundIcon.preview_reference!.url)
@@ -844,7 +930,7 @@ it.each(["notes", "rotate", "remove"] as const)("confirmed Header names keep the
   await act(async () => { releaseRead(); await pendingRead })
   await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toBeEnabled())
   expect(screen.getByRole("button", { name: "移除 x-present-key" })).toBeEnabled()
-  expect(screen.queryByLabelText("Header value")).not.toBeInTheDocument()
+  expect(screen.queryByLabelText("Header 值")).not.toBeInTheDocument()
   if (operation === "remove") expect(screen.queryByText("x-removed-key")).not.toBeInTheDocument()
   expect(patch).toHaveBeenCalledOnce()
 })
@@ -984,3 +1070,183 @@ it.each(["ready","needs_oauth"] as const)("stale disconnected detail adopts fres
  await within(dialog).findByRole("button",{name:status==="ready"?"试用一下":"重新连接"});
  expect(prepare).not.toHaveBeenCalled();expect(authorize).not.toHaveBeenCalled();expect(dialog).toBeVisible();expect(within(dialog).queryByRole("button",{name:"完成"})).toBeNull();
 });
+
+
+it("English configuration labels and JSON errors/copy feedback stay localized without exposing secret input or writing", async () => {
+  const previous = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+  const writeText = vi.fn<(text: string) => Promise<void>>(async () => {})
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+  try {
+    const state = await jsonConfigurationFixture(false, undefined, "streamable_http", "en")
+    const configuration = screen.getByRole("dialog", { name: "MCP settings" })
+    expect(within(configuration).getByRole("textbox", { name: "Server name" })).toHaveValue("JSON editor MCP")
+    expect(within(configuration).getByRole("textbox", { name: "Notes (optional)" })).toHaveValue("Keep original note")
+    expect(within(configuration).getByText("Configured")).toBeVisible()
+    expect(within(configuration).getByRole("button", { name: "Copy UUID" })).toBeEnabled()
+    const dialog = await state.openJson()
+    const input = within(dialog).getByRole("textbox", { name: "MCP configuration JSON" })
+    fireEvent.change(input, { target: { value: '{"mcpServers":{"A":{"type":"sse","url":"https://mcp.example.test","headers":{"x-secret":"private-error-sentinel"}}}}' } })
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }))
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("The transport type of this connector cannot be changed.")
+    expect(within(dialog).getByRole("alert")).not.toHaveTextContent("private-error-sentinel")
+    const malformed = 'private-error-sentinel: malformed JSON'
+    fireEvent.change(input, { target: { value: malformed } })
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }))
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Enter a valid configuration containing exactly one MCP server. Only type, url and valid headers are supported.")
+    expect(within(dialog).getByRole("alert")).not.toHaveTextContent("private-error-sentinel")
+    fireEvent.click(within(dialog).getByRole("button", { name: "Copy to clipboard" }))
+    expect(await within(dialog).findByRole("status")).toHaveTextContent("Copied to clipboard")
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(malformed)
+    writeText.mockRejectedValueOnce(Error("private-clipboard-error"))
+    fireEvent.click(within(dialog).getByRole("button", { name: "Copy to clipboard" }))
+    expect(await within(dialog).findByText("Copy failed. Try again.")).toBeVisible()
+    expect(dialog).not.toHaveTextContent("private-clipboard-error")
+    expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+    expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
+  } finally {
+    if (previous) Object.defineProperty(navigator, "clipboard", previous)
+    else Reflect.deleteProperty(navigator, "clipboard")
+  }
+})
+
+it("the MCP detail/configuration slice has explicit messages in all nine runtime locales", () => {
+  const keys = [
+    "mcp.active", "mcp.availability.refreshRequired", "mcp.availability.refreshing",
+    "mcp.availability.reauthorizationRequired", "mcp.availability.unavailable", "settings.connect",
+    "mcp.iconLabel", "mcp.iconHint",
+    "mcp.registerDialogTitle", "connectorCatalog.copyUuid", "mcp.customName", "mcp.customTransport",
+    "mcp.customInstructions", "mcp.optional", "mcp.customInstructionsPlaceholder", "mcp.customServerUrl",
+    "mcp.customHeaders", "mcp.customHeaderNamePlaceholder", "mcp.customHeaderValuePlaceholder",
+    "mcp.customAddHeader", "mcp.customSaveOptions", "mcp.save", "mcp.cancel", "mcp.delete",
+    "mcp.details", "mcp.detailCategory", "mcp.detailConnectorType", "mcp.disconnectConnection", "mcp.publishTitle",
+    "mcp.jsonImportDescription", "connectorCatalog.customMcp", "settings.manage", "mcp.actionFailed",
+    "mcp.saveChanges", "mcp.deleteConfirm", "mcp.description", "mcp.edit", "mcp.publishRecoveryError",
+    "mcp.publishRetryRead", "mcp.errHeaderName", "mcp.tryAction", "mcp.configurationEdit", "mcp.configurationEditJson",
+    "mcp.configurationJsonTitle", "mcp.configurationJsonLabel", "mcp.configurationJsonHelp", "mcp.configurationJsonInvalid",
+    "mcp.configurationTransportImmutable", "mcp.configurationHeadersDuplicate", "mcp.configurationHeadersInvalid",
+    "mcp.configurationCopy", "mcp.configurationCopied", "mcp.configurationCopyFailed", "mcp.headerConfigured",
+    "mcp.removeNamedHeader", "mcp.removeNewHeader", "mcp.uncategorized", "mcp.customDeleteConfirm", "mcp.provideFeedback",
+  ] as const
+  const localizedDefaults = new Set<string>([
+    "mcp.active", "mcp.availability.refreshRequired", "mcp.availability.refreshing",
+    "mcp.availability.reauthorizationRequired", "mcp.availability.unavailable", "settings.connect",
+    "mcp.registerDialogTitle", "mcp.save", "mcp.iconLabel", "mcp.iconHint",
+  ])
+  for (const locale of LOCALES) for (const key of keys) {
+    const source: Readonly<Record<string, string | undefined>> = locale === "zh" ? zh : OVERLAYS[locale]
+    expect.soft(source[key]?.trim(), `${locale}:${key}`).toBeTruthy()
+    const resolved = resolveMessage(locale, key as keyof typeof zh, { name: "x-fixture" })
+    expect.soft(resolved, `${locale}:${key}`).not.toBe(key)
+    if (locale !== "zh" && locale !== "en" && localizedDefaults.has(key))
+      expect.soft(resolved, `${locale}:${key} English placeholder`).not.toBe(resolveMessage("en", key as keyof typeof zh))
+    if (locale !== "zh" && locale !== "ja") expect.soft(resolved, `${locale}:${key}`).not.toMatch(/[\u3400-\u9fff]/u)
+  }
+})
+
+
+it.each([
+  { kind: "duplicate", expected: "Custom header names must be unique." },
+  { kind: "invalid", expected: "Custom headers are invalid or exceed the allowed count or size." },
+  { kind: "unexpected", expected: "Enter a valid configuration containing exactly one MCP server. Only type, url and valid headers are supported." },
+] as const)("JSON local $kind save validation maps a safe error category, never the thrown secret", ({ kind, expected }) => {
+  localStorage.setItem("kokoro.locale", "en")
+  const onSave = vi.fn(() => {
+    if (kind === "unexpected") throw Error("private-thrown-sentinel")
+    const headers = kind === "duplicate"
+      ? [{ name: "x-one", value: "private-thrown-sentinel" }, { name: "X-One", value: "private-thrown-sentinel" }]
+      : [{ name: "Authorization", value: "private-thrown-sentinel" }]
+    mergeConfigurationJsonHeaders(headers, [])
+  })
+  render(<LocaleProvider><McpConfigurationJsonDialog
+    initialJson={JSON.stringify({ mcpServers: { Local: { type: "streamableHttp", url: "https://mcp.example.test/mcp" } } })}
+    transport="streamable_http" locked={false} status={null} isCurrent={() => true}
+    onSave={onSave} onClose={vi.fn()} returnFocusRef={{ current: null }} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "Save" }))
+  expect(onSave).toHaveBeenCalledOnce()
+  expect(screen.getByRole("alert")).toHaveTextContent(expected)
+  expect(screen.getByRole("alert")).not.toHaveTextContent("private-thrown-sentinel")
+})
+
+
+it("French MCP detail translates unavailable qualification and the connection action without starting it", () => {
+  localStorage.setItem("kokoro.locale", "fr")
+  const connector: McpConnector = { availability: "unavailable", connector_id: "french-connector", server_id: "french-server",
+    provider_key: "french-provider", connector_type: "mcp", status: "active", enabled: true, state_version: "1", approved_scopes: [] }
+  const server: McpPrivateServer = { availability: "unavailable", server_id: "french-server", display_name: "French MCP",
+    server_url: "https://mcp.example.test/french", status: "registered", state_version: "1", transport: "streamable_http",
+    headers: [], prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const command = vi.fn()
+  render(<LocaleProvider><CustomMcpDetailDialog connector={connector} server={server} admitted
+    actionId={null} actionError={false} deleteId={null} managementCommand={undefined}
+    onResumeManagement={command} onSaveConfiguration={command} onPrepare={command}
+    onAuthorize={command} onDisconnect={command} onDeleteIntent={command} onDelete={command} onCancelDelete={command}
+    returnFocusRef={{ current: null }} onClose={command} /></LocaleProvider>)
+  const detail = screen.getByRole("dialog", { name: server.display_name })
+  expect(within(detail).getByLabelText("Actuellement indisponible")).toHaveTextContent("Actuellement indisponible")
+  expect(within(detail).getByRole("button", { name: "Connecter" })).toBeEnabled()
+  expect(within(detail).queryByText("暂不可用")).toBeNull()
+  expect(within(detail).queryByRole("button", { name: "Connect" })).toBeNull()
+  expect(command).not.toHaveBeenCalled()
+})
+
+
+it("French MCP configuration localizes its default title, save action and icon guidance without uploading", async () => {
+  const state = await jsonConfigurationFixture(false, undefined, "streamable_http", "fr")
+  const configuration = screen.getByRole("dialog", { name: "Paramètres MCP" })
+  expect(within(configuration).getByRole("button", { name: "Enregistrer" })).toBeEnabled()
+  expect(within(configuration).getByText("Icône")).toBeVisible()
+  expect(within(configuration).getByText("PNG ou JPG, 1 Mo maximum. Taille recommandée : 256×256 pixels.")).toBeVisible()
+  expect(state.update).not.toHaveBeenCalled(); expect(state.prepare).not.toHaveBeenCalled()
+  expect(state.register).not.toHaveBeenCalled(); expect(state.importJson).not.toHaveBeenCalled()
+})
+
+it.each([{ failedRead: false, badProvider: false }, { failedRead: true, badProvider: false }, { failedRead: false, badProvider: true }])("explicit New Authorization uses exact pending reads (read failure $failedRead, bad provider $badProvider), never Prepare or OAuth", async ({ failedRead, badProvider }) => {
+  localStorage.setItem("kokoro.locale", "en")
+  const removed: McpConnector = { availability: "unavailable", connector_id: "removed-source", server_id: "saved-server", provider_key: "private-saved-server",
+    connector_type: "mcp", display_name: "Removed configuration", status: "revoked", enabled: false, state_version: "7", approved_scopes: [] }
+  const saved: McpPrivateServer = { availability: "unavailable", server_id: "saved-server", display_name: "Removed configuration",
+    server_url: "https://mcp.example.test/saved", status: "registered", state_version: "4", headers: [], transport: "streamable_http",
+    prepare_status: "pending_prepare", declarations: [], declarations_available: false }
+  const pendingConnector: McpConnector = { ...removed, connector_id: "new-pending", status: "pending", state_version: "1" }
+  const pendingServer: McpPrivateServer = { ...saved, status: "pending", state_version: "5" }
+  let confirmed = false, failedOnce = false
+  const reauthorize = vi.fn(async () => { confirmed = true; return mcpReauthorizationDataSchema.parse({ server: pendingServer, connector: badProvider ? { ...pendingConnector, provider_key: "private-other-server" } : pendingConnector, replayed: false }) })
+  const prepare = vi.fn(), oauth = vi.fn(), enable = vi.fn()
+  const client = { ...createHubClient(), reauthorizePrivateMcpServer: reauthorize, preparePrivateMcpServer: prepare,
+    beginMcpConnectorAuthorization: oauth, reconnectMcpConnectorAuthorization: oauth, setMcpConnectorEnabled: enable,
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpConnectors: vi.fn().mockResolvedValue({ items: [removed], next_cursor: null }),
+    listCustomApis: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    getMcpConnector: vi.fn(async (id: string) => {
+      if (id === pendingConnector.connector_id && failedRead && !failedOnce) { failedOnce = true; throw Error("fresh read unavailable") }
+      return id === pendingConnector.connector_id ? pendingConnector : removed
+    }),
+    getPrivateMcpServer: vi.fn(async () => confirmed ? pendingServer : saved) }
+  const boundary = { subject: "removed-owner", admitted: true, generation: 1 }
+  render(<LocaleProvider><ConnectorCommandProvider client={client} boundary={boundary}>
+    <McpContent client={client} initialView="connections" readBoundary={boundary} />
+  </ConnectorCommandProvider></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: saved.display_name }))
+  const action = await screen.findByRole("button", { name: "Create new authorization" })
+  await waitFor(() => expect(action).toBeEnabled())
+  expect(reauthorize).not.toHaveBeenCalled()
+  fireEvent.click(action)
+  await waitFor(() => expect(reauthorize).toHaveBeenCalledOnce())
+  expect(reauthorize).toHaveBeenCalledWith(saved.server_id, { source_connector_id: removed.connector_id,
+    expected_server_state_version: "4", expected_connector_state_version: "7" }, expect.any(String), expect.any(AbortSignal))
+  if (badProvider) {
+    await screen.findByRole("button", { name: "Retry original request" })
+    expect(client.getMcpConnector.mock.calls.some(([id]) => id === pendingConnector.connector_id)).toBe(false)
+    expect(client.getPrivateMcpServer).toHaveBeenCalledOnce()
+    expect(prepare).not.toHaveBeenCalled(); expect(oauth).not.toHaveBeenCalled(); expect(enable).not.toHaveBeenCalled()
+    return
+  }
+  await waitFor(() => expect(client.getMcpConnector).toHaveBeenCalledWith(pendingConnector.connector_id, expect.any(AbortSignal)))
+  if (failedRead) {
+    fireEvent.click(await screen.findByRole("button", { name: "Reload added connectors" }))
+    await waitFor(() => expect(client.getMcpConnector.mock.calls.filter(([id]) => id === pendingConnector.connector_id).length).toBe(2))
+    expect(reauthorize).toHaveBeenCalledOnce()
+  }
+  await waitFor(() => expect(client.getPrivateMcpServer.mock.calls.length).toBeGreaterThan(1))
+  expect(prepare).not.toHaveBeenCalled(); expect(oauth).not.toHaveBeenCalled(); expect(enable).not.toHaveBeenCalled()
+})

@@ -60,7 +60,7 @@ export function ProjectContextComposition({ retirementKey, active, task, onClose
                 </CardFooter>
               ) : null}
               {capabilities?.connectors ? (
-                <ProjectMcpRecommendationsSection active={active} model={projectMcpRecommendations} />
+                <ProjectMcpRecommendationsSection readOnly={capabilities?.readOnly === true} active={active} model={projectMcpRecommendations} />
               ) : null}
             </Card>
           ) : null}
@@ -72,7 +72,7 @@ export function ProjectContextComposition({ retirementKey, active, task, onClose
                   title={t("firstSite.filesAndResources")}
                   description={t("firstSite.filesHint")}
                   actions={[
-                    { id: "upload", label: t("firstSite.upload"), icon: Upload, trailingIcon: ChevronDown },
+                    { id: "upload", disabled: capabilities?.readOnly, label: t("firstSite.upload"), icon: Upload, trailingIcon: ChevronDown },
                     { id: "search-web", label: t("firstSite.searchWeb"), icon: ListFilter },
                   ]}
                   showChevron
@@ -91,7 +91,7 @@ export function ProjectContextComposition({ retirementKey, active, task, onClose
                 /></section>
               ) : null}
               {capabilities.skills ? (
-                <ProjectSkillsSection active={active} key={JSON.stringify([projectReadBoundary?.subject ?? null, projectRef ?? null, retirementKey])}
+                <ProjectSkillsSection readOnly={capabilities?.readOnly === true} active={active} key={JSON.stringify([projectReadBoundary?.subject ?? null, projectRef ?? null, retirementKey])}
                   preview={preview} {...(projectDetail === undefined ? {} : { projectDetail })}
                   {...(projectReadBoundary === undefined ? {} : { projectReadBoundary })}
                   {...(onOpenSettings === undefined ? {} : { onOpenSettings })} />

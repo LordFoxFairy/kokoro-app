@@ -197,7 +197,7 @@ const PREVIEW_WORKSPACE_CAPABILITIES: WorkspaceCapabilities = {
   scheduledTasks: true,
 }
 
-const WORKSPACE_CAPABILITY_KEYS: Readonly<Record<keyof WorkspaceCapabilities, readonly string[]>> = {
+const WORKSPACE_CAPABILITY_KEYS: Readonly<Record<Exclude<keyof WorkspaceCapabilities, "readOnly">, readonly string[]>> = {
   instructions: ["workspace.instructions", "project.instructions"],
   connectors: ["workspace.connectors", "project.connectors"],
   resources: ["workspace.resources", "project.resources", "workspace.files"],

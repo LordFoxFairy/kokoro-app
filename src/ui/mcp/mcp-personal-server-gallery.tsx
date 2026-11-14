@@ -3,6 +3,7 @@
 import type { McpConnector, McpConnectorProvider } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
 import { McpConnectorCard } from "./mcp-connector-card";
+import { isVisibleMcpConfiguration } from "./mcp-projection-types";
 import styles from "./mcp-custom-api-gallery.module.css";
 
 type PersonalGalleryRead = {
@@ -17,7 +18,7 @@ type PersonalGalleryRead = {
 export function visiblePersonalMcpServers({ connectors, admitted, confirmed, query, category }: PersonalGalleryRead): readonly McpConnector[] {
   if (!admitted || !confirmed || category !== "all") return [];
   const search = query.trim().toLocaleLowerCase();
-  return connectors.filter(connector => connector.connector_type === "mcp" && Boolean(connector.server_id) && connector.status !== "revoked" &&
+  return connectors.filter(connector => connector.connector_type === "mcp" && Boolean(connector.server_id) && isVisibleMcpConfiguration(connector) &&
     (!search || [connector.display_name, connector.description].some(value => value?.toLocaleLowerCase().includes(search))));
 }
 

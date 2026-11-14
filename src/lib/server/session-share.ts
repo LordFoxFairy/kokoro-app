@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { parseSharedTasksJson } from "@/lib/shared-tasks-json";
-import { shareAckSchema, shareErrorSchema } from "@/lib/shared-tasks.schema";
+import { shareAckSchema, shareErrorSchema, sessionShareMetadataResponseSchema } from "@/lib/shared-tasks.schema";
 import { productBffConfig, productBffHeaders } from "./product-bff";
 import { requestWithDomain } from "./upstream-http";
 
@@ -24,17 +24,17 @@ export async function sessionShare(
   if (!config) return fail(503, "session_share_dependency_unavailable");
   const url = new URL(request.url),
     origin = new URL(config.session.webOrigin);
-  if (!["POST", "DELETE"].includes(request.method))
+  if (!["GET", "POST", "DELETE"].includes(request.method))
     return fail(405, "session_share_method_not_allowed");
   if (
     url.protocol !== origin.protocol ||
     request.headers.get("host") !== origin.host ||
-    request.headers.get("origin") !== origin.origin
+    (request.method === "GET" ? request.headers.has("origin") && request.headers.get("origin") !== origin.origin || request.headers.get("sec-fetch-site") === "cross-site" : request.headers.get("origin") !== origin.origin)
   )
     return fail(403, "session_share_forbidden_origin");
   const key = request.headers.get("idempotency-key");
   if (
-    !key ||
+    (request.method === "GET" ? key !== null || request.headers.has("content-type") || request.headers.has("content-length") || request.body !== null : !key) ||
     request.headers.has("content-encoding") ||
     request.headers.has("transfer-encoding")
   )
@@ -156,7 +156,7 @@ export async function sessionShare(
     check();
 
     const outgoing = productBffHeaders(config, request, requestId);
-    outgoing.set("idempotency-key", key);
+    if (key !== null) outgoing.set("idempotency-key", key);
     if (request.method === "POST")
       outgoing.set("content-type", "application/json");
     response = await requestWithDomain(
@@ -216,11 +216,11 @@ export async function sessionShare(
     try {
       const raw = parseSharedTasksJson(text);
       if (status === 200) {
-        const ack = shareAckSchema.parse(raw);
+        const ack = request.method === "GET" ? sessionShareMetadataResponseSchema.parse(raw) : shareAckSchema.parse(raw);
         if (ack.meta.request_id !== requestId) throw Error();
         output = ack.data;
       } else {
-        if (![401, 403, 404, 409, 429, 503].includes(status)) throw Error();
+        if (![401, 403, 404, 409, 429, 503].includes(status) && !(request.method === "GET" && status === 400)) throw Error();
         const e = shareErrorSchema.parse(raw);
         if (e.meta.request_id !== requestId) throw Error();
         output = e;

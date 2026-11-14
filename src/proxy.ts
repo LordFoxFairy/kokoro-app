@@ -205,12 +205,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
   // Only exact binary GET paths suppress referrer data at the final Next
   // boundary. Do not accept arbitrary percent escapes or double decoding here.
-  if (
-    request.method === "GET" &&
-    request.nextUrl.search === "" &&
-    (/^\/api\/hub\/library\/files\/(?:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}|asset%3A[a-f0-9]{64})\/content$/u.test(path) ||
-      /^\/api\/hub\/library\/artifacts\/[A-Za-z0-9](?:[A-Za-z0-9._:-]|%3A){0,190}\/[A-Za-z0-9](?:[A-Za-z0-9._:-]|%3A){0,190}\/content$/u.test(path))
-  ) {
+  if (request.method === "GET" && request.nextUrl.search === ""
+    && (/^\/api\/hub\/library\/files\/(?:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}|asset%3A[a-f0-9]{64})\/content$/u.test(path)
+      || /^\/api\/hub\/library\/artifacts\/[A-Za-z0-9](?:[A-Za-z0-9._:-]|%3A){0,190}\/[A-Za-z0-9](?:[A-Za-z0-9._:-]|%3A){0,190}\/content$/u.test(path)
+      || /^\/api\/hub\/mcp\/servers\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\/icon$/u.test(path))) {
     response.headers.set("Referrer-Policy", "no-referrer")
   }
   if (shouldDisableCaching(path)) {

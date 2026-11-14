@@ -72,7 +72,7 @@ export function LibraryArtifactDetail({ artifact, read, admitted, generation, bo
           {canPreview && supportsPreview ? <Button type="button" variant="outline" aria-expanded={previewOpen} aria-disabled={previewOpen}
             onClick={() => { if (!previewOpen) setPreviewSelection(visible) }}>{t("canvas.previewTab")}</Button> : null}
           {onOpenSource && detail.projectRef !== undefined ? <Button variant="outline" onClick={() => onOpenSource(detail)}>{t("library.openSource")}</Button> : null}
-          <Button disabled={downloadState === "loading"} aria-busy={downloadState === "loading"} onClick={() => void onDownload(detail)}><Download aria-hidden="true" />{t(downloadState === "error" ? "library.fileRetryDownload" : "library.fileDownload")}</Button>
+          <Button disabled={downloadState === "loading"} aria-busy={downloadState === "loading"} onClick={() => void onDownload(artifact)}><Download aria-hidden="true" />{t(downloadState === "error" ? "library.fileRetryDownload" : "library.fileDownload")}</Button>
         </div>
         {previewOpen ? <ArtifactTextPreview detail={detail} boundary={boundary} /> : canPreview && !supportsPreview
           ? <p>{t("artifact.unsupported")}</p> : null}

@@ -25,7 +25,7 @@ const boundary = { admitted: true, subject: "icon-form-actor", generation: 1 };
 const iconId = "12345678-1234-1234-1234-123456789abc";
 const selector = { intent_id: iconId, expected_state_version: "3" };
 const imageUrl = "https://images.example.test/icon.png";
-const profile: CustomApiProfile = {
+const profile: CustomApiProfile = { governance_status: "active" as const,
   profile_id: "icon-form-api", name: "Original API", state_version: "7",
   created_at: "2026-10-24T00:00:00Z", updated_at: "2026-10-24T00:00:00Z", environment: [],
 };
@@ -71,7 +71,8 @@ function renderCreationDialog(mode: "form" | "custom-api", icon: ReturnType<type
   const create = vi.fn<NonNullable<HubClient["createCustomApi"]>>(async () => profile);
   const register = vi.fn<NonNullable<HubClient["registerPrivateMcpServer"]>>();
   const done = vi.fn(async () => undefined);
-  const client = { ...createHubClient(), mcpIcons: icon.client, createCustomApi: create, registerPrivateMcpServer: register };
+  const get = vi.fn<NonNullable<HubClient["getCustomApi"]>>(async () => profile);
+  const client = { ...createHubClient(), mcpIcons: icon.client, createCustomApi: create, getCustomApi: get, registerPrivateMcpServer: register };
   function Harness() {
     const [open, setOpen] = useState(true);
     return <ConnectorCommandProvider client={client} boundary={boundary}>
@@ -79,7 +80,7 @@ function renderCreationDialog(mode: "form" | "custom-api", icon: ReturnType<type
     </ConnectorCommandProvider>;
   }
   const view = render(<LocaleProvider><Harness /></LocaleProvider>);
-  return { view, create, register, done };
+  return { view, create, get, register, done };
 }
 
 function fillApiCreationSecret() {
@@ -89,6 +90,104 @@ function fillApiCreationSecret() {
 
 beforeEach(() => { localStorage.setItem("kokoro.locale", "zh"); });
 afterEach(() => { cleanup(); localStorage.removeItem("kokoro.locale"); });
+
+it.each(["cancel", "escape"] as const)("closing the icon URL dialog by %s returns to Upload without closing or publishing the outer form", async close => {
+  const icon = iconFixture();
+  const { create, register, done } = renderCreationDialog("custom-api", icon);
+  const outer = await screen.findByRole("dialog");
+  const upload = within(outer).getByRole("button", { name: /^上传$/u });
+  upload.focus();
+  fireEvent.keyDown(upload, { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "粘贴图片 URL" }));
+  const dialog = await screen.findByRole("dialog", { name: "通过 URL 添加图片" });
+  if (close === "cancel") fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  else fireEvent.keyDown(within(dialog).getByRole("textbox", { name: "图标 URL" }), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "通过 URL 添加图片" })).not.toBeInTheDocument());
+  await waitFor(() => expect(upload).toHaveFocus());
+  expect(outer).toBeVisible();
+  expect(create).not.toHaveBeenCalled();
+  expect(register).not.toHaveBeenCalled();
+  expect(done).not.toHaveBeenCalled();
+  expect(icon.client.importUrl).not.toHaveBeenCalled();
+  expect(icon.client.cancel).not.toHaveBeenCalled();
+});
+
+it.each(["disabled", "disconnected"] as const)("closing an icon URL window never focuses its %s Upload trigger", async retirement => {
+  const icon = iconFixture();
+  const save = vi.fn(), remove = vi.fn(), close = vi.fn();
+  const detail = (busy: boolean) => <LocaleProvider><CustomApiDetailDialog
+    profile={profile} iconClient={icon.client} iconBoundary={boundary}
+    actionError={false} busy={busy} admitted command={undefined} canUpdate canRemove
+    onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={close} onSave={save} onDelete={remove}
+  /></LocaleProvider>;
+  const view = render(detail(false));
+  const upload = screen.getByRole("button", { name: /^上传$/u });
+  upload.focus();
+  fireEvent.keyDown(upload, { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "粘贴图片 URL" }));
+  const dialog = await screen.findByRole("dialog", { name: "通过 URL 添加图片" });
+  const focus = vi.spyOn(upload, "focus");
+  if (retirement === "disabled") {
+    view.rerender(detail(true));
+    expect(upload).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+  } else view.unmount();
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "通过 URL 添加图片" })).not.toBeInTheDocument());
+  // Radix retires its FocusScope on the following task after content unmount.
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(focus).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+  expect(remove).not.toHaveBeenCalled();
+  expect(close).not.toHaveBeenCalled();
+  expect(icon.client.importUrl).not.toHaveBeenCalled();
+  expect(icon.client.cancel).not.toHaveBeenCalled();
+});
+
+it("English API details localize visible fields, secret controls and the shared icon URL dialog", async () => {
+  localStorage.setItem("kokoro.locale", "en");
+  const icon = iconFixture();
+  const save = vi.fn(), remove = vi.fn();
+  render(<LocaleProvider><CustomApiDetailDialog
+    profile={{ ...profile, environment: [{ name: "QA_API_KEY", status: "active", state_version: "1", configured: true }] }}
+    iconClient={icon.client} iconBoundary={boundary}
+    actionError={false} busy={false} admitted command={undefined} canUpdate canRemove
+    onResume={vi.fn()} returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={save} onDelete={remove}
+  /></LocaleProvider>);
+  const detail = await screen.findByRole("dialog", { name: "Edit custom API" });
+  expect(within(detail).getByRole("button", { name: "Copy UUID" })).toBeVisible();
+  expect(within(detail).getByRole("textbox", { name: "Name" })).toHaveValue(profile.name);
+  expect(within(detail).getByRole("textbox", { name: "Notes (optional)" })).toBeVisible();
+  expect(within(detail).getByText("Saved secrets are never shown. Leave a value blank to keep it, or enter a new value and save to replace it.")).toBeVisible();
+  expect(within(detail).getByRole("textbox", { name: "QA_API_KEY Secret value" })).toHaveAttribute("placeholder", "Configured; leave blank to keep unchanged");
+  fireEvent.click(within(detail).getByRole("button", { name: "Remove secret QA_API_KEY" }));
+  expect(within(detail).getByRole("button", { name: "Undo removal QA_API_KEY" })).toBeVisible();
+  expect(within(detail).getByRole("textbox", { name: "QA_API_KEY Secret value" })).toHaveAttribute("placeholder", "Removed when saved");
+  fireEvent.click(within(detail).getByRole("button", { name: "Add secret" }));
+  expect(within(detail).getByRole("textbox", { name: "Secret name" })).toBeVisible();
+  expect(within(detail).getByRole("button", { name: "Remove new secret" })).toBeVisible();
+  fireEvent.keyDown(within(detail).getByRole("button", { name: /^Upload$/u }), { key: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Paste image URL" }));
+  const urlDialog = await screen.findByRole("dialog", { name: "Add image via URL" });
+  expect(within(urlDialog).getByRole("textbox", { name: "Icon URL" })).toBeVisible();
+  expect(within(urlDialog).getByRole("button", { name: "Add" })).toBeDisabled();
+  fireEvent.click(within(urlDialog).getByRole("button", { name: "Cancel" }));
+  expect(save).not.toHaveBeenCalled();
+  expect(remove).not.toHaveBeenCalled();
+  expect(icon.client.importUrl).not.toHaveBeenCalled();
+});
+
+it("English API creation uses the shared localized icon picker without publishing", async () => {
+  localStorage.setItem("kokoro.locale", "en");
+  const icon = iconFixture();
+  const fixture = renderCreationDialog("custom-api", icon);
+  expect(await screen.findByRole("button", { name: /^Upload$/u })).toBeVisible();
+  expect(screen.getByLabelText("Upload icon from device")).toHaveAttribute("type", "file");
+  fireEvent.keyDown(screen.getByRole("button", { name: /^Upload$/u }), { key: "Enter" });
+  expect(await screen.findByRole("menuitem", { name: "Upload from device" })).toBeVisible();
+  expect(screen.getByRole("menuitem", { name: "Paste image URL" })).toBeVisible();
+  expect(fixture.create).not.toHaveBeenCalled();
+  expect(fixture.register).not.toHaveBeenCalled();
+});
 
 it("Custom API URL staging never creates a connector until original Save carries the ready selector", async () => {
   const icon = iconFixture();
@@ -200,7 +299,7 @@ it.each([
   expect(icon.client.cancel.mock.calls[0]?.[3]?.aborted).toBe(false);
 });
 
-it("the real creation dialog's successful Save dismissal never cancels the handed-off icon", async () => {
+it("successful Save hands the icon to the exact fresh detail, which closes explicitly", async () => {
   const icon = iconFixture();
   const fixture = renderCreationDialog("custom-api", icon);
   fireEvent.change(screen.getByRole("textbox", { name: /^名称$/u }), { target: { value: profile.name } });
@@ -209,10 +308,17 @@ it("the real creation dialog's successful Save dismissal never cancels the hande
   await acknowledgeIcon(icon);
   fireEvent.click(screen.getByRole("button", { name: /^保存$/u }));
   await waitFor(() => expect(fixture.create).toHaveBeenCalledOnce());
-  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  const detail = await screen.findByRole("dialog", { name: "编辑自定义 API" });
+  expect(fixture.get).toHaveBeenCalledWith(profile.profile_id, expect.any(AbortSignal));
+  expect(await screen.findByDisplayValue(profile.name)).toBeVisible();
   expect(fixture.create.mock.calls[0]?.[0]).toEqual({ name: profile.name, environment: [{ name: "QA_API_KEY", value: "qa-public-fixture-value" }], icon: selector });
   expect(fixture.done).toHaveBeenCalledOnce();
   expect(fixture.register).not.toHaveBeenCalled();
+  expect(icon.client.cancel).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "关闭连接面板" }));
+  await waitFor(() => expect(detail).not.toBeInTheDocument());
+  expect(fixture.create).toHaveBeenCalledOnce();
+  expect(fixture.done).toHaveBeenCalledOnce();
   expect(icon.client.cancel).not.toHaveBeenCalled();
 });
 

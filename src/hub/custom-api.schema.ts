@@ -34,6 +34,7 @@ export const customApiProfileSchema = z
   .object({
     icon: mcpIconBindingSchema.optional(),
     profile_id: profileId,
+    governance_status: z.enum(["active", "quarantined", "revoked"]),
     name: profileText(400),
     instructions: profileText(4000).optional(),
     state_version: stateVersion,
@@ -57,8 +58,10 @@ export const customApiCreateInputSchema = z
       value.environment.length,
     "Environment names must be unique",
   );
+// Immutable ACKs may predate governance; they never authorize a fresh selection.
+export const customApiReceiptProfileSchema = customApiProfileSchema.partial({ governance_status: true });
 export const customApiCreateSchema = z
-  .object({ custom_api: customApiProfileSchema, replayed: z.boolean() })
+  .object({ custom_api: customApiReceiptProfileSchema, replayed: z.boolean() })
   .strict();
 export const customApiGetSchema = z
   .object({ custom_api: customApiProfileSchema })
@@ -135,6 +138,7 @@ export const customApiErrorSchema = z
   .strict();
 
 export type CustomApiCreateInput = z.infer<typeof customApiCreateInputSchema>;
+export type CustomApiReceiptProfile = z.infer<typeof customApiReceiptProfileSchema>;
 export type CustomApiProfile = z.infer<typeof customApiProfileSchema>;
 export type CustomApiPage = z.infer<typeof customApiPageSchema>;
 export type CustomApiUpdateInput = z.infer<typeof customApiUpdateInputSchema>;

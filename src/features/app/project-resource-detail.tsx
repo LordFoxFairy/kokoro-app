@@ -4,7 +4,7 @@ import { useT } from "@/i18n/context"
 import type { ProjectResourcePreview } from "./project-workspace-model"
 import type { useProjectResourceActions } from "./use-project-resource-actions"
 import styles from "./project-resource-detail.module.css"
-export type ProjectResourceActions = ReturnType<typeof useProjectResourceActions>
+export type ProjectResourceActions = ReturnType<typeof useProjectResourceActions> & { readOnly?: boolean }
 export function ProjectResourceDetail({
   actions,
   presentation,
@@ -90,7 +90,7 @@ export function ProjectResourceDetail({
             {t("library.fileDownload")}
           </Button>
           {actions.deleteState === "confirm" || actions.deleteState === "unknown" ? (
-            <Button variant="destructive" disabled={pending} onClick={actions.confirmDelete}>
+            <Button variant="destructive" disabled={pending || actions.readOnly && actions.deleteState !== "unknown"} onClick={actions.confirmDelete}>
               {t(actions.deleteState === "unknown" ? "firstSite.resourceDeleteRetry" : "firstSite.resourceDelete")}
             </Button>
           ) : (

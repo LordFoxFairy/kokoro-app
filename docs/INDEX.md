@@ -1,3 +1,7 @@
+## 2026-11-12 · Task B 分享／显式新授权消费者
+
+[API_CONTRACT](API_CONTRACT.md) 和 [TECHNICAL_DESIGN](TECHNICAL_DESIGN.md) 文首记录固定 Public28.37 与独立私有 profile、命令／读取职责；[CURRENT](CURRENT.md) 区分源码候选、focused 验证和待主控正常组合验收。公开门户沿 catalog 正规生成，不公开私有 reauthorization artifact。
+
 ## 2026-11-12 · Composer menu and lazy overlay reads
 
 [TECHNICAL_DESIGN](TECHNICAL_DESIGN.md) 记录内容约束与现读取 owner；[CURRENT](CURRENT.md) 记录代表语言／真实正常页与测量边界。API／Schema 无变化，不改 canonical 或 generated artifact。

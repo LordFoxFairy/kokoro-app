@@ -1,0 +1,9 @@
+{
+  "owner": "kokoro-bff",
+  "owner_commit": "0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97",
+  "source_path": "contract/openapi/browser/v1/mcp-reauthorization.json",
+  "source_sha256": "6fd643edfb74160444163dc6669d3370878ab3f44b94cdabe17f139c8c9b1925",
+  "profile": "mcp-private-server-reauthorization",
+  "profile_version": "1.0.0",
+  "candidate": false
+}

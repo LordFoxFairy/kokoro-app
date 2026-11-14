@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
-import type { McpJsonImportFlow } from "./mcp-json-import-flow";
+import type { McpJsonImportFlow, McpJsonImportCompletion } from "./mcp-json-import-flow";
 import { useConnectorCreationForm } from "./use-connector-creation-form";
 import { useT } from "@/i18n/context";
 
@@ -36,7 +36,7 @@ export function JsonMcpImportForm({
   flow: McpJsonImportFlow;
   boundary: ProjectReadBoundary;
   onCancel: () => void;
-  onDone: () => Promise<void>;
+  onDone: (result: McpJsonImportCompletion, current: () => boolean) => Promise<void>;
 }) {
   const t = useT();
   const [config, setConfig] = useState("");

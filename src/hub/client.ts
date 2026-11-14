@@ -1,3 +1,4 @@
+import { mcpReauthorizationRequestSchema, mcpReauthorizationDataSchema, mcpReauthorizationMatches, mcpReauthorizationErrorAllowed, type McpReauthorizationInput, type McpReauthorization } from "./mcp-reauthorization.schema";
 import { mcpPrepareReceiptDataSchema, mcpPrepareReceiptRequest, mcpPrepareReceiptMatches, mcpPrepareReceiptErrorAllowed, mcpPreparePostErrorAllowed, mcpPrepareReceiptLookupOnly } from "./mcp-prepare-receipt.schema";
 import { parseMcpConnectorJson } from "./mcp-connector-json";
 import { createMcpProjectPublicationClient, type McpProjectPublicationClient } from "./mcp-project-publication-client";
@@ -77,6 +78,7 @@ import {
   type CustomApiCreateInput,
   type CustomApiPage,
   type CustomApiProfile,
+  type CustomApiReceiptProfile,
   type CustomApiRemoveInput,
   type CustomApiUpdateInput,
 } from "./custom-api.schema";
@@ -638,7 +640,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     ["connectors", "connector", "providers", "provider", "server"].includes(
       operation,
     );
-  const boundedRead = allowCooldown || operation === "prepareReceipt";
+  const boundedRead = allowCooldown || operation === "prepareReceipt" || operation === "reauthorizeServer";
   const deadlineAt = performance.now() + MCP_CONNECTOR_TIMEOUT_MS;
   const deadline = new AbortController();
   const timer = setTimeout(
@@ -779,7 +781,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
             : operation === "server"
               ? "connector"
               : operation;
-        const errorAllowed = operation === "prepareReceipt" ? mcpPrepareReceiptErrorAllowed(response.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(response.status, raw) : authorizationOperation
+        const errorAllowed = operation === "reauthorizeServer" ? mcpReauthorizationErrorAllowed(response.status, raw) : operation === "prepareReceipt" ? mcpPrepareReceiptErrorAllowed(response.status, raw) : operation === "prepareServer" ? mcpPreparePostErrorAllowed(response.status, raw) : authorizationOperation
           ? mcpConnectorErrorAllowed("authorization", response.status, parsed.data)
           : mcpConnectorErrorAllowed(
               connectorOperation as
@@ -977,7 +979,7 @@ export type HubClient = {
     input: CustomApiCreateInput,
     key: string,
     signal?: AbortSignal,
-  ) => Promise<CustomApiProfile>;
+  ) => Promise<CustomApiReceiptProfile>;
   listCustomApis?: (
     query?: { limit?: number; cursor?: string },
     signal?: AbortSignal,
@@ -991,7 +993,7 @@ export type HubClient = {
     input: CustomApiUpdateInput,
     key: string,
     signal?: AbortSignal,
-  ) => Promise<CustomApiProfile>;
+  ) => Promise<CustomApiReceiptProfile>;
   removeCustomApi?: (
     profileId: string,
     input: CustomApiRemoveInput,
@@ -1013,6 +1015,7 @@ export type HubClient = {
     serverId: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateServer>;
+  reauthorizePrivateMcpServer?: (serverId: string, input: McpReauthorizationInput, key: string, signal?: AbortSignal) => Promise<McpReauthorization>;
   preparePrivateMcpServer?: (
     serverId: string,
     expectedStateVersion: string,
@@ -1296,6 +1299,13 @@ export function createHubClient(): HubClient {
           signal,
         )
       ).server,
+    reauthorizePrivateMcpServer: async (serverId, input, key, signal) => {
+      const id = mcpConnectorIdSchema.parse(serverId), body = mcpReauthorizationRequestSchema.parse(input);
+      const result = await requestMcpConnector("reauthorizeServer", `/mcp/servers/${encodeURIComponent(id)}/reauthorize`, mcpReauthorizationDataSchema,
+        { method: "POST", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal);
+      if (!mcpReauthorizationMatches({ data: result }, id, body)) throw new HubClientError("parse", "MCP reauthorization ACK binding mismatch", null, null);
+      return result;
+    },
     preparePrivateMcpServer: async (serverId, expectedStateVersion, key, signal) =>
       requestMcpConnector(
         "prepareServer",

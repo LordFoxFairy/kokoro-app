@@ -286,3 +286,50 @@ it.each(["pending_prepare", "prepare_failed", "wrong_server", "wrong_connector",
   expect(recovery.complete).toHaveBeenCalledOnce(); expect(confirmed).toHaveBeenCalledOnce();
   expect(commands.getSnapshot()[0]?.kind).toBe("completed"); expect(await recovery.current(boundary.subject, target.serverId)).toBeUndefined();
 });
+
+
+it("new authorization freezes source and both CAS values under one actor command and never Prepares", async () => {
+  const ack = {
+    server: { ...response().server, state_version: "5", status: "pending", prepare_status: "pending_prepare", declarations: [], declaration_digest: undefined, declarations_available: false },
+    connector: { ...response().connector, connector_id: "connector-new", provider_key: "private-server-one", state_version: "1", status: "pending", enabled: false, approved_scopes: [] }, replayed: false,
+  };
+  const reauthorizePrivateMcpServer = vi.fn().mockResolvedValue(ack);
+  const client = { ...setup().client, reauthorizePrivateMcpServer, updateMcpConnector: vi.fn(), setMcpConnectorEnabled: vi.fn(), removeMcpConnector: vi.fn() };
+  const commands = createMcpLifecycleCommands({ client, boundary, onConfirmed: vi.fn() });
+  const release = commands.management.retain(boundary);
+  try {
+    await commands.preparation.restore(boundary);
+    const intent = { operation: "reauthorize_server", serverId: "server-one", connectorId: "connector-one", input: { source_connector_id: "connector-one", expected_server_state_version: "4", expected_connector_state_version: "7" } };
+    expect(await commands.management.submit(intent as Parameters<typeof commands.management.submit>[0], boundary)).toBe(true);
+    expect(reauthorizePrivateMcpServer).toHaveBeenCalledOnce();
+    expect(client.preparePrivateMcpServer).not.toHaveBeenCalled();
+  } finally { release(); }
+});
+
+it("unknown new authorization resumes only its frozen source/CAS/key after readmission; actor retirement cannot hand off a late target", async () => {
+  const { reauthorizationFixture, reauthorizationInput } = await import("../hub/fixtures/mcp-reauthorization");
+  let finish!: (value: ReturnType<typeof reauthorizationFixture>["data"]) => void;
+  const reauthorize = vi.fn().mockRejectedValueOnce(Error("lost ACK")).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const client = { ...setup().client, reauthorizePrivateMcpServer: reauthorize, updateMcpConnector: vi.fn(), setMcpConnectorEnabled: vi.fn(), removeMcpConnector: vi.fn() };
+  const commands = createMcpLifecycleCommands({ client, boundary, onConfirmed: vi.fn() });
+  const release = commands.management.retain(boundary);
+  try {
+    await commands.preparation.restore(boundary);
+    const input = { operation: "reauthorize_server" as const, serverId: "saved-server", connectorId: "removed-source", input: { ...reauthorizationInput } };
+    expect(await commands.management.submit(input, boundary)).toBe(false);
+    const original = reauthorize.mock.calls[0]!.slice(0, 3);
+    input.input.expected_server_state_version = "99" as "4";
+    const readmitted = { ...boundary, generation: boundary.generation + 1 };
+    commands.management.bind({ ...boundary, admitted: false }); commands.management.bind(readmitted);
+    commands.preparation.bind(readmitted); await commands.preparation.restore(readmitted);
+    expect(await commands.management.submit({ ...input, input: { ...reauthorizationInput, expected_server_state_version: "99" } }, readmitted)).toBe(false);
+    const retry = commands.management.resume("removed-source", readmitted);
+    await vi.waitFor(() => expect(reauthorize).toHaveBeenCalledTimes(2));
+    expect(reauthorize.mock.calls[1]!.slice(0, 3)).toEqual(original);
+    commands.management.bind({ ...readmitted, subject: "next-actor" });
+    finish(reauthorizationFixture().data); expect(await retry).toBe(false);
+    expect(commands.management.getReauthorizationTarget("removed-source", readmitted)).toBeUndefined();
+    expect(commands.management.getSnapshot()).toEqual([]);
+    expect(client.preparePrivateMcpServer).not.toHaveBeenCalled(); expect(client.getPrivateMcpServer).not.toHaveBeenCalled(); expect(client.getMcpConnector).not.toHaveBeenCalled();
+  } finally { release(); }
+});

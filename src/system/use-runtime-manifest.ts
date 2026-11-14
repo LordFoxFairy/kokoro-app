@@ -175,12 +175,8 @@ export function useRuntimeManifest(options: { preview?: boolean } = {}): {
     setAttempt((value) => value + 1)
   }, [])
 
-  useEffect(() => {
-    if (preview) return
-    // Keep the document language aligned with the tenant/product runtime
-    // without exposing tenant identity or requiring a second config channel.
-    document.documentElement.lang = manifest.locale
-  }, [manifest.locale, preview])
+  // LocaleProvider owns document language; System metadata must not override
+  // the user's effective UI language when a manifest settles or falls back.
 
   useEffect(() => {
     document.title = `${manifest.brand.name} Web`
@@ -205,41 +201,62 @@ export function useRuntimeManifest(options: { preview?: boolean } = {}): {
   useLayoutEffect(() => {
     if (scope.preview) return
     const controller = new AbortController()
-    const current = () => !controller.signal.aborted
+    const deadlineAt = performance.now() + 20_000
+    let settled = false
+    const current = () => !settled && !controller.signal.aborted
+    const fail = () => {
+      if (!current()) return
+      settled = true
+      clearTimeout(timer)
+      controller.abort()
+      // Product defaults are not preview capabilities or a preview transport.
+      setProjection({ scope, manifest: PRODUCT_RUNTIME_MANIFEST, source: "error" })
+      setRetrying(false)
+    }
+    const timer = setTimeout(fail, 20_000)
+    const withinDeadline = () => {
+      if (!current()) return false
+      // A busy event loop may settle fetch/body before dispatching the timer.
+      if (performance.now() >= deadlineAt) {
+        fail()
+        return false
+      }
+      return true
+    }
 
     const locale = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en-US"
     const query = new URLSearchParams({ product_id: "kokoro", locale, surface_id: "user-web" })
     void Promise.resolve().then(() => {
-      if (!current()) return
+      if (!withinDeadline()) return
       return fetch(`/api/system/runtime-manifest?${query.toString()}`, {
         signal: controller.signal,
         headers: { Accept: "application/json" },
       })
     })
       .then(async (response) => {
-        if (!current() || response === undefined) return
+        if (!withinDeadline() || response === undefined) return
         if (!response.ok) throw new Error(`runtime manifest ${response.status}`)
         const payload: unknown = await response.json()
-        if (!current()) return
+        if (!withinDeadline()) return
         return payload
       })
       .then((payload) => {
-        if (!current()) return
+        if (!withinDeadline()) return
         const next = mergeManifest(payload)
         if (!next) throw new Error("invalid runtime manifest")
-        if (!current()) return
+        if (!withinDeadline()) return
+        settled = true
+        clearTimeout(timer)
         setProjection({ scope, manifest: next, source: "live" })
         setRetrying(false)
       })
-      .catch((error: unknown) => {
-        if (!current() || (error as { name?: string }).name === "AbortError") return
-        // Clear any previously verified site skin before reporting a failure.
-        // Product defaults are not preview capabilities or a preview transport.
-        setProjection({ scope, manifest: PRODUCT_RUNTIME_MANIFEST, source: "error" })
-        setRetrying(false)
-      })
+      .catch(fail)
 
-    return () => controller.abort()
+    return () => {
+      settled = true
+      clearTimeout(timer)
+      controller.abort()
+    }
   }, [scope])
 
   // Preview can be the first render while the session probe is undecided. When

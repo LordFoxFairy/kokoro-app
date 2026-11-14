@@ -14,7 +14,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it("keeps a failed marketplace pending detail quiet and recovers its exact selection through normal search re-entry", async () => {
+it("recovers a failed marketplace search through explicit read-only retry while retaining its exact selection", async () => {
   const card = { skillId: "search-recovery-series", displayName: "Search recovery", currentVersion: { versionUid: "search-recovery-revision" } }
   const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "catalog-recovery" } })
   const reads: { path: string; body: unknown }[] = []
@@ -53,15 +53,16 @@ it("keeps a failed marketplace pending detail quiet and recovers its exact selec
   expect(within(dialog).queryByRole("button", { name: "重试" })).toBeNull()
   expect(reads.filter(read => read.path.endsWith("GetSkill"))).toHaveLength(0)
 
-  // A normal search re-entry reads the failed query again; no failure card
-  // owns recovery and opening/closing a detail does not issue a command.
+  // Closing the pending detail exposes the directory's original-query retry;
+  // opening, closing and retrying reads must never create an installation.
   fireEvent.keyDown(dialog, { key: "Escape" })
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
   expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
-  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "" } })
-  await waitFor(() => expect(screen.getByRole("button", { name: `添加 ${card.displayName}` })).toBeEnabled())
-  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "Search" } })
+  expect(screen.getByRole("alert")).toBeVisible()
+  expect(within(screen.getByRole("alert")).getByText("技能池加载失败")).toBeVisible()
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
   await waitFor(() => expect(finishRetry).toBeTypeOf("function"))
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue("Search")
   fireEvent.click(screen.getByRole("button", { name: card.displayName }))
   const reopened = screen.getByRole("dialog")
   expect(within(reopened).queryByRole("alert")).toBeNull()
@@ -194,7 +195,7 @@ import { invalidate } from "@/lib/query"
 import { __resetResourceStore } from "@/lib/query/resource-store"
 import { SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 
-it("keeps the marketplace scaffold quiet for unknown reads, retains confirmed cards on refresh failure and fences a retired actor's late result", async () => {
+it("keeps unknown reads distinct from empty, visibly retries confirmed refresh failure and fences a retired actor's late result", async () => {
   __resetResourceStore()
   const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "quiet-marketplace" } })
   const card = { skillId: "quiet-market-series", displayName: "Confirmed marketplace card", currentVersion: { versionUid: "quiet-market-revision" } }
@@ -220,9 +221,8 @@ it("keeps the marketplace scaffold quiet for unknown reads, retains confirmed ca
   expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
   await act(async () => { reject(Error("controlled passive refresh failure")) })
   expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
-  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
-  expect(screen.queryByRole("alert")).toBeNull()
-  act(() => invalidate(SKILL_CATALOG_RESOURCE_KEY))
+  expect(screen.getByRole("alert")).toBeVisible()
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
   await waitFor(() => expect(calls).toBe(3))
   view.rerender(content("quiet-market-b"))
   await waitFor(() => expect(calls).toBe(4))
@@ -231,6 +231,51 @@ it("keeps the marketplace scaffold quiet for unknown reads, retains confirmed ca
   expect(screen.queryByRole("button", { name: card.displayName })).toBeNull()
   expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
   expect(screen.getByRole("searchbox", { name: "搜索技能" })).toBeVisible()
+})
+
+it.each(["initial", "category"] as const)("recovers a failed marketplace %s read with the original filters and cursor", async kind => {
+  __resetResourceStore()
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "explicit-catalog-retry" } })
+  const card = { skillId: "filtered-retry-series", displayName: "Matched retry card", currentVersion: { versionUid: "filtered-retry-revision" }, tags: { values: ["SKILL_HUB_TAG_CODING"] } }
+  const reads: Record<string, unknown>[] = []
+  let rejectNext = true
+  let pageFailed = false
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (!path.endsWith("ListHubSkills")) throw Error(`Unexpected non-read request: ${path}`)
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+    reads.push(body)
+    if (body.pageToken) {
+      if (!pageFailed) { pageFailed = true; throw Error("controlled next page failure") }
+      return response({ skills: [], tagOptions: {} })
+    }
+    if (rejectNext && (kind === "initial" || body.tag)) { rejectNext = false; throw Error("controlled catalog failure") }
+    return response({ skills: [card], nextPageToken: "owned-next-page", tagOptions: {} })
+  })
+  render(<LocaleProvider><KokoroSkillsSurface onPrompt={vi.fn()} preview={false} projectReadBoundary={{ admitted: true, subject: `explicit-retry-${kind}`, generation: 1 }} /></LocaleProvider>)
+  if (kind === "category") {
+    await screen.findByRole("button", { name: card.displayName })
+    fireEvent.click(within(screen.getByRole("navigation", { name: "技能分类" })).getByRole("button", { name: "编程" }))
+  }
+  expect(await screen.findByRole("alert")).toBeVisible()
+  expect(screen.queryByTestId("skills-catalog-empty")).toBeNull()
+  const failedFilters = reads.at(-1)
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull())
+  expect(reads.at(-1)).toEqual(failedFilters)
+  const trigger = screen.getByRole("button", { name: card.displayName })
+  expect(screen.getByRole("button", { name: `添加 ${card.displayName}` })).toBeEnabled()
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  expect(await screen.findByRole("alert")).toBeVisible()
+  expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  const failedPage = reads.at(-1)
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull())
+  expect(reads.at(-1)).toEqual(failedPage)
+  expect(failedPage).toEqual({ pageSize: 9, includeOfficialSkills: true, ...(kind === "category" ? { tag: "SKILL_HUB_TAG_CODING" } : {}), pageToken: "owned-next-page" })
+  expect(screen.getByRole("button", { name: card.displayName })).toBe(trigger)
 })
 
 const publisherProduct = {

@@ -1,3 +1,27 @@
+## 2026-11-13 B13：Admin 审计桥输入边界（源码阶段已验）
+
+仅 GET /api/admin/identity/audit-events → BFF GET /v1/admin/identity/audit-events。只允许 limit=1–100 与非空≤2048 opaque cursor；重复/未知query、tenant/site selector、GET body、命令/CAS/编码/framing头拒绝。原 request-id、no-store、有限body/response与取消边界保持；不把坏/失败响应替换成成功空数据，不增加generic prefix或任意upstream URL。安全字段及data.items/next_cursor归BFF canonical，App只是具名透明传输；Admin的正式contract检查承担页面schema消费证明。
+
+## 2026-11-13 Task B：Public29 消费与同源接线（候选）
+
+固定BFF `38d47c958cecdc072ee60d5a96ad17c48ac691c6`／29.0.0，完整SHA256 `45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509`。原正式生成器重出，新增Project Access窄codec；独立auth-session/reauthorization来源不机械升级。build/test叶逆证精确还原已发行28.37的完整Git bytes，原封存父hash不改；不存在runtime旧协议fallback。
+
+具名同源接口：GET `/api/hub/projects/{id}/access`；GET `/api/hub/projects/{id}/grants`；PUT/DELETE `/api/hub/projects/{id}/grants/{subject_id}`。当前native准入仍在BFF，body仅role/expires_at，写带原idempotency-key和quoted access_version If-Match。client核Project、目标member、版本/结果和取消寿命；目录有界完整分页，不按浏览器自报身份授权。
+
+`/api/admin/custom-apis`只桥接list/get/audit-events与quarantine/restore/revoke六项。Scheduled current Details要求revision/execution_actor_id；immutable ACK允许保历史省略。PATCH/retry透传真实quoted revision If-Match，未知命令原key/body/CAS固定，不自行GET推算或rebase。AG-UI公开Project snapshot/head/message的project_access、can_control、can_regenerate按owner语义消费；peer FINAL仍经同一snapshot/parts与AI SDK呈现。工程验收与native状态见CURRENT，不据本合同文档声称已部署。
+
+## 2026-11-12 · Task B Public28.37／新授权消费者候选
+
+固定 BFF `0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97` 的 Public28.37（216 operations，原生 Session metadata、Share GET、Team delete_series）及独立 browser-private reauthorization1.0。当前 public 生成链与精确28.36／28.35父字节逆证一起升级，旧独立 profile 与历史父 pin 不变；无契约手写副本、锁依赖或认证状态机变更。
+
+会话分享打开／重开／焦点刷新只读 fresh metadata；成功 null 才是未分享，失败不当空、不自动发布。POST／DELETE 仍需明确操作，unknown 保原 scope／key／body，ACK 后只通过 fresh GET 展示；主体／窗口／准入退休阻断迟到显示与剪贴板反馈。确认后读失败只重读，不再发布。
+
+已断开的个人 MCP 仅显式“创建新授权”可提交 source Connector＋Server/Connector 双 CAS；复用现 actor-owned command 冻结原 key/body，unknown 原样恢复。严格 pending ACK 只提供新 Connector locator，随后 fresh exact Connector＋Server，历史 ACK 不授连接／执行资格；失败只重读，零自动 Prepare／OAuth／enable。旧 picture/RSS 等退休链保持不激活。此为消费者源码候选；工程证据由停写交接与主控复验绑定，正常 native 组合旅程／build／Root 配对另由主控验收，不冒全部 Task B 完成。
+
+## Task B承接：无网络增量（2026-11-12）
+
+当前仍为main固定的Public28.35及现browser-private artifacts；22原生成链正规生成且输出核等。API／JSON创建completion只是UI内部安全locator，不把ACK当当前详情；继续用现exact GET。原unknown/key/body/CAS与native session不变。旧未发行29.3、Share metadata/private reauthorize与RSS消费者不参与当前装配，待BFF正式统一发行后再正规消费；不新增兼容alias或假空响应。
+
 ## 2026-11-12 · AG-UI／AI SDK 本地适配（无网络增量）
 
 外部仍是现BFF AG-UI事件与opaque durable cursor。Web将已有mapper的文本chunks交现AI SDK reader，live与历史共用装配；内部 `message.text_snapshot` 是本地绝对文本视图，不新增SSE事件、公开API或generated contract。安全activity／interaction／delivery及私有parts读取资格不变，tool／reasoning payload不作为答案正文。
@@ -2531,6 +2555,8 @@ id and does not resend POST.
 Skills 目录重核修复仅改变 Web 内部展示/请求生命周期：不新增 HTTP 字段、endpoint 或授权协议。正常 session 重核期间私有 API client 按既有准入代际退休，详情 placeholder 不发送 owner 请求；恢复后仅使用本代列表与详情。安装仍为既有严格 typed command 和同键未知结果恢复，未增加个人原子升级或前端移除/重装旁路。
 
 Custom API 创建恢复仅调整 Web 内部 client API：createCustomApi(input, key, signal?) 必须由调用者传合法 Idempotency-Key，取消每次调用隐式生成新 key。浏览器路径、body、header wire、BFF/Platform 固定 artifact 不变。未知结果重试同 key、同正文，按原 owner durable receipt 重放；GET 不作为 ACK。响应仍走既有严格 safe profile 校验并绑定原 name/instructions/environment names；结构或语义不符保留 unknown，而非重新创建。原 OAuth 原生协议不添加此 header。
+
+2026-11-13 私有治理消费候选：只按已提交 BFF `74117ac8800a6c5c5e7fcffe8306ec8cd813efff` 的既有 browser-private code-first 成功边界承接，不改公共 canonical、public pin 或错误 profile。GET/List 的 safe Profile 必须含 governance_status=active/quarantined/revoked；缺失、空串、未知值拒绝。create/update immutable ACK 复用 Profile 基础但状态可省略；历史缺字段不补 active、不补读改写 ACK、不当当前可选或执行授权。创建完成仍只保 exact locator，沿原详情／聚合失效取得本代读取；原 key/body/CAS/unknown 恢复不变。菜单仅在本代读取成功且 active/合法版本时新增选择；同主体既有草稿 ID/CAS 及 Project 原引用不因失效自动删除或换版，显式移除仍可用。管理显示三态，非 active 禁新编辑／secret／icon 保存但保本人 Delete；未结原命令的显式恢复按钮保持原准入／互斥，不借此造新写。当前页展示是最近读到的元数据，非权限 cache；不轮询、不自动 Prepare/连接，owner runtime 的 final fresh 仍是放行边界。九语沿现 useT；正常预览、native 与最终 build 由 Root 串行验收，源码不冒已激活。
 
 
 MCP JSON创建恢复的本地client签名为importPrivateMcpJson(configJson, key, signal?)，与API创建一样显式caller key，无默认新key。原/v1 browser/BFF/Platform contract、header及config_json wire不变；完整原文冻结、同key恢复，ACK沿既有mcpPrivateJsonImportMatches绑定。原子导入不主动Prepare、不逐条Register，原生OAuth没有新增header。

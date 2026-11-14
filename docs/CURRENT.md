@@ -1,3 +1,121 @@
+## 2026-11-13 Public29.1 API门户增量（已验）
+
+仅原catalog/contracts.yaml固定正式BFF `bec8584f0b185a3ce0a32366199142b945d8812b`／29.1.0／raw `dea9f3b6dfc03daab3a6fe3b4009635cd0aecf03517c05e7ce42ae116162c925` 与API changelog；新IAM审计GET由正规reference链生成，228 owner/222 public，六browser-private继续排除。22份生成参考仍ignored不手改/不提交，不改App通用业务contract pin或另外创建文档系统。
+
+writer完整门户check通过55例、62 HTML/21556内部链接；主控2源+22生成SHA核等、provenance/reference/links直接复验通过，确定性reference digest b9d19964dabd7849e818718b9876c12ea65b8f25a7c54b736e1fd67b942c8ebd，build仅chunk体积warning。Portal发行不代表后台normal native已通过；App透明审计桥业务源仍143b283c，门户不改运行行为，无部署。
+
+## 2026-11-13 B13：Admin IAM 审计具名桥（源码阶段已验）
+
+仅现 Product Admin adapter 增加 exact GET identity/audit-events，复用原 bounded proxy 的 limit/cursor、native Cookie/固定Origin/服务envelope、request-id/no-store、10秒总预算及取消；不开放 identity prefix、不直连IAM或新增schema/parser/SDK/认证/缓存。Admin 是这项公开响应的正式raw contract消费者；App是透明传输，原通用业务及browser-private pins不机械升级。
+
+真实loopback HTTP新回归先RED404，最终相关三文件52 PASS/0skip；非增量types/scopedlint、真实Next生产build通过，三源码输入SHA保持，独审CLEAR。此为App source adapter，不冒IAM/BFF配对或正常审计页native；完整消费者pin/门户与Root精确组合由主控串行续接。原资金写/metadata恢复语义保持；next-env.d.ts是正常Next自动生成输入，不纳入交付。
+
+## 2026-11-13 Project Skills 词条组九语言统一收口
+
+正常法语同一弹窗继续发现标题／说明／查看我的技能仍英语、emptyHint中文，因此不再逐个key补丁：只将现35个 projectSkills.* 连同已修 emptyState 在九现有locale各自补齐。仅8词典／overlays／现resolver测试10路径；中文源及原emptyState行保持，删除仅此34项旧projectSkillsFallback与8处spread，其它产品fallback、合并顺序、组件/业务请求/状态机不变。
+
+主控停写10 SHA＋中文源核等；新增词条组先8非zh语言RED，最终同文件58 PASS／0 SKIP、scoped ESLint、非增量TypeScript通过，独审CLEAR。正常Chrome法语Project卡片/弹窗标题、默认说明、链接、空态均已本地化；390px document 390/390、dialog client/scroll均371，无横溢。截图留Root ignored；原English及默认viewport已恢复。其它七语言为resolver/插值证据，不冒九语言全视觉矩阵。未改ProjectTodo／全站其它文案，未重复全默认或Next build/typegen，next-env自动diff保留未提交。
+
+该翻译片不改变下方Project安装503/unknown事实，原写body/key仍私有保留且没有第二次安装；当前fresh list0/selection空不替代原写回执。Storage恢复后仅原命令继续，完整安装／包正文一致性仍OPEN。
+
+## 2026-11-13 Project Skills 英语空态漏译已修，包依赖不冒安装成功
+
+主控正常 English 浏览器在原 QA Project → Skills 实测空列表仍显示“尚无技能”。组件已消费现 t/key，仅 en.ts 补 skills.personal.emptyState，不改组件／其它八语言／选择命令／契约或认证；现 resolver 回归先 RED 中文 fallback，主控停写两输入 SHA 核等、整文件 41 PASS／0 FAIL／0 SKIP、scoped ESLint／非增量 TypeScript 通过，独审 CLEAR。正常页面现显示 No skills yet，截图在 Root local ignored。未为一行翻译重复全默认／Next build，未修改 next-env.d.ts。
+
+同 Project 从原个人 structured-report 导入现 exact source 的实际 POST 返回503，UI保 unknown／Retry original command，原 body/key已私有留存且没有发送第二次安装；response body被浏览器回收，未杜撰错误码。源码确定安装本身先走 Capability verifyPackage→Storage GetPackageReference，不是只在打开正文时才读包；当前 Storage 数据面问题仍限制该主路径。后继独立 native鲜读安装列表200／0项、selection200／空，仅是当前观察，不替代原写回执。未新建版本/包/Project或发送Chat，个人Settings原pin不动；完整Project安装/默认选择/包正文三入口一致性仍待恢复后原命令，不冒闭环。
+
+## 2026-11-13 Public29 门户已发行，正常 Project ACL 与终态恢复已验
+
+`08bc30b6c7d2debaa2cba7606f1e214ff58fede3` 已推原 PR #49：九个门户路径消费已发行 BFF509597f／Public29.0.0，221 个公开操作／22 个生成文件，六个 browser-private 操作排除；完整 owner 为 227，勿混计。Project／ScheduledTask 的 API 概念与产品导航、可用边界已同步，复用单一 catalog／生成器，不新增公开机器契约副本。后继 BFF replay runtime 修复不改变此 wire pin。
+
+writer 门户 lint／types／55 tests／provenance／reference／examples／architecture／build 与 62 页 21475 链接检查通过；主控九 SHA 停写核等并独立复验 provenance／reference／links。既存大 chunk 警告保留，未再跑全 App 默认或门户全门。Root 固定精确源码组合；这是文档交付，不等同全部产品功能完成。
+
+正常 App 已按本地 HTTP／IAM 环境恢复源码 next dev，未放宽生产 Secure Cookie。真实 owner＋独立普通成员已验 Project viewer 只读、editor 保存、降权写 403、不变性及撤销后列表／直达旧内容退休；下方“候选未激活”只属前阶段。BFF 修复 SSE replay 后，正常会话硬刷新准确恢复新 Run 的 Stopped 与旧 incompatible 失败。完整共享成功执行／安全 FINAL／Artifact 和到期协作仍待；不把 cancelled 当成功答复。next-env.d.ts 只有 Next 自动切 dev types 的未提交差异，业务源未夹带变更。
+
+## 2026-11-13 Task B：Public29 Project 协作消费者候选（未正常激活）
+
+固定 BFF `38d47c958cecdc072ee60d5a96ad17c48ac691c6`／Public29.0.0 完整 artifact，SHA256 `45c54365e75a31684e1dbf841a0c68cd554bf022643919cac591c78ed4499509`。所有受影响消费者由原生成入口重出，新增四项 Project Access 的窄 generated codec/check；auth-session、MCP原生重新授权等独立 profile 不浮动更新。build/test-only 精确29→已发行28.37完整Git原件的叶逆证接回原链，封存父SHA不变，不存在运行时降级／旧入口fallback。
+
+Project分享不再只是复制私人URL。当前同团队成员目录选择、owner显式viewer/editor授权／到期／撤销使用既有BFF边界；实际Project读取所得canonical ID进入授权接口，不拿route slug作权限事实。长成员名、原生可访问表单、窄屏换行与九语言提示随片实现。原未知命令按同tab、tenant／实际subject／Project冻结目标、body、CAS和key；storage读回后才dispatch、刷新只恢复不自动重放。错member／错version／迟到或取消ACK不确认，首次明确拒绝可显式结束；曾未知的后继拒绝不冒未提交。该槽不是权限缓存、服务凭据或owner回执。
+
+viewer只读，editor使用自身执行资格。公开AG-UI仍唯一网络轨，peer只显示安全busy／生命周期，无他人的Stop、private process／pause或再生成；当前`can_control`／`can_regenerate`来自owner。peer确认FINAL通过原terminal snapshot及parts→AI SDK单轨adoption恢复，不新增stream/store。Project结果详情接受正式无私有asset_id分支，私人Library索引及匹配要求不放宽。Project403/404只退休该Project；401仍立即退休集合并交原生准入重核，不扩大内部OAuth。
+
+Scheduled current Details必须有真实revision及execution_actor_id，旧immutable ACK可仍省略，客户端不猜新版本／执行人。PATCH/retry显式携带当前revision的If-Match，经同源桥原样透传，未知命令绑定原CAS，不隐式rebase或生成替代key；原actor-scoped创建、不同Project独立未知创建和删除行为保持。跨actor修改后是否暂停由BFF确认状态决定，重新启用是当前actor的明确动作。六项Admin Custom API具名同源桥接通，不开放generic proxy、浏览器内部secret或新认证状态。
+
+本片源码工程门已验，正常组合未激活。主控已修复接管时的六桥未接、迟到/错目标Grant确认、Project权限投影、Scheduled CAS接线；首轮完整默认6771 PASS／94 FAIL，失败包含遗漏的新权限fixture/当前pin/新必需字段与实际401集合退休缺口，失败原件保留，不冒全绿。后继当前身份401集合退休已修复、Project403/404只退休目标且回报明确不可用，测试fixture补独立Access读而非把其误算成Detail重复GET；新Scheduled字段/CAS与旧ACK分流、当前pin/完整Git父逆证均已承接。最终停写142输入逐SHA保持，完整默认380文件6865 PASS／0 FAIL／0 SKIP、完整lint、正规check集合、Next生产build及构建后非增量types通过；提交前仅修一处测试行尾空格和本段文档。实际Normal3310仍旧外置compiled baseline，未提前激活候选。原私人URL复制独占测试按功能替换退休，真实Grant正向／未知恢复／角色退休已承接；仅自比常量的伪pin断言删除，完整字节及正式生成检查保持。真实双身份浏览器、当前组合激活、剩余BFF入口和完整TaskB仍OPEN；不以fake client／React渲染／HTTP fixture冒native或模型执行。
+
+## 2026-11-13 Task B 文档语言与 API 门户收口
+
+只删除 Runtime Manifest 覆盖 html.lang 的重复 effect，由现 LocaleProvider 唯一维护所选文档语言；请求 navigator.language、manifest scope/policy/取消/期限原样保持，System允许locale与设置码映射仍是独立待裁定项。初始en-US→en-US受控案例原实现即GREEN不冒RED；schema-valid迟到en-GB覆盖fr真实RED，最低回归最终31 PASS（含既有SET31与error/preview），主控同文件31 PASS、非增量types、正式App build、独审CLEAR，六源码/门户输入SHA停写核等。正常原生浏览器English→Français显示与html.lang=fr、硬刷新仍fr、最后恢复English/en；en-GB仅受控响应，不称正常System已支持。
+
+门户只消费已发布BFF396897b8/Public28.38/d6927c3a原artifact，更新新模型草稿条件PATCH参考，App业务client28.37不机械升级。参考首页旧Bearer提示纠正，plain/Secure cookie互斥名称明确；旧changelog多空行按lint修正。主控门户lint/provenance/55tests/正式VitePress build/62页20603内部链接/确定性reference211 public operations/architecture通过。首轮执行cwd写路径错误、旧pin相对当前checkout不匹配、既有changelog空行及auth漏Secure名称断言失败均留日志；正规配对与正文修正后通过，没有删断言或放宽provenance。
+
+原Task B PR保持Draft；未重跑全App默认/模型/计费，不冒整个B14/B15或Task B闭环。正常App只短停自己的3310用于一次正式build，同配置已恢复；PG/Redis/原卷/其它owner不变。next-env开发生成差异不提交。
+
+## 2026-11-13 B13 同源草稿PATCH主控复验
+
+只在原Admin薄桥精确开放model-revisions/{UUID} PATCH；原64KiB/raw body、native Cookie/固定Origin、key/CAS/有界signal保持。四输入冻结主控四相关文件56 PASS、正常工作区production build通过，writer相关ESLint/完整非增量TS通过。App Public28.37子集pin/生成链不变；消费者须配BFF396897b8新具名操作与Admin本片，不将薄桥测试当真实owner/native闭环。正常App的dev只由主控短停用于build，原配置/数据保留，无副本/依赖复制；沿原#49，Root负责组合与恢复。
+
+## 2026-11-13 · B13 模型草稿 PATCH 同源网关补口（本地候选）
+
+基线00334cbe；仅现Admin adapter的精确UUID `model-revisions` PATCH加入既有modelWrite allowlist，不扩其它方法／路径，不改Public28.37原件或生成链。草稿JSON由owner解析，Web沿原64KiB请求长度、原生Cookie／固定Origin、body／key／If-Match、取消与响应关联透传；缺失CAS、冲突等仍由BFF裁决，不改认证或UI。
+
+现原测试先复现四项本地404，再13 PASS；连既有discovery／metering／credit薄适配器四文件56 PASS。新增证据包括200／409／428原响应、exact body／key／CAS／signal，以及非法路径／方法和长度拒绝；测试替身不冒真实BFF／System或浏览器成功。主控继续配对BFF、build与正常页面验收，未执行资源／安装／发布操作。
+
+## 2026-11-13 · Task B 侧栏有限多语言修复验收
+
+沿原 #49，基线 bf8ef938；15 文件只承接实际侧栏既有文案与必要 ARIA。32 个 key × 9 语言自有译文，补118条缺译并纠正7条英文占位，不改 locale resolver、导航资格、排序/权限/焦点/迟到逻辑或用户标题。拖动 hook 只接必需展示字符串，两个真实 caller 通过现 t 传入；不加新 locale 层。
+
+主控冻结15输入，两个原测试文件160 PASS、相关 ESLint、完整非增量 TS 与正常工作区 production build 通过；独审 CLEAR。真实 native 页面最新 French 的 Projets／Aucun projet pour le moment. 正确，英文恢复。此次视口请求未实际应用到目标标签，实测1000×716/document1000，不称最新390px验收；此前15-key阶段窄屏证据单列。未重跑全默认、模型/工具/资金，不拼旧失败为全绿。build前仅停主控自己的3310 dev，未复制源码/依赖或影响其它服务；生成 next-env 由正式build恢复，未纳本片源码。
+
+此为侧栏有界切片，不冒全站词条齐备：共享移动侧栏 primitive、其它页面/manifest语言输入独立待办。原 PR 仍 Draft，整Task B未完成。Root维护精确组合、正常dev恢复及唯一TODO。
+
+## 2026-11-12 B-08 产品指南与知识使用提示
+
+新增公开产品层级“设置→个性化与个人知识”，说明实际onBlur保存、知识显式保存/启停、后续新消息生效及旧消息重新生成原上下文；API/内部工程分层不变，导入记忆未开放明确说明，不以页面存在冒实际自动记忆。现knowledgeUseHint九语言纠正过时“任务未接通”，删公共旧英文fallback，仅该key与直接回归，不改框架/业务。
+
+主控18输入冻结核等：hint相关47 PASS、非增量types、门户阅读路线具名1 PASS（其他名称过滤未跑）、正规reference生成/门户build、62 HTML/20513内部链接检查、App production build全部exit0；独审CLEAR。原VitePress大chunk warning、原全站Markdown API changelog MD012与配置忽略mts lint如实保留，未冒完整lint。后继Root21e833c4/Appc044/BFF143正常native已验：原四空字段中临时回复偏好onBlur显示Saved，新消息本身无标记，正常配置模型一次调用回复按该偏好带标记；硬刷新同一条回复恢复。BFF/Agent私有context核等，两个Message/Run终态，原四空字段经正常UI恢复revision2，未创建知识或改usage开关。知识启停/原key/regen等分支复用真实PG和Agent规则/私有prompt证据，不扩大成重复模型矩阵；原网络collector提交阶段无事件，未称零HTTP。本片不是整TaskB完成或部署。
+
+## 2026-11-12 Skills 当前语言展示修正
+
+正常英文页复现 scope radio 两词条回退中文、日期固定 zh。仅补 en 两已有 key（其他八语言原本齐备），installed/catalog 两日期调用显式使用当前 locale，保 UTC／Unix秒与旧毫秒值；不改筛选／启停／详情行为、CSS、认证或契约。writer 7 RED 后修复，主控冻结5输入：两相关文件41 PASS／types／production build，writer scoped lint零警告，独审输入核等／CLEAR。英／中／德及动态切语言由现实际组件承接；正常native英文页已复验4筛选与日期，320px实测document宽320、每radio文本内收、Third-party整词自然换行，恢复原视口。不冒九语言全站QA或完整默认全绿。沿原#49继续，未部署。
+
+## 2026-11-12 · Task B Share／MCP正式消费者候选
+
+固定BFF已提交0a2c98ae（原PR17后继609b0e93完整源树相同）的Public28.37与独立private reauthorization profile；现23正规生成/check、门户既有clean-checkout+blob验证通过，旧独立profiles与父证明不改。Share复用现generated事实源读取metadata，打开零发布；原unknown key/body/scope与ACK分离、读失败仅GET、失准入无locator/不写，重新verified同subject+tenant保持原key。MCP仅已移除/disabled配置可显式新授权，原source双CAS冻结，safeACK后fresh exact Server/Connector；坏provider绑定拒绝、不自动Prepare/OAuth/enable。无新认证／session探测／store／SDK框架，preview不造live metadata。
+
+主控原109冻结输入23 checks／60相关文件1216 PASS及build通过；独审随后定位真实tenant暂缺丢原key、私有provider跨字段遗漏、shared SDK路径参数丢失三缺口，均真实RED后定向修复。最终110输入主控6文件185 PASS／types／shared SDK正规check／build，逐SHA保持，Share/SDK与MCP独审CLEAR；未把阶段拼成一次全默认绿。SDK仍orphans:false、仅4操作，GET/POST/DELETE path.id必需且实际URL替换通过。门户210公开过滤operations／22页正规生成检查通过，完整owner216项；原参数指向固定clean609，不改loader或绕验证。
+
+正常服务/精确Root组合与真实浏览器Share刷新／新授权仍待主控受控切换验收，当前只交付源码候选，不冒Task B整体闭环。未重跑全默认、新模型或真实Provider。
+
+## 2026-11-12 · Task B Public28.37／新授权消费者候选
+
+固定 BFF `0a2c98ae6b16e48849c96ccd5fb87c1dcc2b6e97` 的 Public28.37（216 operations，原生 Session metadata、Share GET、Team delete_series）及独立 browser-private reauthorization1.0。当前 public 生成链与精确28.36／28.35父字节逆证一起升级，旧独立 profile 与历史父 pin 不变；无契约手写副本、锁依赖或认证状态机变更。
+
+会话分享打开／重开／焦点刷新只读 fresh metadata；成功 null 才是未分享，失败不当空、不自动发布。POST／DELETE 仍需明确操作，unknown 保原 scope／key／body，ACK 后只通过 fresh GET 展示；主体／窗口／准入退休阻断迟到显示与剪贴板反馈。确认后读失败只重读，不再发布。
+
+已断开的个人 MCP 仅显式“创建新授权”可提交 source Connector＋Server/Connector 双 CAS；复用现 actor-owned command 冻结原 key/body，unknown 原样恢复。严格 pending ACK 只提供新 Connector locator，随后 fresh exact Connector＋Server，历史 ACK 不授连接／执行资格；失败只重读，零自动 Prepare／OAuth／enable。旧 picture/RSS 等退休链保持不激活。此为消费者源码候选；工程证据由停写交接与主控复验绑定，正常 native 组合旅程／build／Root 配对另由主控验收，不冒全部 Task B 完成。
+
+## 2026-11-12 · MCP默认词条真实法语补口
+
+正常native页面已验English详情／管理／JSON错误、取消回焦与390px内收，JSON非法输入零MCP写；French320px另发现默认availability回退中文、Connect／标题／Save仍English占位、icon标签／hint缺译。只纠正本片10个现有key的七份缺译语言字典（zh/en原准确字节保持）及既有测试，不改UI逻辑／resolver／配置流程。writer真实3 FAIL→117 PASS；主控原两文件117 PASS及production build，八输入SHA核等、独审CLEAR。最终正常法语补验由主控继续，未将key存在冒实际译文正确或全站翻译完成。
+
+## 2026-11-12 · Task B MCP配置多语言与未读模型壳修复
+
+仅bootstrap显式标记模型目录未读并隐藏选择，保真实ready-empty提示与原零私有读取；MCP详情／管理／配置／JSON编辑复用现t和本片九语言key，不引入resolver／新请求／固定语言宽度。JSON解析／Header／transport错误只按四类安全代码在UI翻译，异常及复制反馈不反射秘密；原unknown命令key/body与窗口退休／回焦逻辑不变。
+
+停写16源码／测试输入与manifest核等，writer及主控四相关文件443 PASS，types／精确lint和主控production build通过，独审CLEAR。新回归先复现冷壳错误反馈、English硬编码与缺译；补充错误fixture首次URL不合法失败保留，修fixture不放宽生产校验。未重跑全默认／生成器／新模型或Provider。正常native页面和窄屏交主控后继补验，不以词条覆盖冒九语言全部视觉验收。
+
+## 2026-11-12 · Task B current-main integration candidate
+
+Original PR49 history is preserved by a normal merge of main59d412c9 into d6dd3cd0 in an isolated checkout; normal3310 source/output and the dirty Admin worktree were not touched. Current released Public28.35, native session, strict BFF profile, Task A executions/frequency/time/timezone and current AG-UI/AI SDK body remain authoritative. All22 normal generators ran; canonical/vendor/generated trees equal current main byte-for-byte. Old unpublished29.3, metadata/private-reauthorize consumers, picture direct-IAM read, RSS/runs and retiredOIDC are not activated; their original commits remain history and actual owner publication is a TODO, not a fallback/false success.
+
+API/JSON confirmed creation now retains only safe locator metadata. API opens a fresh exact GET; JSON single-result opens exact Connector+Server reads and multiple results require explicit selection. Unknown keeps original key/body; current identity/window guards reject late handoff, and post-confirmation detail retry never repeats POST. Existing URL/form publication and creation lifecycles remain. Also carries supported connector read recovery, native tab-local return hints and existing account/Skills lifecycle fixes from the original PR; each still needs current native-product evidence before complete Task B acceptance.
+
+Main verification: full ESLint/nonincrementalTS,22 generated checks and production build PASS. Default suite actual result6753 PASS/2 FAIL; failures were two stale UI oracles (retiredRSS triggerKind and hidden shared-package error). Corrected only those test oracles; their two files48 PASS, production inputs unchanged. Earlier rail5 failures similarly aligned trusted admission/no closed-overlay warm/visible failure and recovery with all late/key/body assertions retained; final rail295 PASS. Do not stitch these into a claimed final complete default green run. Full default includes contract/architecture tests; no duplicate whole suite. Independent scoped review CLEAR. Frozen non-document inputs verified around gates; fixture browser tests are preview-only, with no remaining owned fixture process. No new model/financial/sandbox call or normal service restart.
+
+Current candidate is not full Task B/main delivery. Normal native-auth create→exact detail→refresh and same-identity permissions remain to be exercised on the committed tuple. Source/PR/runtime receipts are owned by Root TODO; payment/E2B/provider boundaries remain explicit.
+
 ## 2026-11-12 · Composer menu and unnecessary startup reads
 
 Composer menus retain Radix anchor/top8px/collision12px and keyboard semantics. Content-sized width, viewport cap, wrapping labels and persistent checked weight replace fixed width/ellipsis; fine/coarse rows are at least36/44px. A confirmed empty model directory is visible; a missing locked explicit model never impersonates another default. Both Composer-only status keys are supplied in nine locales; selection identity, engine/draft/commands, API/schema/dependencies unchanged.

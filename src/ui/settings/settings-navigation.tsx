@@ -14,6 +14,7 @@ type SettingsNavigationProps = {
   selectedTab: SettingsTab;
   activeTabRef: RefObject<HTMLButtonElement | null>;
   onSelectTab: (tab: SettingsTab) => void;
+  onOrientationChange: (orientation: "horizontal" | "vertical") => void;
 };
 
 // Only labels already visible on navigable product pages belong here. Values,
@@ -42,7 +43,7 @@ function matchedLabel(label: string, query: string) {
   return <>{label.slice(0, index)}<mark>{label.slice(index, index + query.length)}</mark>{label.slice(index + query.length)}</>;
 }
 
-export function SettingsNavigation({ brandName, selectedTab, activeTabRef, onSelectTab }: SettingsNavigationProps) {
+export function SettingsNavigation({ brandName, selectedTab, activeTabRef, onSelectTab, onOrientationChange }: SettingsNavigationProps) {
   const { t } = useLocale();
   const unavailableId = useId();
   const [query, setQuery] = useState("");
@@ -82,6 +83,6 @@ export function SettingsNavigation({ brandName, selectedTab, activeTabRef, onSel
 
     </SettingsNavigationBrand>
     <p id={unavailableId} className="sr-only">{t("settings.unavailableNavigation")}</p>
-    <SettingsNavigationRail entries={nav} selectedTab={selectedTab} activeTabRef={activeTabRef} onSelectTab={onSelectTab} moreLabel={t("settings.moreSections")} isFiltered={searching} unavailableId={unavailableId} groupLabel={(entry) => settingsGroupLabel(t, entry.group)} />
+    <SettingsNavigationRail entries={nav} selectedTab={selectedTab} activeTabRef={activeTabRef} onSelectTab={onSelectTab} onOrientationChange={onOrientationChange} moreLabel={t("settings.moreSections")} isFiltered={searching} unavailableId={unavailableId} groupLabel={(entry) => settingsGroupLabel(t, entry.group)} />
   </nav>;
 }

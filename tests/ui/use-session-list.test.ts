@@ -590,9 +590,9 @@ describe("Project reads stay independent from conversation list/title state", ()
     const view = renderHook(() => useProjectList(false, boundary, alpha.id))
     const denied = { status: "error", retryable: false }
     await waitFor(() => expect(view.result.current.current).toEqual(denied))
-    await act(async () => { finishRail(Response.json({ data: { projects: [alpha] }, meta: { request_id: "req_late_list" } })); await rail })
+    await act(async () => { finishRail(Response.json({ data: { projects: [alpha, { ...alpha, id: "unrelated", name: "Other Project" }] }, meta: { request_id: "req_late_list" } })); await rail })
     expect(view.result.current.current).toEqual(denied)
-    expect(view.result.current.list).toEqual(denied)
+    expect(view.result.current.list).toEqual({ status: "ready", data: [{ ...alpha, id: "unrelated", name: "Other Project" }] })
     view.unmount()
   })
 
@@ -658,7 +658,7 @@ it.each([401, 403, 404, 503])("a deep-link detail HTTP %s clears the earlier can
   expect(view.result.current.current.status).toBe("loading")
   await waitFor(() => expect(view.result.current.current).toEqual({ status: "error", retryable: status === 503 }))
   expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual(["/api/hub/projects", "/api/hub/projects/detail-B"])
-  expect(view.result.current.list).toEqual(status === 401 || status === 403
+  expect(view.result.current.list).toEqual(status === 401
     ? { status: "error", retryable: false } : { status: "ready", data: [alpha] })
   view.unmount()
 })

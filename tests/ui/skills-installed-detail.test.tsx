@@ -2,7 +2,7 @@ import { chromium } from "@playwright/test"
 import { createServer } from "vite"
 import { basename } from "node:path"
 import readerStyles from "@/ui/skills/manus-skill-detail-dialog.module.css"
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 
 import type { ManagedPersonalSkill, PersonalInstallation, SkillCatalogCard } from "@/hub/schemas"
@@ -52,6 +52,154 @@ function ordinaryMetadataFixture() {
   const content = (boundary: ProjectReadBoundary = { admitted: true, subject: "ordinary-reader", generation: 1 }, selected = card, open = true) => <LocaleProvider><ManusSkillDetailDialog open={open} skill={selected} readBoundary={boundary} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={() => false} /></LocaleProvider>
   return { card, response, metadata, download, content, navigate }
 }
+
+function creatorShareFixture() {
+  const ordinary = ordinaryMetadataFixture()
+  const copy = vi.fn().mockResolvedValue(undefined)
+  const currentNavigator = navigator
+  vi.stubGlobal("navigator", new Proxy(currentNavigator, { get: (target, key) => key === "clipboard" ? { writeText: copy } : Reflect.get(target, key, target) }))
+  const ack = { share_id: "creator-share", source_ref: ordinary.card.source_ref, url: `${window.location.origin}/skills/shared/creator-share`, created_at: "2026-10-10T00:00:00Z", expires_at: null, revoked_at: null }
+  const owner = (data: unknown, status = 200) => ordinary.response({ data }, status)
+  return { ...ordinary, ack, copy, owner }
+}
+
+it("manages only its explicit create ACK, confirms revocation, cancels without writing and never recreates automatically", async () => {
+  const f = creatorShareFixture()
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("GetSkill")) return f.metadata()
+    if (init?.method === "POST") return f.owner(f.ack, 201)
+    if (init?.method === "DELETE") return f.owner({ ...f.ack, revoked_at: "2026-11-03T00:00:00Z" })
+    return f.owner(f.ack)
+  })
+  vi.stubGlobal("fetch", fetcher)
+  render(f.content())
+  expect(screen.queryByRole("button", { name: "停止分享" })).toBeNull()
+  await screen.findByText("Confirmed metadata without download material")
+  await waitFor(() => expect(screen.getByRole("button", { name: "分享技能" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("button", { name: "分享技能" }))
+  await waitFor(() => expect(f.copy).toHaveBeenCalledOnce())
+  fireEvent.click(screen.getByRole("button", { name: "停止分享" }))
+  const confirmation = await screen.findByRole("dialog", { name: "停止分享这个技能？" })
+  expect(within(confirmation).getByRole("button", { name: "取消" })).toHaveFocus()
+  fireEvent.click(within(confirmation).getByRole("button", { name: "取消" }))
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false)
+  fireEvent.click(screen.getByRole("button", { name: "停止分享" }))
+  const second = await screen.findByRole("dialog", { name: "停止分享这个技能？" })
+  act(() => { fireEvent.click(within(second).getByRole("button", { name: "停止分享" })); fireEvent.click(within(second).getByRole("button", { name: "停止分享" })) })
+  expect(await screen.findByText("分享已停止。" )).toBeVisible()
+  expect(screen.queryByRole("button", { name: "停止分享" })).toBeNull()
+  expect(fetcher.mock.calls.filter(([input, init]) => String(input).includes("/api/hub/skill-shares") && init?.method === "POST")).toHaveLength(1)
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1)
+})
+
+it("checks a cached link before copying and retires an externally unavailable share without creating another", async () => {
+  const f = creatorShareFixture()
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("GetSkill")) return f.metadata()
+    if (init?.method === "POST") return f.owner(f.ack, 201)
+    return f.response({ error: { code: "skill_not_found", message: "Share unavailable", retryable: false } }, 404)
+  })
+  vi.stubGlobal("fetch", fetcher); render(f.content())
+  await screen.findByText("Confirmed metadata without download material")
+  await waitFor(() => expect(screen.getByRole("button", { name: "分享技能" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("button", { name: "分享技能" }))
+  await waitFor(() => expect(f.copy).toHaveBeenCalledOnce())
+  fireEvent.click(screen.getByRole("button", { name: "分享技能" }))
+  expect(await screen.findByText("分享暂不可用或已失效。" )).toBeVisible()
+  expect(f.copy).toHaveBeenCalledOnce()
+  expect(fetcher.mock.calls.filter(([input, init]) => String(input).includes("/api/hub/skill-shares") && init?.method === "POST")).toHaveLength(1)
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "GET")).toHaveLength(1)
+})
+
+it("recovers an unknown revocation only through the original share GET without replaying either command", async () => {
+  const f = creatorShareFixture()
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("GetSkill")) return f.metadata()
+    if (init?.method === "POST") return f.owner(f.ack, 201)
+    if (init?.method === "DELETE") throw new TypeError("ACK lost")
+    expect(String(input)).toBe("/api/hub/skill-shares/creator-share")
+    return f.response({ error: { code: "skill_not_found", message: "Share unavailable", retryable: false } }, 404)
+  })
+  vi.stubGlobal("fetch", fetcher); render(f.content())
+  await screen.findByText("Confirmed metadata without download material")
+  await waitFor(() => expect(screen.getByRole("button", { name: "分享技能" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("button", { name: "分享技能" }))
+  await waitFor(() => expect(f.copy).toHaveBeenCalledOnce())
+  fireEvent.click(screen.getByRole("button", { name: "停止分享" }))
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "停止分享这个技能？" })).getByRole("button", { name: "停止分享" }))
+  fireEvent.click(await screen.findByRole("button", { name: "重新读取分享状态" }))
+  expect(await screen.findByText("分享暂不可用或已失效。" )).toBeVisible()
+  expect(screen.queryByText("分享已停止。" )).toBeNull()
+  expect(fetcher.mock.calls.filter(([input, init]) => String(input).includes("/api/hub/skill-shares") && init?.method === "POST")).toHaveLength(1)
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1)
+})
+
+it("reopens a retired unknown revoke with GET-only recovery and requires a new confirmation while the link stays active", async () => {
+  const f = creatorShareFixture()
+  let finish!: (response: Response) => void
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("GetSkill")) return f.metadata()
+    if (init?.method === "POST") return f.owner(f.ack, 201)
+    if (init?.method === "DELETE") return new Promise<Response>(resolve => { finish = resolve })
+    expect(String(input)).toBe("/api/hub/skill-shares/creator-share")
+    return f.owner(f.ack)
+  })
+  vi.stubGlobal("fetch", fetcher)
+  const view = render(f.content())
+  await screen.findByText("Confirmed metadata without download material")
+  fireEvent.click(screen.getByRole("button", { name: "分享技能" }))
+  await waitFor(() => expect(f.copy).toHaveBeenCalledOnce())
+  fireEvent.click(screen.getByRole("button", { name: "停止分享" }))
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "停止分享这个技能？" })).getByRole("button", { name: "停止分享" }))
+  await waitFor(() => expect(finish).toBeTypeOf("function"))
+  view.rerender(f.content(undefined, f.card, false))
+  await act(async () => { await Promise.resolve() })
+  view.rerender(f.content())
+  const recheck = await screen.findByRole("button", { name: "重新读取分享状态" })
+  expect(screen.getByRole("button", { name: "分享技能" })).toBeDisabled()
+  expect(screen.queryByRole("dialog", { name: "停止分享这个技能？" })).toBeNull()
+  fireEvent.click(recheck)
+  expect(await screen.findByText("此链接仍有效；如需停止分享，请再次确认。" )).toBeVisible()
+  await act(async () => finish(f.owner({ ...f.ack, revoked_at: "2026-11-03T00:00:00Z" })))
+  expect(screen.queryByText("分享已停止。" )).toBeNull()
+  expect(f.copy).toHaveBeenCalledOnce()
+  expect(fetcher.mock.calls.filter(([input, init]) => String(input).includes("/api/hub/skill-shares") && init?.method === "POST")).toHaveLength(1)
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1)
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "GET")).toHaveLength(1)
+  fireEvent.click(screen.getByRole("button", { name: "停止分享" }))
+  const confirmation = await screen.findByRole("dialog", { name: "停止分享这个技能？" })
+  fireEvent.click(within(confirmation).getByRole("button", { name: "取消" }))
+  await waitFor(() => expect(screen.getByRole("button", { name: "停止分享" })).toHaveFocus())
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1)
+})
+
+it.each(["actor", "source", "close"] as const)("retires a pending revoke and its late ACK on %s change", async change => {
+  const f = creatorShareFixture()
+  let finish!: (response: Response) => void
+  let signal: AbortSignal | undefined
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("GetSkill")) return f.metadata(change === "source" && changed ? "next-revision" : undefined)
+    if (init?.method === "POST") return f.owner(f.ack, 201)
+    signal = init?.signal ?? undefined
+    return new Promise<Response>(resolve => { finish = resolve })
+  })
+  let changed = false
+  vi.stubGlobal("fetch", fetcher); const view = render(f.content())
+  await screen.findByText("Confirmed metadata without download material")
+  await waitFor(() => expect(screen.getByRole("button", { name: "分享技能" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("button", { name: "分享技能" }))
+  await waitFor(() => expect(f.copy).toHaveBeenCalledOnce())
+  fireEvent.click(screen.getByRole("button", { name: "停止分享" }))
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "停止分享这个技能？" })).getByRole("button", { name: "停止分享" }))
+  await waitFor(() => expect(finish).toBeTypeOf("function"))
+  changed = true
+  view.rerender(f.content({ admitted: true, subject: change === "actor" ? "next-reader" : "ordinary-reader", generation: 1 }, change === "source" ? { ...f.card, revision_skill_id: "next-revision", source_ref: "skill:next-revision" } : f.card, change !== "close"))
+  expect(signal?.aborted).toBe(true)
+  await act(async () => finish(f.owner({ ...f.ack, revoked_at: "2026-11-03T00:00:00Z" })))
+  expect(screen.queryByText("分享已停止。" )).toBeNull()
+  expect(screen.queryByRole("dialog", { name: "停止分享这个技能？" })).toBeNull()
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1)
+})
 
 it.each(["confirmed", "unavailable", "different-version"] as const)("opens metadata independently and retains it after explicit download %s", async outcome => {
   const { card, response, metadata, download, content, navigate } = ordinaryMetadataFixture()
@@ -663,7 +811,7 @@ it.each([["catalog", "network"], ["catalog", "503"], ["installation", "network"]
   expect(onTry).not.toHaveBeenCalled()
 })
 
-it.each(["catalog", "installation"] as const)("keeps initial %s package failures distinct from empty success and recovers through normal reader controls", async source => {
+it.each([["catalog", "network"], ["installation", "network"], ["installation", "429"]] as const)("shows initial %s package %s failures and recovers with explicit read-only retry", async (source, failure) => {
   const { expectedPath, detailResponse, content, packagePath, response } = quietPackageFixture(source)
   let directoryReads = 0, fileReads = 0
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
@@ -671,7 +819,10 @@ it.each(["catalog", "installation"] as const)("keeps initial %s package failures
     if (path === expectedPath) return detailResponse("Confirmed detail")
     expect(path.startsWith(packagePath)).toBe(true)
     const file = new URL(path, "http://localhost").searchParams.get("file_path") as "SKILL.md" | "notes.md" | null
-    if (file === null && ++directoryReads === 1) throw Error("directory unavailable")
+    if (file === null && ++directoryReads === 1) {
+      if (failure === "429") return Response.json({ error: { code: "session_rate_limited", message: "Read throttled", retryable: true } }, { status: 429, headers: { "cache-control": "no-store", "x-request-id": "reader-throttled", "retry-after": "1" } })
+      throw Error("directory unavailable")
+    }
     if (file !== null && ++fileReads === 1) throw Error("file unavailable")
     return response(file)
   }))
@@ -680,19 +831,18 @@ it.each(["catalog", "installation"] as const)("keeps initial %s package failures
   fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
   await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
   expect(directoryReads).toBe(1)
-  expect(screen.queryByRole("alert")).toBeNull()
-  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  expect(screen.getByRole("alert")).toHaveTextContent("技能文件暂时不可用")
+  expect(screen.getByRole("button", { name: "重试" })).toBeEnabled()
   expect(screen.queryByText("暂无可读取的文本文件")).toBeNull()
   expect(screen.queryByText("此包没有可读取的 SKILL.md，请选择其他文本文件")).toBeNull()
   expect(screen.queryByText("此文件为空")).toBeNull()
   expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
-  fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
-  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
   await waitFor(() => expect(fileReads).toBe(1))
   await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
-  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.getByRole("alert")).toHaveTextContent("技能文件暂时不可用")
   expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
-  fireEvent.click(screen.getByRole("button", { name: "SKILL.md" }))
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
   expect(await screen.findByRole("heading", { name: "Confirmed skill" })).toBeVisible()
   expect(directoryReads).toBe(2)
   expect(fileReads).toBe(2)
@@ -733,7 +883,7 @@ it.each([
   await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"))
   expect(screen.queryByRole("heading", { name: "Confirmed skill" })).toBeNull()
   expect(screen.queryByRole("button", { name: "SKILL.md" })).toBeNull()
-  expect(screen.queryByRole("alert")).toBeNull()
+  expect(screen.getByRole("alert")).toHaveTextContent("技能文件暂时不可用")
   fireEvent.click(screen.getByRole("button", { name: "技能详情" }))
   if (failure !== "parse") {
     expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()

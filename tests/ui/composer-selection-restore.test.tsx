@@ -99,7 +99,7 @@ it("restores original Custom API versions only after current profile validation,
   api.nextSnapshot = async () => ({ ...saved(["conn_a"]), composer_selection: { source_message_id: "sent-original", selected_mcp_connection_ids: ["conn_a"], selected_custom_api_profiles: [{ profile_id: "api:valid", expected_state_version: 7 }, { profile_id: "api:changed", expected_state_version: 1 }] } })
   const engine = createSessionEngine({ client: api, storage: createMemoryStorage<ConversationStore>(null) })
   const profile = { name: "My API", created_at: "2026-10-29T00:00:00Z", updated_at: "2026-10-29T00:00:00Z", environment: [] }
-  const client = { ...catalog(), listCustomApis: vi.fn().mockResolvedValue({ items: [{ ...profile, profile_id: "api:valid", state_version: "7" }, { ...profile, profile_id: "api:changed", state_version: "2" }], page: { next_cursor: null } }) }
+  const client = { ...catalog(), listCustomApis: vi.fn().mockResolvedValue({ items: [{ ...profile, profile_id: "api:valid", state_version: "7", governance_status: "active" }, { ...profile, profile_id: "api:changed", state_version: "2", governance_status: "active" }], page: { next_cursor: null } }) }
   engine.openConversation("conv_1")
   const hook = renderHook(() => useComposerConnections({ engine, client, boundary, enforceSubjectMarker: false }))
   await waitFor(() => expect(engine.getSnapshot().selectedCustomApiProfiles).toEqual([{ profileId: "api:valid", expectedStateVersion: "7" }]))

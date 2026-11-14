@@ -21,8 +21,10 @@ export default defineConfig({
   parser: {
     filters: {
       operations: {
-        include: ["GET /v1/account/shared-tasks", "POST /v1/sessions/{id}/share", "DELETE /v1/sessions/{id}/share"],
+        include: ["GET /v1/sessions/{id}/share", "GET /v1/account/shared-tasks", "POST /v1/sessions/{id}/share", "DELETE /v1/sessions/{id}/share"],
       },
+      // Preserve inherited SessionId alongside the canonical operation-parameter dependencies.
+      parameters: { include: ["SessionId", "DirectScopeQuery", "ProjectRefQuery", "IdempotencyKey"] },
       orphans: false,
     },
   },

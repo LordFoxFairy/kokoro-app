@@ -6,6 +6,8 @@ import { browserAuthSessionResponseSchema } from "@/generated/bff-auth-session"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { useHydrated } from "@/lib/use-hydrated"
+import { readProductSignInReturnTarget } from "./product-auth-client"
 
 const EPISODE_MS = 10_000
 const RECHECK_MS = 1_000
@@ -28,6 +30,9 @@ function currentSession(raw: unknown): boolean {
 export function SignInRecovery() {
   const router = useRouter()
   const [checking, setChecking] = useState(false)
+  const hydrated = useHydrated()
+  const returnTarget = hydrated ? readProductSignInReturnTarget() : null
+  const loginHref = returnTarget === null ? "/login" : `/login?${new URLSearchParams({ return_to: returnTarget })}`
   const explicitRecovery = useRef<() => void>(() => {})
   useEffect(() => {
     let live = true
@@ -64,7 +69,7 @@ export function SignInRecovery() {
             if (currentSession(raw)) {
               navigated = true
               retire()
-              router.replace("/app")
+              router.replace(readProductSignInReturnTarget() ?? "/app")
               return
             }
           } else { void response.body?.cancel().catch(() => undefined) }
@@ -110,7 +115,7 @@ export function SignInRecovery() {
       </CardHeader>
       <CardContent className="grid gap-3 px-0">
         <Button type="button" size="lg" className="h-11 w-full" disabled={checking} onClick={() => explicitRecovery.current()}>检查并继续</Button>
-        <Button asChild variant="outline" size="lg" className="h-11 w-full"><a href="/login">重新登录</a></Button>
+        <Button asChild variant="outline" size="lg" className="h-11 w-full"><a href={loginHref}>重新登录</a></Button>
       </CardContent>
     </Card>
   )

@@ -1,3 +1,9 @@
+## 2026-11-12 · 显式新授权
+
+`mcp-management-commands.ts` 沿原 actor-owned 命令冻结已移除 Connector 的 source／双 CAS／key；`mcp-projection-read.tsx` 仅在只读断开配置装配显式新授权。确认 pending ACK 只产生安全新 locator，详情重读 exact Connector＋Server，不自动 Prepare／OAuth。原窗口／主体退休与 unknown 原命令恢复保持；正式独立 artifact、同源边界及验证范围见本仓 API_CONTRACT／CURRENT。
+
+2026-11-12：创建命令仅暂存安全completion locator，API需fresh exact profile GET，JSON单项直入／多项显选后核exact Connector+Server。unknown仍同key/body；迟到／换主体／窗口退休不handoff，已确认后的详情失败只重读不POST。原URL/form publication保留。private reauthorize未发行owner投影不装配，配置读取不当连接授权。
+
 ## 设置工具栏：按内容与容器排版
 
 Browse／Create 不再锁86／64px。现 Settings toolbar 与操作组自然换行，搜索保留可用宽度；长译文允许按钮增高，不用省略号、缩字或横向滚动掩盖溢出。规则只在 Settings scope，standalone／plaza与业务回调不变。实际验证范围见 CURRENT，不能从几种代表语言的布局通过推断全部词条已翻译完整。
@@ -31,6 +37,8 @@ API备注optional独立400/muted，主label500；密钥每行独立12px圆角框
 `custom-api-form.module.css` 与 `mcp-create-dialog.module.css` 的 API 作用域使用实测内在内容高度，不固定724或780px；600px宽、95vw/95dvh上限，标题74px、页脚76px，只有字段body滚动，多密钥自然增高。复用settings surface/control token及既有菜单阴影；输入36px/8px圆角，说明与密钥值100/80px、10px圆角，字段焦点保留参考1px inset，按钮键盘焦点保留2px外圈。关闭按钮28px、top20px/right12px。
 
 短屏明确工程差异：参考390×400仍有500px最小高度并裁掉页脚；本实现将最小高度限制为`min(500px,95dvh)`，保留全部字段可滚动及页脚键盘可达，不宣称此缺陷态像素一致。`tests/ui/mcp-custom-api-visual.test.tsx`以真实组件DOM、Vite编译生产CSS及Chromium验证普通/短/窄/多密钥几何，不代替正常服务旅程。业务TS、全局token及共享Input/Button未变。
+
+个人 API 治理：卡片／详情显示 fresh 三态；非 active 只读（含 secret/icon）但无未结命令时允许本人 Delete。原 unknown 命令仍显式同 key/body/CAS 恢复；创建 ACK 可缺治理字段且只投影 locator，禁止据其推断 active。读取与写失效仍归现 hooks，不新增轮询／缓存。
 
 ## 自定义 API 删除后的显示退休（2026-10-27）
 
