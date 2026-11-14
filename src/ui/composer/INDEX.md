@@ -53,3 +53,5 @@ Composer 仅报告新输入的 slash 范围；成功选择仅移除该范围，�
 ## 当前草稿的资源选择（A‑08，实施候选）
 
 `composer-resource-picker.tsx` / `.module.css` 承接现加号的显式本地上传、Library CLEAN files/FINAL artifacts 与当前 scope 最近任务。最近任务只在打开时读原私有 snapshot；无任何交付且有 durable final 标记才显示“最终答复”，用 opaque Message ID，不读正文。存在交付仍沿原 artifact 分页；Project 仅保当前 Conversation 归属。引用只报告 kind/resource_id，≤16、可移除，上传/选择/关闭不发送；未知上传保原 File/key，身份/路由/页面退休 abort 并忽略迟到结果。真实浏览器/正式组合验收归 Root。
+
+Project 最近任务及成果页按所选 Conversation 读取 exact Project scope 的授权 snapshot，核当前 read/edit 与 Project 身份；共享候选使用确认 FINAL 或 snapshot deliveries，不枚举私人 Library。无任何交付才显示最终答复；有限 snapshot 不冒完整成果分页。direct 保留本人绑定及原 Library 分页，发送仍由 BFF 锁内鲜验资源资格。
