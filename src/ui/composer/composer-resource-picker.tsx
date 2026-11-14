@@ -49,6 +49,7 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
   const [navigation, setNavigation] = useState<{ scope: object; tab: "files" | "artifacts"; task: string | null; query: string }>({ scope, tab: "files", task: null, query: "" })
   const currentNavigation = navigation.scope === scope ? navigation : { scope, tab: "files" as const, task: null, query: "" }
   const { tab, task, query } = currentNavigation
+  const taskSource = source === "recent" || Boolean(projectRef && source === "library" && tab === "artifacts")
   const setTab = (tab: "files" | "artifacts") => setNavigation({ ...currentNavigation, tab, query: "" })
   const setTask = (task: string | null) => setNavigation({ ...currentNavigation, task, query: "" })
   const setQuery = (query: string) => setNavigation(previous => ({ ...(previous.scope === scope ? previous : currentNavigation), query }))
@@ -92,7 +93,7 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
   const taskIsMember = useCallback(() => task !== null && latest.current.recentTasks.some(item => item.id === task), [task])
   const candidateLabel = (item: Candidate) => item.label ?? t("composer.resourceFinalAnswer")
   const select = (item: Candidate) => {
-    if (!current() || (source === "recent" && (!taskIsMember() || item.conversationId !== task))) return false
+    if (!current() || (taskSource && (!taskIsMember() || item.conversationId !== task))) return false
     const refs = latest.current.selected
     if (refs.some(ref => key(ref) === key(item.ref))) return true
     const parsed = selectedResourceRefsSchema.safeParse([...refs, item.ref])
@@ -103,11 +104,11 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
     return true
   }
   const read = useCallback(async (cursor: string | null, append = false) => {
-    if (!current() || source === null || source === "upload" || source === "recent" && !taskIsMember()) return
+    if (!current() || source === null || source === "upload" || taskSource && !taskIsMember()) return
     request.current?.abort()
     const abort = new AbortController(); request.current = abort
     setCatalog(previous => ({ view, items: append && previous?.view === view ? previous.items : [], cursor, status: "loading" }))
-    const stillCurrent = () => !abort.signal.aborted && request.current === abort && current() && (source !== "recent" || taskIsMember())
+    const stillCurrent = () => !abort.signal.aborted && request.current === abort && current() && (!taskSource || taskIsMember())
     const show = (items: Candidate[], nextCursor: string | null) => {
       if (!stillCurrent()) return
       setCatalog(previous => {
@@ -116,7 +117,7 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
       })
     }
     try {
-      if (source === "recent" && task !== null && cursor === null) {
+      if (taskSource && task !== null && cursor === null) {
         const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(RECENT_TASK_READ_TIMEOUT_MS)])
         const snapshot = await latest.current.readRecentTaskSnapshot(task, {
           signal, scope: projectRef ? { kind: "project", projectRef } : DIRECT_SESSION_SCOPE,
@@ -124,15 +125,25 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
         if (!stillCurrent()) return
         signal.throwIfAborted()
         if (snapshot === null) { show([], null); return }
-        if (snapshot.session.session_id !== task || snapshot.session.owner_id !== scope.subject) throw new Error("Recent task snapshot binding mismatch")
+        const access = snapshot.project_access
+        if (snapshot.session.session_id !== task || (projectRef
+          ? access?.project_id !== projectRef || !access.capabilities.includes("read") || !access.capabilities.includes("edit")
+          : snapshot.session.owner_id !== scope.subject)) throw new Error("Recent task snapshot binding mismatch")
+        if (projectRef && snapshot.deliveries.some(item => item.conversation_id !== task))
+          throw new Error("Project delivery binding mismatch")
         if (snapshot.deliveries.length === 0 && !snapshot.deliveries_has_more) {
-          // The private snapshot is in owner message order. An inline answer or
+          // The authorized snapshot is in message order. An inline answer or
           // missing durable marker never becomes a reference via inference.
-          const message = snapshot.messages?.findLast(item => item.role === "assistant" && item.status === "completed" &&
-            "rendering" in item && item.run_id.trim() && item.rendering.revision !== "0" && item.rendering.final_segment_id?.trim())
+          const message = source === "recent" ? snapshot.messages?.findLast(item => item.role === "assistant" && item.status === "completed" &&
+            "rendering" in item && item.run_id.trim() && item.rendering.revision !== "0" && item.rendering.final_segment_id?.trim()) : undefined
           const refs = message && selectedResourceRefsSchema.safeParse([{ kind: "final_answer", resource_id: message.message_id }])
           const ref = refs?.success ? refs.data[0] : undefined
           show(ref ? [{ ref, conversationId: task }] : [], null)
+          return
+        }
+        if (projectRef) {
+          show(snapshot.deliveries.map(item => ({ ref: { kind: "artifact", resource_id: item.artifact_id },
+            label: item.title, conversationId: item.conversation_id })), null)
           return
         }
       }
@@ -143,8 +154,7 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
         nextCursor = page.nextCursor
       } else {
         const page = await listLibraryArtifacts(cursor, abort.signal, { query: "", type: "all" })
-        const projectTasks = new Set(latest.current.recentTasks.map(item => item.id))
-        items = page.items.filter(item => !projectRef || projectTasks.has(item.conversationId)).map(item => ({
+        items = page.items.map(item => ({
           ref: { kind: "artifact", resource_id: item.artifactId }, label: item.filename, conversationId: item.conversationId,
         }))
         nextCursor = page.nextCursor
@@ -153,7 +163,7 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
     } catch {
       if (stillCurrent()) setCatalog(previous => ({ view, items: previous?.view === view ? previous.items : [], cursor, status: "error" }))
     }
-  }, [current, projectRef, scope.subject, source, tab, task, taskIsMember, view])
+  }, [current, projectRef, scope.subject, source, tab, task, taskIsMember, taskSource, view])
   useEffect(() => {
     let live = true
     queueMicrotask(() => { if (live) void read(null) })
@@ -188,9 +198,9 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
       if (abort.signal.aborted) setUpload(previous => previous?.scope === scope && previous.key === intent.key && previous.status === "uploading" ? { ...previous, status: "unknown" } : previous)
     }
   }
-  const taskUnavailable = source === "recent" && task !== null && !controller.recentTasks.some(item => item.id === task)
+  const taskUnavailable = taskSource && task !== null && !controller.recentTasks.some(item => item.id === task)
   const page = !taskUnavailable && catalog?.view === view ? catalog : null
-  const choices = (page?.items ?? []).filter(item => (source !== "recent" || item.conversationId === task) && candidateLabel(item).toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+  const choices = (page?.items ?? []).filter(item => (!taskSource || item.conversationId === task) && candidateLabel(item).toLocaleLowerCase().includes(query.toLocaleLowerCase()))
   const selectedKeys = new Set(controller.selected.map(key))
   const uploadIntent = upload?.scope === scope ? upload : null
   const selectedLabels = labels.scope === scope ? labels.values : {}
@@ -225,15 +235,15 @@ export function ComposerResourcePicker({ controller, source, onClose, returnTarg
             <Button type="button" variant="ghost" aria-pressed={tab === "artifacts"} onClick={() => { setTab("artifacts") }}>{t("library.artifactsTab")}</Button>
           </div> : null}
           <Input aria-label={t("firstSite.searchResources")} placeholder={t("firstSite.searchResources")} value={query} onChange={event => setQuery(event.currentTarget.value)} />
-          {source === "recent" && task === null ? <div className={styles.list}>
+          {taskSource && task === null ? <div className={styles.list}>
             {controller.recentTasks.filter(item => item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())).map(item => <Button type="button" variant="ghost" key={item.id} onClick={() => { setTask(item.id) }}>{item.title}</Button>)}
             {controller.recentTasks.length === 0 ? <p className={styles.hint}>{t("composer.resourcesNoTasks")}</p> : null}
           </div> : <>
-            {source === "recent" ? <Button type="button" variant="ghost" onClick={() => { setTask(null) }}>{t("composer.resourcesBack")}</Button> : null}
+            {taskSource ? <Button type="button" variant="ghost" onClick={() => { setTask(null) }}>{t("composer.resourcesBack")}</Button> : null}
             <div className={styles.list} aria-busy={page?.status === "loading"}>
               {page?.status === "loading" ? <p role="status">{t("composer.resourcesLoading")}</p> : null}
               {choices.map(item => <Button type="button" variant="ghost" key={key(item.ref)} disabled={selectedKeys.has(key(item.ref)) || controller.selected.length >= 16} onClick={() => select(item)}><FileText aria-hidden="true" /><span>{candidateLabel(item)}</span>{selectedKeys.has(key(item.ref)) ? <span>{t("composer.resourceAdded")}</span> : null}</Button>)}
-              {taskUnavailable || page?.status === "ready" && choices.length === 0 ? <p className={styles.hint}>{t(source === "recent" ? "composer.resourcesNoTaskResult" : "composer.resourcesEmptyPage")}</p> : null}
+              {taskUnavailable || page?.status === "ready" && choices.length === 0 ? <p className={styles.hint}>{t(taskSource ? "composer.resourcesNoTaskResult" : "composer.resourcesEmptyPage")}</p> : null}
             </div>
             {page?.status === "error" ? <div role="alert"><p>{t("composer.resourcesError")}</p><Button type="button" variant="ghost" onClick={() => void read(page.cursor, page.items.length > 0)}>{t("skills.retry")}</Button></div> : null}
             {page?.cursor && page.status !== "error" ? <Button type="button" variant="ghost" disabled={page.status === "loading"} onClick={() => void read(page.cursor, true)}>{t("composer.resourcesMore")}</Button> : null}
