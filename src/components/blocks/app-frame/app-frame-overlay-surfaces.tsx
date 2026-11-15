@@ -11,7 +11,7 @@ import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserHubClient } from "@/ui/shell/page-clients";
 import { createManusSkillHubClient, retainManusSkillHubClient } from "@/ui/skills/manus-skill-client";
-import { warmSkillsPool } from "@/ui/skills/skills-panel";
+import { warmSkillsPool } from "@/ui/skills/skills-pool-resource";
 
 import type { AppCommandMenuProps } from "./app-command-menu";
 

@@ -1,3 +1,11 @@
+## 2026-11-15 Project 业务代码质量：精确404与Skills数据职责
+
+本轮仅修rename ACK后exact detail404漏退休：区分detail与collection阶段，collection404不冒目标删除、503不退休。
+新增三等价类先RED1/PASS2（43筛除），修后对应两文件59PASS；旧姓名／路由／主体／epoch／取消与GET-only恢复规则保持。
+Skills warm/read移到现feature内具名resource模块，旧UI定义删除，Shell不再为取数据预热函数导入面板；Panel复用同reader。
+未改store/key/false／Panel订阅／quota-null或准入lease，不新增缓存／SDK／协议或泛化层，也不宣称性能提速。
+四文件定向523PASS；最终工程门和独立审查由本PR记录。无API／Schema／data owner变化，不重复旧模型、native、全默认或性能对照。
+
 ## 2026-11-15 A-15：Project 非首屏设置 JS 切片已验
 
 只改 `settings-panel.tsx` 的现内容入口：Next dynamic按需取SettingsPanelContent，复用现多语言

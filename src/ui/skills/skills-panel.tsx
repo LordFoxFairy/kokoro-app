@@ -15,7 +15,6 @@ import { isRequiredLockError } from "@/hub/rules";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import { invalidate, useResource } from "@/lib/query";
-import { subscribeResource } from "@/lib/query/resource-store";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { useOverlayClose } from "@/ui/shell/use-overlay-close";
 
@@ -26,6 +25,7 @@ import { PersonalSkillManagement, type PersonalSkillSelection } from "./personal
 import type { PersonalSkillOperation } from "./personal-skill-actions";
 import { ManusSkillDetailDialog } from "./manus-skill-detail-dialog";
 import { type SkillsPool, skillStateKey } from "./skills-pool-model";
+import { readSkillsPool } from "./skills-pool-resource";
 import type { SkillsScopeFilter } from "./skills-scope";
 import { SkillsPoolTab } from "./skills-pool-tab";
 import {
@@ -52,27 +52,6 @@ function isNestedOverlayPointerEvent(event: Event): boolean {
     target.closest('[data-slot="dialog-overlay"]') !== null &&
     document.querySelectorAll('[data-slot="dialog-content"][data-state="open"]')
       .length > 1
-  );
-}
-
-/**
- * Start the installed-Skills read as soon as an admitted app shell is ready.
- * The Settings tab later subscribes to this exact cache entry, preserving a
- * stable toolbar and avoiding a cold loading interchange during a tab click.
- */
-export function warmSkillsPool(client: HubClient): () => void {
-  const key = skillResourceKey(SKILLS_KEY, client);
-  return subscribeResource(
-    key,
-    async (): Promise<SkillsPool> => {
-      const [skills, quota] = await Promise.all([
-        client.listSkillPool(),
-        client.skillQuota().catch(() => null),
-      ]);
-      return { skills, quota };
-    },
-    () => undefined,
-    false,
   );
 }
 
@@ -352,13 +331,7 @@ function InstalledSkillsContent({
   // 池 + 配额合并读经查询层（模块缓存/去重/失活）：池只含「有效可用」项，配额缺失回退 null。
   const pool = useResource<SkillsPool>(
     skillResourceKey(SKILLS_KEY, client),
-    useCallback(async (): Promise<SkillsPool> => {
-      const [skills, quota] = await Promise.all([
-        client.listSkillPool(),
-        client.skillQuota().catch(() => null),
-      ]);
-      return { skills, quota };
-    }, [client]),
+    useCallback(() => readSkillsPool(client), [client]),
   );
   // required 锁定集合：某技能 disable 撞 409 hub.skill_required 后记入，UI 据此锁 toggle。
   const [locked, setLocked] = useState<Set<string>>(new Set());

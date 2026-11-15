@@ -3,7 +3,9 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createHubClient } from "@/hub/client"
-import { skillResourceKey } from "@/ui/skills/skills-resource-cache"
+import { SKILLS_KEY, skillResourceKey } from "@/ui/skills/skills-resource-cache"
+import { warmSkillsPool } from "@/ui/skills/skills-pool-resource"
+import type { SkillsPool } from "@/ui/skills/skills-pool-model"
 
 import {
   __resetResourceStore,
@@ -192,5 +194,33 @@ describe("resource-store 错误态", () => {
     good.resolve("ok")
     await good.promise
     expect(getResourceSnapshot<string>("k/err")).toMatchObject({ data: "ok", error: undefined })
+  })
+})
+
+
+describe("installed Skills warm resource", () => {
+  it("shares the client-scoped inflight read and retains it across warm subscriptions when quota fails", async () => {
+    let complete!: (skills: SkillsPool["skills"]) => void
+    const listSkillPool = vi.fn(() => new Promise<SkillsPool["skills"]>(resolve => { complete = resolve }))
+    const skillQuota = vi.fn().mockRejectedValue(new Error("quota unavailable"))
+    const client = { ...createHubClient(), listSkillPool, skillQuota }
+    const key = skillResourceKey(SKILLS_KEY, client)
+    const first = warmSkillsPool(client), second = warmSkillsPool(client)
+    expect(listSkillPool).toHaveBeenCalledTimes(1)
+    expect(skillQuota).toHaveBeenCalledTimes(1)
+    complete([])
+    await vi.waitFor(() => expect(getResourceSnapshot<SkillsPool>(key)).toEqual({ data: { skills: [], quota: null }, error: undefined, loading: false }))
+    first(); second()
+    const again = warmSkillsPool(client)
+    expect(listSkillPool).toHaveBeenCalledTimes(1)
+    again()
+  })
+
+  it("keeps a failed pool read as an error rather than publishing an empty successful pool", async () => {
+    const failure = new Error("pool unavailable")
+    const client = { ...createHubClient(), listSkillPool: vi.fn().mockRejectedValue(failure), skillQuota: vi.fn().mockResolvedValue(null) }
+    const release = warmSkillsPool(client)
+    await vi.waitFor(() => expect(getResourceSnapshot<SkillsPool>(skillResourceKey(SKILLS_KEY, client))).toEqual({ data: undefined, error: failure, loading: false }))
+    release()
   })
 })
