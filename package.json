@@ -78,7 +78,7 @@
     "@ag-ui/core": "0.0.59",
     "@ai-sdk/react": "4.0.95",
     "@bufbuild/protobuf": "2.14.0",
-    "@kokoro/i18n": "workspace:*",
+    "@lordfoxfairy/i18n": "0.1.0",
     "@shadcn/react": "^0.3.0",
     "ai": "7.0.92",
     "class-variance-authority": "^0.7.1",

@@ -1,5 +1,5 @@
-# 当前是 Site 内的 package bootstrap workspace。通用包稳定并有第二个 Site 消费后，
-# packages/* 整体迁移到 kokoro-web-shared；跨仓库改用 registry + semver，不使用相对路径。
+# App 只保留本地 tsconfig workspace；i18n 使用 GitHub Packages 精确版本。
+# 产品源码不通过 sibling 相对路径或 file bridge 消费 i18n。
 packages:
   - "."
   - "packages/*"
@@ -14,6 +14,7 @@ minimumReleaseAgeExclude:
   - '@ai-sdk/mcp@2.0.44'
   - '@ai-sdk/react@4.0.95'
   - ai@7.0.92
+  - '@lordfoxfairy/i18n@0.1.0'
 onlyBuiltDependencies:
   - esbuild
   - sharp

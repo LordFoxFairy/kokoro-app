@@ -1,3 +1,10 @@
+## R-06：i18n 单一源码与发行
+
+唯一引擎 owner 为 shared；App 以 GitHub Packages 精确依赖 `@lordfoxfairy/i18n@0.1.0`，
+原 resolver 仅替换包 import，本地七文件副本退休。现 pnpm/lock、GitHub 自动 token 和
+BuildKit 安装接线承接发行，不新增运行时层、API/Schema、词典或兼容 alias。
+实际安装/构建验收见 `docs/CURRENT.md`，其它产品与 tsconfig 不变。
+
 ## 2026-11-13 B13：Admin IAM 审计具名桥（源码阶段已验，正常配对待完成）
 
 保当前 Browser→Admin 同源→App Product bridge→BFF→IAM 边界。仅现 /api/admin/[...path] 增加 exact GET identity/audit-events，并在原有有界 Admin proxy 复用 limit/cursor 读传输；不开放 identity 任意前缀。原 native Cookie/固定Origin/service envelope/request-id/10秒入站至响应预算、原字节上限/取消/无自动重试保持。Web 不直连 IAM、读审计库或作权限决定，不新增OAuth/token/SDK/缓存/事件协议。
