@@ -1,10 +1,10 @@
 # Shared package boundary
 
-当前 `packages/` 是 `kokoro-app` 的私有 workspace 层，实际包含 `i18n`、
-`tsconfig`，App 的 manifest 与 lockfile 仍以 `workspace:*`／本仓 link 消费。
-独立 `libs/kokoro-web-shared` 已存在，Mori 通过显式 `file:` package bridge 消费其中同名三包；
-App 未使用的 `web-core` 副本及依赖已退役；共享仓 canonical 包保持，未迁移或发布。
-App 在用 `i18n` 副本尚未切换，仍有双 writer，不能把局部删除当成完整迁移完成。
+本仓只保留 `@kokoro/tsconfig` 的私有 workspace。i18n 引擎唯一源码 owner 是
+`libs/kokoro-web-shared/packages/i18n`，App 通过 GitHub Packages 精确消费
+`@lordfoxfairy/i18n@0.1.0`，manifest 与正规 lock 固定版本和 integrity。
+本地 i18n 七文件副本已删除；不保留 workspace/file/link/alias fallback。
+词典、overlays 与 React 绑定仍归 App，公开 resolver 行为不变。
 
 ## 当前仓库边界与后续交付
 
@@ -12,16 +12,15 @@ Root 当前组合如下；各产品只通过 package 公共入口消费，不互
 
 ```text
 Kokoro/
-├── apps/kokoro-app/packages/ # App 当前消费的 i18n 与 tsconfig
+├── apps/kokoro-app/packages/ # App 仅本地消费 tsconfig
 ├── apps/kokoro-mori/         # file: bridge 消费下方独立共享包
 └── libs/kokoro-web-shared/
     └── packages/{web-core,i18n,tsconfig}
 ```
 
 Root 通过 gitlink 组合独立子仓，不等于产品通过 submodule 嵌入共享源码。
-独立共享仓库允许本地显式 `file:` package bridge；私有 registry、semver 与 lockfile 的版本化
-发布仍是后续交付目标，不是当前已完成事实。App 切换与副本删除须先收敛唯一源码 owner，
-逐个验证消费者，再停止双 writer；本轮只退役无消费者的本地 web-core，不切换在用 i18n 或发布包；App 六项额外严格编译检查保持。
+其它产品现有消费不在本轮修改范围；App i18n 已使用 GitHub registry/semver/lock，
+不再把 App 的副本和共享源码当两个 writer。`@kokoro/tsconfig` 的本地消费与严格编译检查保持。
 
 ## 包职责与提取规划
 
@@ -31,7 +30,7 @@ Root 通过 gitlink 组合独立子仓，不等于产品通过 submodule 嵌入�
 | package | 允许拥有 | 禁止拥有 |
 | --- | --- | --- |
 | `@kokoro/web-core` | 纯 TS 类型、资源/动作状态、跨产品协议 | React、CSS、Next、网络、产品文案 |
-| `@kokoro/i18n` | 无 DOM 的语言协商、插值和 fallback 引擎 | 某个产品的词典、页面文案 |
+| `@lordfoxfairy/i18n` | 无 DOM 的语言协商、插值和 fallback 引擎 | 某个产品的词典、页面文案 |
 | `@kokoro/web-data` | BFF client、schema、SSE/query adapter、错误映射 | 数据库连接、IAM 私有 token、页面布局 |
 | `@kokoro/web-ui` | shadcn/Radix/Lucide primitive 和无业务交互 | Tenant 事实、业务请求、唯一页面排列 |
 | `@kokoro/web-blocks` | Rail、Composer、Thread、ContextPanel 等可组合块 | 强制所有产品使用同一页面布局 |
@@ -76,12 +75,10 @@ Live backend。
 
 ## 当前阶段规则
 
-- App 保持当前 `private` workspace 消费；Mori 已消费独立共享仓库的三包，不再按单消费者
-  或仅有已归档旧 workspace 判断。两份实现的 owner／交付收敛仍待完成。
-- 保留 `@kokoro/i18n` 稳定包名，不为增加 `web-` 前缀制造无收益的重命名。
-- 后续 App 切换须同步 manifest 与 lockfile，并验证公共入口后删除本仓副本；
-  不以文档修改代替 package 迁移或 registry 发布。
-- 迁移前必须保证 package 不依赖产品路径，并为每个公共入口提供 typecheck、unit test、
-  changelog 和 semver 变更记录。
+- App i18n 只消费 GitHub 发布的精确版本；shared 源码、制品和 App lock 的实际验证见 CURRENT。
+- GitHub npm 包 scope 跟随现账号，包名为 `@lordfoxfairy/i18n`，不建立组织或兼容别名。
+- 本地临时使用现 GitHub 登录；Actions 使用自动 `GITHUB_TOKEN` 和 package Read 授权，
+  不新增长期读取 secret。Docker 仅在 frozen install 挂载 BuildKit 认证秘密。
+- shared 公开 API 与产品词典分离，升级以 semver、固定 commit 和 integrity 追溯；已发版本不覆盖。
 - 产品自己的布局、品牌文案、SEO、Logo、素材和 token preset 始终留在
   `kokoro-app/src/features`，不因为“方便复用”而抽进 shared package。

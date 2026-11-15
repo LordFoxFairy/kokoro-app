@@ -1,3 +1,10 @@
+## R-06：i18n 单一源码与发行
+
+唯一引擎 owner 为 shared；App 以 GitHub Packages 精确依赖 `@lordfoxfairy/i18n@0.1.0`，
+原 resolver 仅替换包 import，本地七文件副本退休。现 pnpm/lock、GitHub 自动 token 和
+BuildKit 安装接线承接发行，不新增运行时层、API/Schema、词典或兼容 alias。
+实际安装/构建验收见 `docs/CURRENT.md`，其它产品与 tsconfig 不变。
+
 ## 2026-11-13 Project 协作当前写区
 
 Public29候选及实际验收边界见 `docs/CURRENT.md`。Project Access正规codec位于`src/generated/bff-project-access.ts`，浏览器读取和同tab原命令分别在`src/features/app/project-access-client.ts`、`project-grant-command.ts`；Project header只承接UI，后端资格仍由BFF判定。Chat沿原engine→AI SDK，Scheduled沿原feature client/operations与显式revision，没有第二业务owner或认证层。

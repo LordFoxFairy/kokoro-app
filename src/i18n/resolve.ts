@@ -1,8 +1,8 @@
-// 解析层：委派共享引擎 @kokoro/i18n（泛型于本 app 的 Locale/MessageKey 与词典）。
+// 解析层：委派共享引擎 @lordfoxfairy/i18n（泛型于本 app 的 Locale/MessageKey 与词典）。
 // 公共面 negotiateLocale/resolveMessage 签名不变——42 处 useT/MessageKey 消费方零改动。
-// 协商/三层 fallback/{插值} 逻辑收归 @kokoro/i18n 单一实现，供仓内应用复用。
+// 协商/三层 fallback/{插值} 逻辑收归 @lordfoxfairy/i18n 单一实现，供仓内应用复用。
 
-import { createI18n } from "@kokoro/i18n"
+import { createI18n } from "@lordfoxfairy/i18n"
 
 import { DEFAULT_LOCALE, LOCALES, zh, type Locale, type MessageKey } from "./messages"
 import { OVERLAYS } from "./overlays"

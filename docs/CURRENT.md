@@ -1,3 +1,24 @@
+## 2026-11-15 R-06：GitHub 正式包与 App 单一消费源已验
+
+shared#2/main `e0ca7221b17a7d9ca3624aaa664e3f792433b7cb` 正式发行
+`@lordfoxfairy/i18n@0.1.0` 到 GitHub Packages（private）；fresh cache拉取/SRI、JS/声明与
+源构建逐字一致、独立Node22运行及NodeNext类型正负例PASS。App package Actions Read已保存，
+自动GITHUB_TOKEN即可，不新增长期secret或组织，不继续使用其它registry。
+
+App精确manifest/正规lock/唯一import切换，删除本地七文件和旧Docker COPY；词典、resolver行为、
+Next配置、tsconfig不变，无alias/file/workspace fallback。保留的lock package/snapshot逐项不变，
+仅清理旧包独有工具链，并由pnpm为可信新精确版本生成min-age放行。三workflow沿原触发/部署条件，
+Docker仅安装时挂npmrc/token，approve/rebuild不挂秘密。
+
+主控App-only archive＋精确停写overlay、独立空store真实frozen install及compiled包importPASS；
+原resolver/runtime-manifest/governance三文件115 PASS，完整lint/typecheck/production build PASS。
+实际Docker build、public standalone HTTP200/nosniff、运行镜像无认证文件/环境和history无凭据PASS；
+自有candidate容器已回收。首个smoke仅本地helper的日志参数不兼容而exit125、应用未启动，修正helper后通过；
+未改生产逻辑。独审CLEAR；原源码22路径的非文档输入在全部门后SHA保持，仅本节补实际结果。
+
+本片不重跑全默认、模型/支付/全产品E2E或部署，远端CI不当本地通过证据。Git/PR/main及Root精确组合
+由Root唯一TODO记录，不在本文件预写未来commit或合并结果。
+
 ## 2026-11-13 Public29.1 API门户增量（已验）
 
 仅原catalog/contracts.yaml固定正式BFF `bec8584f0b185a3ce0a32366199142b945d8812b`／29.1.0／raw `dea9f3b6dfc03daab3a6fe3b4009635cd0aecf03517c05e7ce42ae116162c925` 与API changelog；新IAM审计GET由正规reference链生成，228 owner/222 public，六browser-private继续排除。22份生成参考仍ignored不手改/不提交，不改App通用业务contract pin或另外创建文档系统。

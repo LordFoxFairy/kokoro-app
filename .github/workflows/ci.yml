@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   verify:
@@ -44,10 +45,13 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+          registry-url: https://npm.pkg.github.com
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install locked dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm install --frozen-lockfile
 
       - name: Scan dependencies, source configuration, and secrets
@@ -82,4 +86,8 @@ jobs:
         run: pnpm test:e2e
 
       - name: Build production image candidate
-        run: docker build --tag kokoro-web:ci .
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker build --secret id=npmrc,src="$NPM_CONFIG_USERCONFIG" \
+            --secret id=github_token,env=NODE_AUTH_TOKEN --tag kokoro-web:ci .

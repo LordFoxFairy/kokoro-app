@@ -1,8 +1,10 @@
 node_modules
+.pnpm-store
 .next
 .git
 .env
 .env.*
+**/.npmrc
 !.env.example
 npm-debug.log*
 .playwright-mcp

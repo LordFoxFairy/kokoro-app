@@ -1,3 +1,27 @@
+## R-06：GitHub i18n 正式依赖（2026-11-15）
+
+App 精确消费 `@lordfoxfairy/i18n@0.1.0`，唯一源码归 shared；本地副本已删除，
+不改词典/UI、不使用 sibling/file/alias fallback。包保持 private，CI 使用自动
+`GITHUB_TOKEN`＋`packages: read` 和该包的 App 仓读取授权，不需长期 npm secret。
+
+本地复用已登录的 GitHub CLI；凭据只在当前子进程内，配置文件只含占位，不改用户全局 npm 配置：
+
+```bash
+(
+  export NODE_AUTH_TOKEN="$(gh auth token)"
+  npmrc="$(mktemp)"
+  trap 'rm -f "$npmrc"' EXIT
+  printf '%s\n' '@lordfoxfairy:registry=https://npm.pkg.github.com' \
+    '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' > "$npmrc"
+  NPM_CONFIG_USERCONFIG="$npmrc" pnpm install --frozen-lockfile
+  # 如需本地镜像候选（不发布）：
+  # docker build --secret id=npmrc,src="$npmrc" \
+  #   --secret id=github_token,env=NODE_AUTH_TOKEN --tag kokoro-web:local .
+)
+```
+
+本轮实际验收与未运行范围见 [CURRENT](docs/CURRENT.md)；下方保留原任务历史记录。
+
 ## Task B 当前源码（2026-11-13）
 
 当前源码 `0d38eec6` 的独立前端工程门已验：完整默认6885 PASS／0 SKIP、1593输入起终核等，相关lint/types/build/contract及门户55例、62页21556链接通过。原PR范围包含配置与读取恢复、账户/团队、Skills、分享、个性化、Project协作/本人Run控制、原CAS Scheduled写入、Admin具名桥及多语言/门户；具名native片已验配置创建回读、团队治理、设置CAS/个性化生效、双身份Project角色/降权撤权、历史恢复和审计桥，不将部分旅程扩大为所有E2E完成。

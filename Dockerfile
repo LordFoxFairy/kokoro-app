@@ -11,11 +11,13 @@ ENV npm_config_fetch_retries=6 \
 # workspace 清单 + 锁先拷，供过滤安装。
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/tsconfig/package.json ./packages/tsconfig/
-COPY packages/i18n/package.json ./packages/i18n/
 # pnpm 11 blocks native build scripts by default in CI. Install deterministically first,
 # approve only the native packages required by Next/Tailwind, then build them explicitly.
-RUN pnpm install --frozen-lockfile --filter @kokoro/app... --ignore-scripts \
-    && pnpm approve-builds --all \
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=true \
+    --mount=type=secret,id=github_token,required=true \
+    NODE_AUTH_TOKEN="$(cat /run/secrets/github_token)" \
+    pnpm install --frozen-lockfile --filter @kokoro/app... --ignore-scripts
+RUN pnpm approve-builds --all \
     && pnpm rebuild esbuild sharp unrs-resolver
 
 FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS build
