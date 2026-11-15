@@ -1,3 +1,21 @@
+## 2026-11-15 A-15：Project 非首屏设置 JS 切片已验
+
+只改 `settings-panel.tsx` 的现内容入口：Next dynamic按需取SettingsPanelContent，复用现多语言
+loading；不动Dialog/tab/focus、Project读取、准入/取消/代际、缓存、词典、契约、依赖或服务边界。
+用户已批准此窄方案，不拆其它模块。
+
+App75af734b前后同一只读HTTP契约fixture、production build、各3个新browser context：首屏JS
+encoded 1,229,484→1,190,358 bytes，decoded 4,521,400→4,323,829 bytes；script20→21，
+首次打开设置才取另外2个脚本。rAF可编辑中位229.4→201.5ms，DCL→首Project GET中位163.7→156ms。
+这是受控前端小样本，不是真实IAM/BFF、生产p95、100ms达标或完整A-15收益；首次打开设置有新chunk等待。
+
+原Settings/rail/Project三个UI文件504 PASS；原布局例仅改为等异步内容，单独运行1 PASS、原断言保持；新E2E先在旧入口复现无延迟loading的RED，最终en/fr×
+desktop/mobile4 PASS，真实脚本load完成后确认迟到不重开、明确菜单重开与草稿保持；完整lint/types/
+production build及独审CLEAR。初次私有runner fd接线、E2E未等history/泛Dialog定位失败保留；只修
+测试/runner，不改业务语义。normal服务/.next、真实账户/数据库/资金和部署不动。
+
+不重跑无关contract/全默认/全站E2E或R-06发行验证；Root唯一TODO管理本轮PR/main和清分支出口。
+
 ## 2026-11-15 R-06：GitHub 正式包与 App 单一消费源已验
 
 shared#2/main `e0ca7221b17a7d9ca3624aaa664e3f792433b7cb` 正式发行

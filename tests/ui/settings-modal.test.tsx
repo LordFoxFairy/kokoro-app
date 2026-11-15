@@ -816,7 +816,7 @@ describe("SettingsModal 设置中心模态", () => {
     expect(card).toHaveClass("p-0", "box-border");
   });
 
-  it("右侧标题与设置内容由同一个 ScrollArea viewport 滚动", () => {
+  it("右侧标题与设置内容由同一个 ScrollArea viewport 滚动", async () => {
     renderSettings(() => {}, undefined, false, undefined, "appearance");
 
     const panel = screen.getByTestId("settings-panel-appearance");
@@ -826,7 +826,7 @@ describe("SettingsModal 设置中心模态", () => {
       screen.getByRole("heading", { name: "通用" }),
     );
     expect(viewport).toContainElement(
-      screen.getByTestId("settings-appearance"),
+      await screen.findByTestId("settings-appearance"),
     );
   });
 

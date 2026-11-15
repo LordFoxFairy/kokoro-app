@@ -1,3 +1,10 @@
+## A-15：非首屏设置内容按需加载
+
+`src/ui/settings/settings-panel.tsx` 保持现 Panel/AccountReadSnapshotBoundary、标题与tab，只对
+`SettingsPanelContent` 使用现 Next dynamic 边界，未打开设置时不取内容脚本；loading复用
+`settings.loading` 的现多语言词条。Dialog、焦点、URL/身份退休和Project读取围栏不变。
+实际production对照、英法语/桌面移动浏览器、原回归及未验范围见 `docs/CURRENT.md`。
+
 ## R-06：i18n 单一源码与发行
 
 唯一引擎 owner 为 shared；App 以 GitHub Packages 精确依赖 `@lordfoxfairy/i18n@0.1.0`，

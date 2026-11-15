@@ -1,8 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
+import dynamic from "next/dynamic";
 
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n/context";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TabsContent } from "@/components/ui/tabs";
 import type { HubClient } from "@/hub/client";
@@ -12,10 +14,19 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 
 import styles from "./settings-modal.module.css";
-import { SettingsPanelContent } from "./settings-panel-content";
 import { SettingsPanelHeader } from "./settings-panel-header";
 import { AccountReadSnapshotBoundary } from "./account-read-snapshots";
 import { SETTINGS_TABS, type AccountDetail, type SettingsTab } from "./settings-types";
+
+const SettingsPanelContent = dynamic(
+  () => import("./settings-panel-content").then((module) => module.SettingsPanelContent),
+  { loading: SettingsPanelLoading },
+);
+
+function SettingsPanelLoading() {
+  const t = useT();
+  return <p role="status">{t("settings.loading")}</p>;
+}
 
 type SettingsPanelProps = {
   activeTab: SettingsTab;
