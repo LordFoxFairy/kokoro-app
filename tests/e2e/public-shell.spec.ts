@@ -398,3 +398,68 @@ test("ordinary composer connector menu stays in the viewport, keeps draft and re
   await expect(page.getByRole("tab", { name: "连接器", exact: true })).toHaveAttribute("aria-selected", "true")
   await expect(page).toHaveURL(/#\/account\/settings\/mcp$/)
 })
+
+for (const [locale, loading, settings, expand] of [
+  ["en", "Loading…", "Settings", "Expand sidebar"],
+  ["fr", "Chargement…", "Paramètres", "Développer la barre latérale"],
+] as const) {
+  test(`延迟设置内容在 ${locale} 加载时可关闭，迟到模块不重开窗口`, async ({ page }) => {
+    await page.addInitScript((language) => localStorage.setItem("kokoro.locale", language), locale)
+    await page.goto("/app", { waitUntil: "domcontentloaded" })
+    const draft = page.locator("textarea")
+    await expect(draft).toBeEditable()
+    await draft.fill("A15 unsent draft")
+
+    let release!: () => void
+    const held = new Promise<void>((resolve) => { release = resolve })
+    let paused = false
+    const pausedScripts = new Set<string>()
+    await page.route("**/_next/static/**", async (route) => {
+      if (paused && route.request().resourceType() === "script") {
+        pausedScripts.add(route.request().url())
+        await held
+      }
+      await route.continue()
+    })
+    try {
+      paused = true
+      // Existing public deep-link navigation stays in this document: no extra
+      // route or private module hook is needed to open the ordinary dialog.
+      await page.goto("/app#/account/settings/general")
+      const dialog = page.getByRole("dialog", { name: settings, exact: true })
+      await expect(dialog).toBeVisible()
+      await expect(dialog.getByText(loading, { exact: true })).toBeVisible()
+      expect(pausedScripts.size).toBeGreaterThan(0)
+      await page.keyboard.press("Escape")
+      await expect(dialog).toBeHidden()
+      await expect(page).toHaveURL(/\/app$/)
+      await page.evaluate((urls) => {
+        for (const url of urls) {
+          const script = [...document.scripts].find((element) => element.src === url)
+          if (!script) throw new Error("Delayed settings script element is missing")
+          script.addEventListener("load", () => script.setAttribute("data-a15-loaded", "true"), { once: true })
+        }
+      }, [...pausedScripts])
+      release()
+      paused = false
+      await page.unrouteAll({ behavior: "wait" })
+      await expect(page.locator('script[data-a15-loaded="true"]')).toHaveCount(pausedScripts.size)
+      // Script load follows execution; give React two paint opportunities too.
+      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+      await expect(dialog).toBeHidden()
+      await expect(draft).toHaveValue("A15 unsent draft")
+      // Closing a URL intent does not reopen that same dismissed address.
+      // Reopen via the real account-menu action instead.
+      const account = page.getByTestId("rail-utility-account")
+      if (!(await account.isVisible())) await page.getByRole("button", { name: expand, exact: true }).click()
+      await account.click()
+      await page.getByRole("menuitem", { name: new RegExp(settings) }).click()
+      await expect(page.getByTestId("settings-appearance")).toBeVisible()
+      await page.keyboard.press("Escape")
+      await expect(dialog).toBeHidden()
+      await expect(draft).toHaveValue("A15 unsent draft")
+    } finally {
+      release()
+    }
+  })
+}
