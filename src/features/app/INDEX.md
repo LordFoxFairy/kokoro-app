@@ -1,3 +1,9 @@
+## Project rename 的精确退休事实
+
+`use-project-list.ts` 的 rename ACK 回读仍先 exact detail、再 collection，只有两次 owner 读成功才一起发布。
+精确 detail 404 与401/403会退休目标；后继 collection 404 和 transient503不伪造成目标已删除。
+原epoch／subject／route／AbortSignal围栏及错误原型保持，不重发PATCH，不用ACK替代fresh事实。
+
 ## 资料库与 Canvas 正式内容预览（A‑09/A‑10）
 
 `kokoro-library-preview-content.ts` 复用现同源内容读取、一次 deadline、EOF／SHA／UTF‑8；

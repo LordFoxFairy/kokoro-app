@@ -1,3 +1,9 @@
+## Skills pool：数据读取不依赖面板 UI
+
+`skills-pool-resource.ts` 是现已安装pool的唯一reader与warm订阅入口；Shell直接使用它，Panel用同reader，
+不从`skills-panel.tsx`取预热能力，不保旧re-export。沿用现client-scoped key/store和warm的false重验证参数；
+pool失败仍报错，quota失败仍null，Panel原订阅行为、准入lease和失活语义不变。不新增缓存或声称启动提速。
+
 ## 操作区按内容排版
 
 Skills池的Browse／Create共享动作类不再锁72／84／116px，嵌入设置也不锁两行32px；搜索保可用宽度，动作自然增高／换行，范围筛选独立占一行并按文案宽度分配。窄屏不再改变toolbar主轴或强制等宽拆单词；长文案超过单行容器才自然折行。不改共享Button／业务hook／创建或导入协议。正常英文测量与代表语言的浏览器范围见CURRENT，不冒全部翻译完整或全站视觉验收。

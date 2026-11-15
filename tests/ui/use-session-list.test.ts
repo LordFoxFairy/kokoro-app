@@ -704,6 +704,41 @@ it("rename refresh aborts the old generation, then reads frozen detail before li
   view.unmount()
 })
 
+it.each([
+  { stage: "detail", status: 404, retired: true },
+  { stage: "collection", status: 404, retired: false },
+  { stage: "detail", status: 503, retired: false },
+] as const)("rename read-back $stage $status retires only an exact missing Project", async ({ stage, status, retired }) => {
+  const { useProjectList } = await import("@/features/app/use-project-list")
+  const project = { id: "project_12345678-1234-1234-1234-123456789abc", name: "Confirmed", slug: "same", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+  const calls: string[] = []
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const path = String(input)
+    calls.push(path)
+    if (calls.length === 1) return Response.json({ data: { projects: [project] }, meta: { request_id: "initial" } })
+    if (path === `/api/hub/projects/${project.id}` && stage === "collection")
+      return Response.json({ data: { project: { ...project, name: "Renamed" } }, meta: { request_id: "exact" } })
+    return Response.json({ error: { code: status === 404 ? "not_found" : "unavailable" } }, { status })
+  })
+  const boundary = { admitted: true, subject: "rename-reader", generation: 1 }
+  const view = renderHook(({ id }: { id?: string }) => useProjectList(false, boundary, id), { initialProps: {} })
+  try {
+    await waitFor(() => expect(view.result.current.list.status).toBe("ready"))
+    view.rerender({ id: project.id })
+    expect(view.result.current.current).toEqual({ status: "ready", data: project })
+    // The caller already has the rename ACK; do not mask a ready prior row with refresh().
+    await act(async () => {
+      await expect(view.result.current.refreshRenamedProject(project.id, new AbortController().signal))
+        .rejects.toMatchObject({ reason: "http", status })
+    })
+    expect(view.result.current.current).toEqual(retired ? { status: "error", retryable: false } : { status: "ready", data: project })
+    expect(view.result.current.list).toEqual({ status: "ready", data: retired ? [] : [project] })
+    expect(calls).toEqual(["/api/hub/projects", `/api/hub/projects/${project.id}`, ...(stage === "collection" ? ["/api/hub/projects"] : [])])
+  } finally {
+    view.unmount()
+  }
+})
+
 it("rename read-back subject/route generation discards held detail and never starts its list", async () => {
   const { useProjectList } = await import("@/features/app/use-project-list")
   const project = { id: "project_12345678-1234-1234-1234-123456789abc", name: "Old", slug: "same", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }

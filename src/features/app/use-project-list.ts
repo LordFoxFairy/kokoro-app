@@ -193,7 +193,7 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
         : history?.key === detailKey || sameRouteRefresh && !settledMissing && history?.key.route === route && history.state.status === "ready"
           ? history.state : { status: "loading" }
 
-  // ACK invalidates old name reads synchronously. No receipt value enters this hook.
+  // ACK fences older reads; only fresh owner reads can replace the name, never the receipt.
   const refreshRenamedProject = useCallback(async (target: string, signal: AbortSignal): Promise<Project> => {
     const readFence = readScopeRef.current
     const renameFence = projectScopeRef.current
@@ -202,7 +202,7 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
       throw new DOMException("Aborted", "AbortError")
     }
     const epoch = ++readFence.epoch
-    // An acknowledged rename invalidates any previous generation's display.
+    // Preserve this generation while retiring older requests before the fresh owner barrier.
     setDetail(previous => previous?.key === detailKey ? previous : { key: detailKey, state: { status: "loading" } })
     for (const old of readFence.controllers) old.abort()
     readFence.controllers.clear()
@@ -219,9 +219,11 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
         throw new DOMException("Aborted", "AbortError")
       }
     }
+    let detailReadFinished = false
     try {
       const project = await getProject(target, controller.signal)
       check()
+      detailReadFinished = true
       const projects = await listProjects(controller.signal)
       check()
       // Publish both fresh owner reads together, only after the sequential barrier.
@@ -230,7 +232,9 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
       return project
     } catch (error) {
       check()
-      if (denied(error)) {
+      // Only the exact read's 404 proves this Project is gone, not a collection failure.
+      const targetMissing = !detailReadFinished && error instanceof ProjectReadError && error.status === 404
+      if (denied(error) || targetMissing) {
         if (error instanceof ProjectReadError && error.status === 401) setCollection({ key, state: { status: "error", retryable: false } })
         retireProject(target)
         setDetail({ key: detailKey, state: { status: "error", retryable: false } })
