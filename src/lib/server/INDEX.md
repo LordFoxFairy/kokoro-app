@@ -20,6 +20,15 @@ Web 不创建本地 Product Session，不读取 Auth.js/RP state、CSRF、callba
 
 ## 业务适配器
 
+### Hub 分发与具名处理器
+
+- `src/app/api/hub/[...path]/route.ts`：只保现顺序路径／方法分发、退役路径404与Next runtime／dynamic／HTTP exports；不解析body、不建立准入或出站请求。
+- `mcp-connector.ts`／`custom-api.ts`：承接原MCP与Custom API闭集操作，保原各自Cookie／Origin、校验、取消／期限与错误语义；不统一成处理器注册框架。
+- `skill-cover.ts`、`skill-local-import.ts`、`skill-github-import.ts`、`skill-share.ts`、`skill-package.ts`、`personal-skill-lifecycle.ts`：原六个具名Skills处理器，复用既有schema与BFF传输。
+- `hub-bff-proxy.ts`：原末端BFF转发的闭集profiles（managed Skills／history／写、MCP connections GET、Library／Project resources及原普通转发），保原URL／self与校验顺序，不是可选任意owner／URL的通用代理。
+- `hub-projection.ts`：原共用projection错误／请求约束，无准入或I/O；`hub-download.ts`：原下载头、尺寸和流／EOF校验，保个人／Artifact／Project原差异。其它现有Project、Library与MCP专用适配器不搬迁。
+
+
 所有业务 adapter 只携 allowlisted Cookie、固定 Origin 和受信服务身份调用 BFF 认证边缘，使用 `upstream-http.ts` 的有限 deadline、响应大小和取消语义：
 
 - `account-profile.ts`、`account-sessions.ts`、`shared-tasks.ts`：账户投影和分享边界；账户资料返回前保留 fresh native admission 复验，明确无效或身份变化为 `401 session_invalid`，复验不可用为 `503 account_profile_unavailable`，两者均不返回资料。

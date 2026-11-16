@@ -1,3 +1,13 @@
+## 2026-11-16 Web Hub 按现有能力收口处理器
+
+原2992行Hub入口改为只保现顺序／条件分发及Next runtime／dynamic／五HTTP exports；MCP／Custom API与六Skills具名函数进入既有lib/server目录。原共享projection错误／请求约束与下载头／流校验分别归hub-projection／hub-download；原末端多profile转发整体归hub-bff-proxy，保managed Skills／history／写、MCP connections唯一GET、Library／Project resources与原普通转发闭集，不伪称纯generic，也不引入registry、nullable-handler链、Base类、SDK或新准入层。现有其它Project／Library适配器直接复用，schema／owner选择、API／generated、依赖／lock、UI和Mori不动。
+
+主控与两个独立写区交接后停写12源码输入，原18个函数body、15个声明、route分发prefix／优先级、末端body和Next导出逐字／AST核等；只整理imports并删除原全局“密封信封／scope身份头”的误导注释。Cookie／Origin、path／body／key／CAS、header、各自原取消／期限、错误shape／状态／request-id／Retry-After、大小与EOF清理均留原位置；不统一原差异或扩404／错误响应。Custom API原body读取在deadline创建前，不将本次搬迁冒所有路径已有准入至EOF统一硬期限，也不顺手修改原时序。
+
+重构前主控具名5文件333 PASS；停写后同5文件333 PASS／0 FAIL、现architecture 4文件50 PASS，正式lint、Next typegen＋非增量tsc、production build及diff通过。12源码输入最终SHA与验收manifest核等；第三agent独立核imports／模块副作用／无循环及语义CLEAR。未改测试或删断言，不重跑全默认／无关契约生成／浏览器／真实模型／PG／部署；原HTTP为明确loopback BFF fixture，不称真实IAM或整产品E2E。两个writer早期scoped检查遇主控共享模块尚未落地的missing-import诊断仅属未集成阶段，不冒产品失败或最终验证；集成后正式门通过。
+
+更新本仓INDEX及server导航，收据／日志留Root ignored var/dev/web-hub-handler-cleanup。只暂停／恢复自己Next dev以免覆盖在用.next，恢复公开根HTTP200，其它服务／数据／资金不动。源码随App本需求PR交付，随后Root精确gitlink／真实blob摘要配对并正常PR收尾；最终merge与本轮topic清理由Git回执确认，不预写未来SHA。
+
 ## 2026-11-16 未消费 @ai-sdk/react 依赖退役
 
 按用户批准先核实际引用：tracked源码／脚本／测试未消费@ai-sdk/react，旧ADR仅为历史提及；当前AgUiChatTransport、AG-UI映射及message-parts-reader实际消费ai，保留ai@7.0.92及原消息流／恢复实现。只删manifest中的@ai-sdk/react，并由pnpm11.25正规重算lock，裁掉该包和独占的@ai-sdk/mcp、pkce-challenge、swr、throttleit、use-sync-external-store；相应react／mcp两条过期release-age例外删除，其余安装安全设置不变。1121个保留packages／1122个snapshots逐项值与父锁一致，ai依赖图／integrity、i18n及其他版本均不变，无手改锁、依赖升级或新registry。
