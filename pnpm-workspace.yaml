@@ -10,8 +10,6 @@ allowBuilds:
   workerd: true
 minimumReleaseAgeExclude:
   - '@ai-sdk/gateway@4.0.74'
-  - '@ai-sdk/mcp@2.0.44'
-  - '@ai-sdk/react@4.0.95'
   - ai@7.0.92
   - '@lordfoxfairy/i18n@0.1.0'
 onlyBuiltDependencies:
