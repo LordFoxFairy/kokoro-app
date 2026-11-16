@@ -1,3 +1,9 @@
+## 2026-11-16 未消费 @ai-sdk/react 依赖退役
+
+按用户批准先核实际引用：tracked源码／脚本／测试未消费@ai-sdk/react，旧ADR仅为历史提及；当前AgUiChatTransport、AG-UI映射及message-parts-reader实际消费ai，保留ai@7.0.92及原消息流／恢复实现。只删manifest中的@ai-sdk/react，并由pnpm11.25正规重算lock，裁掉该包和独占的@ai-sdk/mcp、pkce-challenge、swr、throttleit、use-sync-external-store；相应react／mcp两条过期release-age例外删除，其余安装安全设置不变。1121个保留packages／1122个snapshots逐项值与父锁一致，ai依赖图／integrity、i18n及其他版本均不变，无手改锁、依赖升级或新registry。
+
+主控最终冻结安装、全lint、Next typegen＋非增量tsc、现消息流4文件93 PASS／0 FAIL、production build均通过。1344个tracked源码／测试输入逐SHA保持，独立三配置diff复核CLEAR；未新增测试／业务代码、不重跑无关全默认／浏览器／真实模型／契约生成／部署，不把依赖删除冒首屏或性能提速。临时凭据仅子进程环境、0600npmrc已清；仅暂停／恢复自己的Next dev，恢复后公开根HTTP200，其它服务／数据／资金不动，Mori不动。证据留Root ignored var/dev/app-unused-ai-react；App本片沿正常PR合main，再由Root精确配对并仅清本轮topic，最终Git回执确认交付。
+
 ## 2026-11-16 App TypeScript 配置去重：有效检查不变
 
 用户批准先核引用再清理：shared三个包均有实际消费者（含范围外受保护Mori及shared内部extends），因此未删除shared包，未改Mori代码／配置／分支或仓库结构。本轮只将App本地`packages/tsconfig/base.json`并入根`tsconfig.json`，删除本地同名package、devDependency、lock link／空importer及Docker COPY；workspace只保根`.`，全部安装安全／构建设置原样。业务源码、API／Schema／generated、i18n版本／SRI／registry／resolver与shared保持不变，无新包发行或替代层。
