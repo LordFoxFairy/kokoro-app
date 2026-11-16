@@ -10,7 +10,6 @@ ENV npm_config_fetch_retries=6 \
     npm_config_network_concurrency=4
 # workspace 清单 + 锁先拷，供过滤安装。
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/tsconfig/package.json ./packages/tsconfig/
 # pnpm 11 blocks native build scripts by default in CI. Install deterministically first,
 # approve only the native packages required by Next/Tailwind, then build them explicitly.
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=true \

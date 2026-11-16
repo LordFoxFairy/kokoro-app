@@ -72,9 +72,6 @@ importers:
       '@hey-api/openapi-ts':
         specifier: 0.99.0
         version: 0.99.0(typescript@5.9.3)
-      '@kokoro/tsconfig':
-        specifier: workspace:*
-        version: link:packages/tsconfig
       '@opennextjs/cloudflare':
         specifier: ^1.20.4
         version: 1.20.4(next@16.2.6(@babel/core@7.29.7(supports-color@10.2.2))(@playwright/test@1.62.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(supports-color@10.2.2)(wrangler@4.127.1)
@@ -126,8 +123,6 @@ importers:
       yaml:
         specifier: 2.9.0
         version: 2.9.0
-
-  packages/tsconfig: {}
 
 packages:
 

@@ -1,3 +1,9 @@
+## TypeScript 配置入口
+
+App 的完整编译配置只维护在根 `tsconfig.json`，不再通过本地同名 `@kokoro/tsconfig` workspace 包间接继承。原有效编译选项、严格检查、Next 插件与 include/exclude 均保留；`pnpm-workspace.yaml` 仍维护本仓安装安全／构建设置。Docker 只复制实际存在的 manifest，不依赖 sibling 配置包。
+
+`@lordfoxfairy/i18n@0.1.0` 继续从 GitHub Packages 精确消费，源码／发行 owner 仍是 shared，本片不改 i18n、registry 或凭据接线。shared 其它包有范围外受保护消费者，本仓不负责删除或迁移。实际验证见 CURRENT。
+
 ## R-06：GitHub i18n 正式依赖（2026-11-15）
 
 App 精确消费 `@lordfoxfairy/i18n@0.1.0`，唯一源码归 shared；本地副本已删除，
