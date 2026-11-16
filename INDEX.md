@@ -1,3 +1,7 @@
+## Web Hub 分发与处理器
+
+`src/app/api/hub/[...path]/route.ts`仅保原顺序分发；MCP、Custom API和六个Skills处理器按现有能力放在`src/lib/server`。原末端多profile转发归`hub-bff-proxy.ts`，原projection／下载共用规则分别在`hub-projection.ts`／`hub-download.ts`，不新建通用框架或准入层。详细导航见[server索引](src/lib/server/INDEX.md)，本轮保行为证据与未运行范围见[CURRENT](docs/CURRENT.md)。
+
 ## App 单一 TypeScript 配置
 
 根 `tsconfig.json` 承接原本地基线与产品选项，退休 `packages/tsconfig` 伪共享层及安装／Docker接线。workspace配置只保本仓根与原安全设置；i18n正式registry依赖不变。有效配置／文件集核等及本轮验证见 `docs/CURRENT.md`；不改shared／Mori或业务代码。
