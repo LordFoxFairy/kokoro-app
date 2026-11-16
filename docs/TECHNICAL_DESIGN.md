@@ -1,3 +1,11 @@
+## H-01：本人草稿 metadata 编辑
+
+复用当前 Settings→Skills 的 Create 菜单，按需挂载个人草稿 Dialog；旧 `PersonalSkillsRead`/workspace 不恢复。Dialog 只拥有本窗口列表、表单和原命令：列表后选中目标再读本人 managed detail，确认 exact skill/source、draft 与当前字符串 CAS 后才能保存。标签与示例逐项编辑，保留顺序、重复示例与换行，不以分隔符拆装原数据。类别复用现 schema 唯一枚举。
+
+首次保存冻结目标、metadata、CAS 与幂等 key；unknown 仅显式重放原命令。可信 PATCH ACK 后只 fresh GET 读回，读失败恢复不再 PATCH；冲突须显式重新读取，不自动换 CAS 覆盖。关闭／准入代际退休取消 I/O 并拒迟到；同 actor 窗口保原未决意图，tenant/subject 变化整体退休。本人资源与权限仍由 BFF/Capability 决定，前端列表不成为写资格。无新 owner、服务、依赖、全局 store 或持久化事实。
+
+本轮仅 metadata，不提供 cover、discard、AI 或自动发布；源码与真实验收状态以 CURRENT 为准。
+
 ## R-06：i18n 单一源码与发行
 
 唯一引擎 owner 为 shared；App 以 GitHub Packages 精确依赖 `@lordfoxfairy/i18n@0.1.0`，

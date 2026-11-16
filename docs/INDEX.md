@@ -1,3 +1,7 @@
+## H-01：本人草稿 metadata
+
+[技术设计](TECHNICAL_DESIGN.md)、[传输边界](API_CONTRACT.md)与[局部状态](DATA_MODEL.md)记录现役 Settings Skills 的窄接入；实际门禁／native证据见[当前事实](CURRENT.md)。对外操作指南维护在 `developer-docs/docs/product/settings/skills.md`，不复制内部状态机到产品门户。
+
 ## 2026-11-12 · Task B 分享／显式新授权消费者
 
 [API_CONTRACT](API_CONTRACT.md) 和 [TECHNICAL_DESIGN](TECHNICAL_DESIGN.md) 文首记录固定 Public28.37 与独立私有 profile、命令／读取职责；[CURRENT](CURRENT.md) 区分源码候选、focused 验证和待主控正常组合验收。公开门户沿 catalog 正规生成，不公开私有 reauthorization artifact。

@@ -99,8 +99,9 @@ const skillExamplePromptsSchema = z
   )
   .max(10)
   .refine((values) => values.reduce((size, value) => size + new TextEncoder().encode(value).byteLength, 0) <= 16384)
+export const SKILL_CATEGORY_KEYS = ["programming", "data", "automation", "business", "design", "media", "content", "apps"] as const
 const skillCategoryKeysSchema = z
-  .array(z.enum(["programming", "data", "automation", "business", "design", "media", "content", "apps"]))
+  .array(z.enum(SKILL_CATEGORY_KEYS))
   .max(8)
   .refine((values) => new Set(values).size === values.length)
 export const createSkillDraftRequestSchema = z
@@ -131,6 +132,11 @@ export const skillStateVersionSchema = z
   .max(19)
   .regex(/^[1-9][0-9]*$/u)
   .refine((value) => BigInt(value) <= BigInt("9223372036854775807"))
+export const updateSkillDraftRequestSchema = z.object({
+  expected_state_version: skillStateVersionSchema,
+  metadata: createSkillDraftRequestSchema,
+}).strict()
+export type UpdateSkillDraftRequest = z.infer<typeof updateSkillDraftRequestSchema>
 export const skillSourceVersionSchema = z
   .string()
   .min(1)
@@ -478,6 +484,18 @@ export const managedPersonalSkillSchema = z
     publisher_profile: skillPublisherProfileSchema.optional(),
   })
   .strict()
+// Metadata update acknowledges the complete Product record, not the create-Draft receipt.
+export const updateSkillDraftAckSchema = z.object({
+  skill: managedPersonalSkillSchema.extend({
+    revision: uint64,
+    status: z.literal("draft"),
+    tags: createSkillDraftRequestSchema.shape.tags,
+    package_phase: z.enum(["none", "upload_pending", "uploaded", "valid", "invalid", "aborted"]),
+  }).strict(),
+  event_id: skillCommandId,
+  replayed: z.boolean(),
+}).strict()
+export type UpdateSkillDraftAck = z.infer<typeof updateSkillDraftAckSchema>
 export const createPersonalSkillVersionRequestSchema = createSkillDraftRequestSchema
   .extend({ example_prompts: skillExamplePromptsSchema, category_keys: skillCategoryKeysSchema })
   .strict()

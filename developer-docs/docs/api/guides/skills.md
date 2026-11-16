@@ -17,3 +17,9 @@
 本人历史使用[版本列表](/api/reference/v1/generated/skills#list-personal-skill-versions)按精确版本锚点读取。当前标记来自 publication，而非最大修订；选择旧版本只读原包，不改变安装。恢复通过既有创建新版本、原ZIP上传扫描校验及发布流程生成新UID，旧历史与安装保持；发布使用确认时冻结的 publication 与 draft 状态前置条件。它不是管理员解除隔离，也没有新增“恢复服务”。本人可通过[系列删除操作](/api/reference/v1/generated/skills#delete-personal-skill-series)明确删除整个个人系列；这与撤回、移除安装或后台丢弃草稿不同。删除后不再允许新的读取或引用，既有精确引用与审计不被改写为新版本，也不宣称物理包已擦除。
 
 外部 User API Key、普通 OAuth Open App 与 trusted App 已有明确读取路径，身份与项目范围见[认证与请求约定](/api/authentication)。普通 App 仅读自身精确绑定；trusted 资格、个人及项目安装按正式准入合并，重复系列保持完整精确表示。读取与绑定管理不授予 Agent 执行权限；示例fixture和文档生成也不触发模型、工具或积分扣减。
+
+## 本人草稿 metadata
+
+[更新已有草稿](../reference/v1/generated/skills.md#update-skill-draft)复用现有 metadata 与字符串状态版本前置条件。原地修改不会创建新版本、发布或修改安装。保存命令保持原 Idempotency-Key／正文；成功回执与随后读取的当前草稿是两份不同事实，读回失败只恢复读取，冲突不自动替换 CAS。字段、完整回执与错误以生成参考为准，不在指南维护第二份 schema。
+
+工作台操作见[技能草稿](../../product/settings/skills.md)。工作台本轮只开放 metadata，不发送封面清除字段。

@@ -4,6 +4,21 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "skills.draft.title": "Edit skill drafts",
+  "skills.draft.edit": "Edit draft",
+  "skills.draft.save": "Save changes",
+  "skills.draft.reload": "Reload current draft",
+  "skills.draft.saved": "Draft saved and read back.",
+  "skills.draft.retryOriginal": "Retry original save command",
+  "skills.draft.tags": "Tags",
+  "skills.draft.examples": "Example questions",
+  "skills.draft.addTag": "Add tag",
+  "skills.draft.removeTag": "Remove tag",
+  "skills.draft.addExample": "Add example",
+  "skills.draft.removeExample": "Remove example",
+  "skills.draft.invalid": "Check the name, summary, tags, examples, and categories for valid content and counts.",
+  "skills.draft.changed": "Draft saved. Later changes were found; the latest draft is shown.",
+
   "firstSite.projectOptions": "Project options",
   "firstSite.projectSort": "Project sort order",
   "firstSite.newProjectSection": "New section",

@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest"
 
 import { HubClientError } from "@/hub/client"
 import { createSkillPublishClient } from "@/hub/skill-publish-client"
-import { completeSkillUploadSchema, skillUploadStateSchema } from "@/hub/schemas"
+import { completeSkillUploadSchema, skillUploadStateSchema, updateSkillDraftRequestSchema } from "@/hub/schemas"
 
 it("accepts the actual Public13 Draft ACK including signed64 state_version", async () => {
   const draft = { skill_id: "mine", series_id: "series", revision: 1, status: "draft", replayed: false, state_version: "1" }
@@ -709,4 +709,76 @@ it.each([
  const result=createSkillPublishClient().deleteSeries("mine",{expected_state_version:expected,expected_publication:null},"delete-exact-step")
  if(valid)await expect(result).resolves.toEqual(data)
  else await expect(result).rejects.toMatchObject({reason:"parse",status:200})
+})
+
+
+const metadataUpdateBody = { expected_state_version: "9007199254740993", metadata: { display_name: "Mine updated", summary: "", tags: ["second", "first"], example_prompts: ["重复", "重复"], category_keys: ["programming" as const] } }
+const metadataUpdateAck = {
+  skill: { skill_id: "mine", source_ref: "skill:mine", series_id: "series", revision: "1", name: "Mine updated", summary: "", tags: ["second", "first"], example_prompts: ["重复", "重复"], category_keys: ["programming"], status: "draft", skill_updated_at: "2026-11-15T00:00:00Z", product: { state_version: "9007199254740998", publication_audience: "owner" }, package_phase: "valid" },
+  event_id: "evt:metadata-1", replayed: true,
+}
+
+it("PATCHes draft metadata with exact large CAS, original key and full Product ACK without assuming version plus one", async () => {
+  const fetcher = vi.fn().mockResolvedValue(Response.json({ data: metadataUpdateAck }, { headers }))
+  vi.stubGlobal("fetch", fetcher)
+  await expect(createSkillPublishClient().updateDraft("mine", metadataUpdateBody, "update:original")).resolves.toEqual(metadataUpdateAck)
+  expect(fetcher).toHaveBeenCalledOnce()
+  expect(fetcher).toHaveBeenCalledWith("/api/hub/self/skills/mine/draft", expect.objectContaining({ method: "PATCH", cache: "no-store", redirect: "error", headers: { "content-type": "application/json", "idempotency-key": "update:original" } }))
+  expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toEqual(metadataUpdateBody)
+})
+
+it("keeps metadata-only update requests closed and preserves explicit empty arrays", () => {
+  expect(updateSkillDraftRequestSchema.parse({ expected_state_version: "1", metadata: { display_name: "Mine", summary: "", tags: [], example_prompts: [], category_keys: [] } })).toEqual({ expected_state_version: "1", metadata: { display_name: "Mine", summary: "", tags: [], example_prompts: [], category_keys: [] } })
+  for (const body of [
+    { ...metadataUpdateBody, clear_cover: false },
+    { ...metadataUpdateBody, expected_state_version: "9223372036854775808" },
+    { ...metadataUpdateBody, expected_state_version: 1 },
+    { ...metadataUpdateBody, metadata: { ...metadataUpdateBody.metadata, tags: ["duplicate", "duplicate"] } },
+    { ...metadataUpdateBody, metadata: { ...metadataUpdateBody.metadata, example_prompts: null } },
+  ]) expect(updateSkillDraftRequestSchema.safeParse(body).success).toBe(false)
+})
+
+it("rejects malformed or wrong-resource metadata update ACKs rather than accepting unrelated success", async () => {
+  for (const data of [
+    { ...metadataUpdateAck, unexpected: true },
+    { ...metadataUpdateAck, event_id: "bad event" },
+    { ...metadataUpdateAck, replayed: "true" },
+    { ...metadataUpdateAck, skill: { ...metadataUpdateAck.skill, skill_id: "other" } },
+    { ...metadataUpdateAck, skill: { ...metadataUpdateAck.skill, source_ref: "skill:other" } },
+    { ...metadataUpdateAck, skill: { ...metadataUpdateAck.skill, status: "active" } },
+    { ...metadataUpdateAck, skill: { ...metadataUpdateAck.skill, package_phase: "validated" } },
+    { ...metadataUpdateAck, skill: { ...metadataUpdateAck.skill, product: { ...metadataUpdateAck.skill.product, state_version: "9223372036854775808" } } },
+    { ...metadataUpdateAck, skill: { ...metadataUpdateAck.skill, product: { ...metadataUpdateAck.skill.product, state_version: metadataUpdateBody.expected_state_version } } },
+    { ...metadataUpdateAck, skill: { ...metadataUpdateAck.skill, product: { ...metadataUpdateAck.skill.product, state_version: "9007199254740992" } } },
+    { ...metadataUpdateAck, skill: { ...metadataUpdateAck.skill, tags: [""] } },
+    { ...metadataUpdateAck, skill: { ...metadataUpdateAck.skill, ignored: true } },
+  ]) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ data }, { headers })))
+    await expect(createSkillPublishClient().updateDraft("mine", metadataUpdateBody, "update:original")).rejects.toMatchObject({ reason: "parse", status: 200 })
+  }
+})
+
+it("keeps updateDraft failures explicit and never retries uncertain transport results", async () => {
+  for (const [status, code] of [[403, "skill_forbidden"], [404, "skill_not_found"], [409, "skill_command_in_progress"], [412, "skill_precondition_failed"], [503, "skill_dependency_unavailable"], [400, "skill_forbidden"]] as const) {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ error: { code, message: "rejected", retryable: false } }, { status, headers }))
+    vi.stubGlobal("fetch", fetcher)
+    await expect(createSkillPublishClient().updateDraft("mine", metadataUpdateBody, "update:original")).rejects.toMatchObject({ reason: status === 400 ? "parse" : "http", status, code: status === 400 ? null : code })
+    expect(fetcher).toHaveBeenCalledOnce()
+  }
+  const fetcher = vi.fn().mockRejectedValue(new TypeError("connection lost"))
+  vi.stubGlobal("fetch", fetcher)
+  await expect(createSkillPublishClient().updateDraft("mine", metadataUpdateBody, "update:original")).rejects.toMatchObject({ reason: "network" })
+  expect(fetcher).toHaveBeenCalledOnce()
+})
+
+it("retires an aborted metadata update without accepting a late ACK", async () => {
+  const controller = new AbortController()
+  let resolve!: (response: Response) => void
+  const fetcher = vi.fn().mockImplementation(() => new Promise<Response>(done => { resolve = done }))
+  vi.stubGlobal("fetch", fetcher)
+  const outcome = expect(createSkillPublishClient().updateDraft("mine", metadataUpdateBody, "update:original", controller.signal)).rejects.toMatchObject({ reason: "aborted" })
+  controller.abort()
+  await outcome
+  resolve(Response.json({ data: metadataUpdateAck }, { headers }))
+  expect(fetcher).toHaveBeenCalledOnce()
 })

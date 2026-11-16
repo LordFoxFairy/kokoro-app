@@ -1,3 +1,7 @@
+## H-01：个人草稿 metadata
+
+现役 `SkillsContent` actor 层按需打开 `personal-skill-drafts-dialog.tsx`，`SkillsPoolTab` 共享 Create 菜单只提供入口。Dialog 通过现 SkillPublishClient 读取本人草稿、fresh 选中目标、冻结 metadata/CAS/key 保存并读回；不复活旧 workspace、不改安装／发布流。数组按项保真，同窗口 unknown 与 ACK-only 读恢复分开；actor/tenant 更换退休。
+
 ## Skills pool：数据读取不依赖面板 UI
 
 `skills-pool-resource.ts` 是现已安装pool的唯一reader与warm订阅入口；Shell直接使用它，Panel用同reader，

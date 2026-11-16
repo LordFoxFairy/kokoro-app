@@ -4,6 +4,21 @@
 import type { MessageKey } from "./messages"
 
 export const es: Partial<Record<MessageKey, string>> = {
+  "skills.draft.title": "Editar borradores de habilidades",
+  "skills.draft.edit": "Editar borrador",
+  "skills.draft.save": "Guardar cambios",
+  "skills.draft.reload": "Volver a cargar el borrador actual",
+  "skills.draft.saved": "Borrador guardado y leído de nuevo.",
+  "skills.draft.retryOriginal": "Reintentar la solicitud original de guardado",
+  "skills.draft.tags": "Etiquetas",
+  "skills.draft.examples": "Preguntas de ejemplo",
+  "skills.draft.addTag": "Añadir etiqueta",
+  "skills.draft.removeTag": "Quitar etiqueta",
+  "skills.draft.addExample": "Añadir ejemplo",
+  "skills.draft.removeExample": "Quitar ejemplo",
+  "skills.draft.invalid": "Comprueba el contenido y la cantidad del nombre, resumen, etiquetas, ejemplos y categorías.",
+  "skills.draft.changed": "Borrador guardado. Hay cambios posteriores; se muestra el borrador más reciente.",
+
   "firstSite.projectOptions": "Opciones del proyecto",
   "firstSite.projectSort": "Orden de los proyectos",
   "firstSite.newProjectSection": "Nueva sección",

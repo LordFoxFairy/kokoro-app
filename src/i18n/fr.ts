@@ -4,6 +4,21 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "skills.draft.title": "Modifier les brouillons de compétences",
+  "skills.draft.edit": "Modifier le brouillon",
+  "skills.draft.save": "Enregistrer les modifications",
+  "skills.draft.reload": "Recharger le brouillon actuel",
+  "skills.draft.saved": "Brouillon enregistré et relu.",
+  "skills.draft.retryOriginal": "Réessayer la demande initiale d’enregistrement",
+  "skills.draft.tags": "Étiquettes",
+  "skills.draft.examples": "Exemples de questions",
+  "skills.draft.addTag": "Ajouter une étiquette",
+  "skills.draft.removeTag": "Retirer l’étiquette",
+  "skills.draft.addExample": "Ajouter un exemple",
+  "skills.draft.removeExample": "Retirer l’exemple",
+  "skills.draft.invalid": "Vérifiez le contenu et le nombre du nom, du résumé, des étiquettes, des exemples et des catégories.",
+  "skills.draft.changed": "Brouillon enregistré. Des modifications ultérieures ont été trouvées ; le dernier brouillon est affiché.",
+
   "firstSite.projectOptions": "Options du projet",
   "firstSite.projectSort": "Ordre de tri des projets",
   "firstSite.newProjectSection": "Nouvelle section",

@@ -1258,6 +1258,47 @@ describe("/api/hub/[...path] proxy", () => {
     expect(init.headers["content-type"]).toBe("application/json");
   });
 
+  it("routes only the exact self draft metadata PATCH through the bounded typed Skill boundary", async () => {
+    const { PATCH } = await import("@/app/api/hub/[...path]/route");
+    const raw = '{ "expected_state_version":"9007199254740993", "metadata":{"display_name":"Mine","summary":"","tags":[],"example_prompts":[],"category_keys":[]} }';
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ data: { ack: "owner" } }, { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-update" } }));
+    const response = await PATCH(new Request("http://localhost/api/hub/self/skills/mine/draft", { method: "PATCH", headers: { cookie: sessionCookie(), origin: "http://localhost", "content-type": "application/json", "idempotency-key": "update:original" }, body: raw }), params(["self", "skills", "mine", "draft"]));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBe("owner-update");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const [target, , init] = vi.mocked(requestWithDomain).mock.calls[0]!;
+    expect(target).toBe("http://bff.test/v1/skills/mine/draft");
+    expect(init).toMatchObject({ method: "PATCH", headers: { "idempotency-key": "update:original", "content-type": "application/json" }, timeoutMs: 10_000, maxResponseBytes: 1_048_576 });
+    expect(new TextDecoder().decode(init!.body as ArrayBuffer)).toBe(raw);
+  });
+
+  it("rejects invalid draft metadata PATCH input locally without opening cover or non-self aliases", async () => {
+    const { PATCH } = await import("@/app/api/hub/[...path]/route");
+    vi.mocked(requestWithDomain).mockResolvedValue(Response.json({ data: {} }, { headers: { "cache-control": "no-store", "x-request-id": "owner-update" } }));
+    const body = { expected_state_version: "1", metadata: { display_name: "Mine", summary: "", tags: [] } };
+    for (const [path, suffix, key, raw, expected] of [
+      [["skills", "mine", "draft"], "", "key", JSON.stringify(body), 404],
+      [["self", "skills", "mine", "draft"], "?cover=true", "key", JSON.stringify(body), 400],
+      [["self", "skills", "mine", "draft"], "", "bad,key", JSON.stringify(body), 400],
+      [["self", "skills", "mine", "draft"], "", "key", JSON.stringify({ ...body, clear_cover: true }), 400],
+      [["self", "skills", "mine", "draft"], "", "key", " ".repeat(65_537), 413],
+    ] as const) {
+      const response = await PATCH(new Request(`http://localhost/api/hub/${path.join("/")}${suffix}`, { method: "PATCH", headers: { cookie: sessionCookie(), origin: "http://localhost", "content-type": "application/json", "idempotency-key": key }, body: raw }), params([...path]));
+      expect(response.status).toBe(expected);
+    }
+    expect(requestWithDomain).not.toHaveBeenCalled();
+  });
+
+  it("keeps owner refusal and malformed ACK headers on the formal metadata PATCH boundary", async () => {
+    const { PATCH } = await import("@/app/api/hub/[...path]/route");
+    for (const [status, contentType, expected] of [[403, "application/json", 403], [200, "text/plain", 502], [201, "application/json", 502]] as const) {
+      vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ error: { code: "skill_forbidden", message: "revoked", retryable: false } }, { status, headers: { "content-type": contentType, "cache-control": "no-store", "x-request-id": "owner-update" } }));
+      const response = await PATCH(new Request("http://localhost/api/hub/self/skills/mine/draft", { method: "PATCH", headers: { cookie: sessionCookie(), origin: "http://localhost", "content-type": "application/json", "idempotency-key": "update:original" }, body: JSON.stringify({ expected_state_version: "1", metadata: { display_name: "Mine", summary: "", tags: [] } }) }), params(["self", "skills", "mine", "draft"]));
+      expect(response.status).toBe(expected);
+      if (status === 403) expect(await response.json()).toMatchObject({ error: { code: "skill_forbidden" } });
+    }
+  });
+
   it("rejects a non-JSON formal command owner response before the browser sees it", async () => {
     const { POST } = await import("@/app/api/hub/[...path]/route");
     vi.mocked(requestWithDomain).mockResolvedValueOnce(

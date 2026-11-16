@@ -1,3 +1,15 @@
+## 2026-11-15 H-01：本人草稿 metadata 已本地验收
+
+基线 App `f8215c105285ab6207bcff3b84aca56631642ee4`，只接现役 Settings→Skills→添加→草稿；旧 workspace 不恢复，BFF／Capability／IAM 源码、契约 pin、依赖和 Schema 均不变。草稿鲜读后编辑名称／简介／标签／示例／类别，冻结字符串 CAS、body、key；unknown 原命令重试，ACK 后读失败仅 GET，合法后继版本采用 fresh 当前事实。同 actor 重核保未决意图，关闭／换 actor/tenant 退休 I/O，数组顺序／换行／重复示例保真。九语言补本轮新增词条；继承的旧字段 fallback 不冒全站翻译完成。
+
+主控停写后：相关 client／adapter／contract／现役宿主与原导入回归5文件372 PASS；完整默认380文件6903 PASS；contract479 PASS、architecture50 PASS，lint／正式 typecheck／production build 全部 exit0。Docs完整 check／build／导航链接检查通过（63 HTML／21595 internal links）；保留原大 chunk 提示，不借本轮扩性能工程。新行为先 RED，定向回归与只读 UI/actor 独审 CLEAR。不运行无关整套 Playwright、模型／积分／外部集成验收；本轮 native 旅程承接直接相关 E2E 证据。
+
+真实 native 登录、正式 App→BFF→IAM→Capability：唯一 QA 草稿版本1→2，唯一成功 PATCH200；正文仅 name/summary 改动，逗号标签、多行和重复示例、有序类别保持；ACK 后正式 GET、UI成功和硬刷新读回核等。后续只读补验中／法语390px编辑窗口横向不溢出、Escape返回添加按钮、同窗口重开保编辑视图；无新 PATCH／消息／模型调用。只对本轮新建未发布系列执行正式 DELETE 清理，fresh managed404；各临时 native 会话正常 logout200，正常 Web dev 已恢复。
+
+原失败如实保留：首 helper 用 textarea implicit label 的全文匹配超时，Chromium role/name核实后只改私有helper；随后403准确来自开发角色只有create_draft/install而无update_draft，mutation未调用。只读核实该专用角色仅绑定当前开发账号后，本地 operator临时增加验收动作与自有夹具清理权限，验后原 permission／membership／platform_admin核等还原；不放宽默认member或生产权限，不伪称这是正式角色管理API验收。已保存／硬刷新后的额外helper曾误设重开回到列表，以及登录后未等Shell hydration导致hash导航未打开；仅修helper、同一已保存草稿续读，不重复提交。原FAIL与后继有效子步骤分别保留在Root ignored `var/dev/h01-draft-metadata/`，不拼成零失败单次旅程。
+
+源码30个受影响文件在验收前后SHA核等，无凭据／截图／运行日志进入PR；本段为本地验收，PR/main与Root精确组合由交付后置核实。
+
 ## 2026-11-15 Project 业务代码质量：精确404与Skills数据职责
 
 本轮仅修rename ACK后exact detail404漏退休：区分detail与collection阶段，collection404不冒目标删除、503不退休。

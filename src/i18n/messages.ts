@@ -42,6 +42,21 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "skills.draft.changed": "草稿已保存；当前已有后续修改，已读取最新内容。",
+  "skills.draft.title": "编辑技能草稿",
+  "skills.draft.edit": "编辑草稿",
+  "skills.draft.save": "保存修改",
+  "skills.draft.reload": "重新载入当前草稿",
+  "skills.draft.saved": "草稿已保存并重新读取。",
+  "skills.draft.retryOriginal": "重试原保存命令",
+  "skills.draft.tags": "标签",
+  "skills.draft.examples": "示例问题",
+  "skills.draft.addTag": "新增标签",
+  "skills.draft.removeTag": "移除标签",
+  "skills.draft.addExample": "新增示例",
+  "skills.draft.removeExample": "移除示例",
+  "skills.draft.invalid": "请检查名称、简介、标签、示例和分类的内容与数量。",
+
   // MCP detail, configuration and local JSON editing.
   "mcp.tryAction": "试用一下",
   "mcp.configurationEdit": "编辑配置",
