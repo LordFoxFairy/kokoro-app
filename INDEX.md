@@ -1,3 +1,7 @@
+## App 单一 TypeScript 配置
+
+根 `tsconfig.json` 承接原本地基线与产品选项，退休 `packages/tsconfig` 伪共享层及安装／Docker接线。workspace配置只保本仓根与原安全设置；i18n正式registry依赖不变。有效配置／文件集核等及本轮验证见 `docs/CURRENT.md`；不改shared／Mori或业务代码。
+
 ## H-01：本人草稿 metadata
 
 Settings Skills 菜单按需打开 `src/ui/skills/personal-skill-drafts-dialog.tsx`，通过现 `src/hub/skill-publish-client.ts` 的 metadata PATCH 和本人 managed GET 实现原地保存／读回。本人权限归 owner；不加封面、discard、AI、旧 workspace 或新 store。当前验证与交付以 `docs/CURRENT.md` 为准。

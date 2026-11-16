@@ -1,3 +1,13 @@
+## 2026-11-16 App TypeScript 配置去重：有效检查不变
+
+用户批准先核引用再清理：shared三个包均有实际消费者（含范围外受保护Mori及shared内部extends），因此未删除shared包，未改Mori代码／配置／分支或仓库结构。本轮只将App本地`packages/tsconfig/base.json`并入根`tsconfig.json`，删除本地同名package、devDependency、lock link／空importer及Docker COPY；workspace只保根`.`，全部安装安全／构建设置原样。业务源码、API／Schema／generated、i18n版本／SRI／registry／resolver与shared保持不变，无新包发行或替代层。
+
+主控停写后核验：官方tsc --showConfig完整JSON前后相等（35个有效compilerOptions／1234个编译文件，include/exclude／Next插件／所有严格检查均保留）。锁语义仅删除本地tsconfig依赖与空importer，其余1127个packages／1128个snapshots、所有版本与integrity／设置均不变。正规冻结安装、全lint、Next typegen＋非增量tsc --noEmit、既有architecture四文件50项、production Next build通过；独立配置／安装边界复核CLEAR。未新增源码字符串测试，不重跑无关业务默认／浏览器E2E、契约或shared／Mori测试；本轮没有业务／wire变化。
+
+原离线lock和冻结安装因supply-chain metadata缓存缺口失败、指定remove CLI选项不受支持均保留；最后沿现有registry正规lock-only生成及frozen安装通过，未手改生成锁、未升级依赖。GitHub凭据仅在相应子进程环境，临时0600 npmrc已清理；未引入registry或长期secret。Docker仅移除无用manifest输入并保原root过滤安装／BuildKit认证，未运行镜像构建或部署，不冒镜像smoke已验。
+
+仅暂停并恢复本轮所有的Next dev以免覆盖正在服务的.next，恢复后公开根路径HTTP200；未操作Mori、其它应用或Docker／PG／Redis／Agent，未做模型或资金操作。原Node／CLI诊断和核等收据留Root ignored `var/dev/web-shared-cleanup/`；本段为本地交付证据，App与Root PR／精确gitlink由主控后置集成核对。
+
 ## 2026-11-15 H-01：本人草稿 metadata 已本地验收
 
 基线 App `f8215c105285ab6207bcff3b84aca56631642ee4`，只接现役 Settings→Skills→添加→草稿；旧 workspace 不恢复，BFF／Capability／IAM 源码、契约 pin、依赖和 Schema 均不变。草稿鲜读后编辑名称／简介／标签／示例／类别，冻结字符串 CAS、body、key；unknown 原命令重试，ACK 后读失败仅 GET，合法后继版本采用 fresh 当前事实。同 actor 重核保未决意图，关闭／换 actor/tenant 退休 I/O，数组顺序／换行／重复示例保真。九语言补本轮新增词条；继承的旧字段 fallback 不冒全站翻译完成。

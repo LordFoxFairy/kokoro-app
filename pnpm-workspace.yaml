@@ -1,8 +1,7 @@
-# App 只保留本地 tsconfig workspace；i18n 使用 GitHub Packages 精确版本。
+# App 仅保留根 package 与 pnpm 安装策略；i18n 使用 GitHub Packages 精确版本。
 # 产品源码不通过 sibling 相对路径或 file bridge 消费 i18n。
 packages:
   - "."
-  - "packages/*"
 strictDepBuilds: true
 allowBuilds:
   esbuild: true
