@@ -4,6 +4,21 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "skills.draft.title": "スキルの下書きを編集",
+  "skills.draft.edit": "下書きを編集",
+  "skills.draft.save": "変更を保存",
+  "skills.draft.reload": "現在の下書きを再読み込み",
+  "skills.draft.saved": "下書きを保存し、再読み込みしました。",
+  "skills.draft.retryOriginal": "元の保存リクエストを再試行",
+  "skills.draft.tags": "タグ",
+  "skills.draft.examples": "質問例",
+  "skills.draft.addTag": "タグを追加",
+  "skills.draft.removeTag": "タグを削除",
+  "skills.draft.addExample": "例を追加",
+  "skills.draft.removeExample": "例を削除",
+  "skills.draft.invalid": "名前、概要、タグ、質問例、分類の内容と件数を確認してください。",
+  "skills.draft.changed": "下書きを保存しました。その後の変更があるため、最新の下書きを表示しています。",
+
   "firstSite.projectOptions": "プロジェクトのオプション",
   "firstSite.projectSort": "プロジェクトの並べ替え",
   "firstSite.newProjectSection": "新しいセクション",

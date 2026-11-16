@@ -10,6 +10,8 @@ import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 import {
   createSkillDraftRequestSchema,
+  updateSkillDraftRequestSchema,
+  updateSkillDraftAckSchema,
   skillDraftSchema,
   beginSkillUploadRequestSchema,
   beginSkillUploadSchema,
@@ -581,5 +583,28 @@ it("restores the complete Public28.6 parent through only the named discovery-cap
   for (const changed of [raw + "\n", raw.replace("listTeamMembers", "unrelatedOperation"), raw.replace("version: 28.7.0", "version: 28.8.0"), raw.replace("maxItems: 512", "maxItems: 513"), raw.replace("maxItems: 128", "maxItems: 129"), raw.replace("maxLength: 39", "maxLength: 40")]) {
     expect(changed).not.toBe(raw)
     expect(() => restore(changed)).toThrow(/drift/)
+  }
+})
+
+
+it("pins the metadata-only draft PATCH to the existing Product operation and complete ACK fields", async () => {
+  const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
+  const update = operation(spec, "/v1/skills/{skill_id}/draft", "patch")
+  expect(update.operationId).toBe("updateSkillDraft")
+  expect(update["x-kokoro-idempotency"]).toBe("required")
+  expect(update.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", in: "header", required: true }))
+  expect(update.requestBody?.content?.["application/json"]?.schema?.$ref).toBe("#/components/schemas/SkillUpdateDraftRequest")
+  expect(update.responses?.["200"]?.content?.["application/json"]?.schema?.$ref).toBe("#/components/schemas/SkillProductAckResponse")
+  const request = shape(spec, "SkillUpdateDraftRequest")
+  expect(Object.keys(updateSkillDraftRequestSchema.shape).sort()).toEqual(Object.keys(request.properties ?? {}).filter(key => key !== "clear_cover").sort())
+  expect(Object.keys(updateSkillDraftRequestSchema.shape).sort()).toEqual([...(request.required ?? [])].sort())
+  for (const [consumer, machine] of [
+    [updateSkillDraftRequestSchema.shape.metadata.shape, shape(spec, "SkillProductMetadata")],
+    [updateSkillDraftAckSchema.shape, field(shape(spec, "SkillProductAckResponse"), "data")],
+    [updateSkillDraftAckSchema.shape.skill.shape, shape(spec, "SkillProductRecord")],
+  ] as const) {
+    expect(Object.keys(consumer).sort()).toEqual(Object.keys(machine.properties ?? {}).sort())
+    expect(Object.entries(consumer).filter(([, validator]) => !validator.isOptional()).map(([key]) => key).sort()).toEqual([...(machine.required ?? [])].sort())
+    expect(machine.additionalProperties).toBe(false)
   }
 })

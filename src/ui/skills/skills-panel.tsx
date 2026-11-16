@@ -36,6 +36,7 @@ import {
 import { SkillUploadDialog } from "./skill-upload-dialog";
 import type { CatalogDetailProjection } from "./skills-catalog-dialog";
 import { SKILL_CATALOG_RESOURCE_KEY } from "./manus-skill-client";
+import { PersonalSkillDraftsDialog } from "./personal-skill-drafts-dialog";
 
 function isNestedOverlayPointerEvent(event: Event): boolean {
   const target = event.target;
@@ -190,6 +191,9 @@ function ActorSkillsContent(props: SkillsContentProps) {
   useLayoutEffect(() => () => { const request = cardRemoveRead.current; cardRemoveRead.current = null; request?.abort(); }, [cardRemoveReadOwner]);
   const [updateOpen, setUpdateOpen] = useState<{ subject: string | null; open: boolean }>({ subject: null, open: false });
   const [personalSelection, setPersonalSelection] = useState<PersonalSkillSelection | null>(null);
+  const draftsOwner = JSON.stringify([props.readBoundary.tenant ?? null, subject]);
+  const [draftsWindow, setDraftsWindow] = useState({ owner: draftsOwner, mounted: false, open: false });
+  const draftsReturnFocus = useRef<HTMLElement | null>(null);
   const updateReturnFocus = useRef<HTMLElement | null>(null);
   const updateFallbackFocus = useRef<HTMLInputElement | null>(null);
   useLayoutEffect(() => updateFlow.retain({ admitted, subject, generation }), [updateFlow, admitted, subject, generation]);
@@ -252,7 +256,8 @@ function ActorSkillsContent(props: SkillsContentProps) {
     {personalSelection !== null ? <PersonalSkillManagement key={JSON.stringify(personalSelection)} selection={personalSelection} boundary={props.readBoundary} onReleased={() => setPersonalSelection(null)} onConfirmed={() => { if(personalSelection.operation === "delete")setPersonalSelection(null); invalidateUpdateViews(); }} onSelectPublished={selection => { if (updateCurrent) setPersonalSelection(selection); }} returnFocusRef={updateFallbackFocus} /> : null}
     {updateCurrent && updateState.kind !== "idle" ? <div className={styles.updateNotice} role="status"><span>{t(updateState.acknowledged ? "skills.update.confirmedNotice" : "skills.update.pendingNotice")}</span><Button type="button" variant="outline" onClick={event => { updateReturnFocus.current = event.currentTarget; setUpdateOpen({ subject, open: true }); void updateFlow.readCurrent(props.readBoundary); }}>{t("skills.update.resume")}</Button></div> : null}
     {removeCurrent && removeState.kind !== "idle" ? <div className={styles.updateNotice} role="status"><span>{t("skills.lifecycle.pending")}</span><Button type="button" variant="outline" onClick={() => setRemoveOpen({ subject, open: true })}>{t("skills.lifecycle.resume")}</Button></div> : null}
-    <InstalledSkillsContent {...props} onUpdateSkill={openUpdate} onRemoveSkill={openRemove} onRemoveInstalledCard={openRemoveFromCard} updateFallbackFocus={updateFallbackFocus} updateLocked={updateLocked} updatePending={cardRemoveReadKind === "reading" || updateState.kind !== "idle" || removeState.kind !== "idle"} onManagePersonal={managePersonal} personalManagementBusy={cardRemoveReadKind === "reading" || personalSelection !== null || updateState.kind !== "idle" || removeState.kind !== "idle"} />
+    {draftsWindow.mounted && draftsWindow.owner === draftsOwner ? <PersonalSkillDraftsDialog key={draftsOwner} boundary={props.readBoundary} open={draftsWindow.open} onOpenChange={open => setDraftsWindow({ owner: draftsOwner, mounted: true, open })} returnFocusRef={draftsReturnFocus} /> : null}
+    <InstalledSkillsContent {...props} onOpenDrafts={source => { if (!props.preview && props.readBoundary.admitted && subject !== null) { draftsReturnFocus.current = source; setDraftsWindow({ owner: draftsOwner, mounted: true, open: true }); } }} onUpdateSkill={openUpdate} onRemoveSkill={openRemove} onRemoveInstalledCard={openRemoveFromCard} updateFallbackFocus={updateFallbackFocus} updateLocked={updateLocked} updatePending={cardRemoveReadKind === "reading" || updateState.kind !== "idle" || removeState.kind !== "idle"} onManagePersonal={managePersonal} personalManagementBusy={cardRemoveReadKind === "reading" || personalSelection !== null || updateState.kind !== "idle" || removeState.kind !== "idle"} />
     <SkillInstallationUpdateDialog flow={updateFlow} boundary={props.readBoundary} state={updateState} admitted={updateCurrent} open={updateOpen.subject === subject && updateOpen.open} onOpenChange={open => { if (updateFlow.matches(props.readBoundary)) setUpdateOpen({ subject, open }); }} onAbandoned={invalidateUpdateViews} returnFocusRef={updateReturnFocus} fallbackFocusRef={updateFallbackFocus} />
     <SkillInstallationRemoveDialog flow={removeFlow} boundary={props.readBoundary} state={removeState} open={removeOpen.subject === subject && removeOpen.open}
       onOpenChange={open => { if (removeFlow.matches(props.readBoundary)) setRemoveOpen({ subject, open }); }} returnFocusRef={removeReturnFocus} fallbackFocusRef={updateFallbackFocus} />
@@ -287,7 +292,8 @@ function InstalledSkillsContent({
   personalManagementBusy,
   onRemoveSkill,
   onRemoveInstalledCard,
-}: SkillsContentProps & { onManagePersonal: (operation: PersonalSkillOperation, installation: PersonalInstallation) => void; personalManagementBusy: boolean; onUpdateSkill: (skill: SkillCard, source: HTMLElement) => boolean; onRemoveSkill: (installation: PersonalInstallation, source: HTMLElement | null) => boolean; onRemoveInstalledCard: (skill: SkillCard, source: HTMLElement, isCurrentTarget: () => boolean) => Promise<void>; updateFallbackFocus: RefObject<HTMLInputElement | null>; updateLocked: () => boolean; updatePending: boolean }) {
+  onOpenDrafts,
+}: SkillsContentProps & { onOpenDrafts: (source: HTMLElement | null) => void; onManagePersonal: (operation: PersonalSkillOperation, installation: PersonalInstallation) => void; personalManagementBusy: boolean; onUpdateSkill: (skill: SkillCard, source: HTMLElement) => boolean; onRemoveSkill: (installation: PersonalInstallation, source: HTMLElement | null) => boolean; onRemoveInstalledCard: (skill: SkillCard, source: HTMLElement, isCurrentTarget: () => boolean) => Promise<void>; updateFallbackFocus: RefObject<HTMLInputElement | null>; updateLocked: () => boolean; updatePending: boolean }) {
   // Importers retire their own facts/work on every admission/generation change.
   // Keep only window intent here; the actor-keyed parent clears it on switch.
   const [githubOpen, setGithubOpen] = useState(false);
@@ -458,6 +464,7 @@ function InstalledSkillsContent({
           data-embedded={embedded || undefined}
         >
           <SkillsPoolTab
+            onOpenDrafts={preview ? undefined : () => onOpenDrafts(poolCreateTriggerRef.current)}
             preview={preview}
             selectedDetailKey={detailIntent?.source === "catalog" ? detailIntent.key : null}
             onDetailProjection={receiveCatalogDetail}

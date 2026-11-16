@@ -1,3 +1,7 @@
+## H-01：草稿 metadata 窗口状态
+
+不新增持久模型。列表／fresh detail 为当前准入代际的 RAM 视图；未确认原命令在同 actor/tenant 已挂载窗口内冻结 target、metadata、字符串 CAS 和 key。ACK 与 fresh 当前内容分开；关闭不自动重放，跨账号／租户退休，硬刷新后仅可从 owner 重读已保存内容，不承诺恢复未保存表单或丢失的原 key。
+
 ## 2026-11-13 B13：审计桥不新增状态（源码阶段已验）
 
 App不持久化审计事件、权限、cursor或正文，不新增store/cache/Session事实。读取只活在原HTTP预算中，迟到/中止响应丢弃；状态归Admin UI lifetime与IAM owner，原聊天/AI SDK/草稿/财务未知命令不受本片影响。

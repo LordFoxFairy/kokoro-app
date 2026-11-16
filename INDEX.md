@@ -1,3 +1,7 @@
+## H-01：本人草稿 metadata
+
+Settings Skills 菜单按需打开 `src/ui/skills/personal-skill-drafts-dialog.tsx`，通过现 `src/hub/skill-publish-client.ts` 的 metadata PATCH 和本人 managed GET 实现原地保存／读回。本人权限归 owner；不加封面、discard、AI、旧 workspace 或新 store。当前验证与交付以 `docs/CURRENT.md` 为准。
+
 ## A-15：非首屏设置内容按需加载
 
 `src/ui/settings/settings-panel.tsx` 保持现 Panel/AccountReadSnapshotBoundary、标题与tab，只对

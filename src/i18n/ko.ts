@@ -4,6 +4,21 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "skills.draft.title": "스킬 초안 편집",
+  "skills.draft.edit": "초안 편집",
+  "skills.draft.save": "변경 사항 저장",
+  "skills.draft.reload": "현재 초안 다시 불러오기",
+  "skills.draft.saved": "초안을 저장하고 다시 불러왔습니다.",
+  "skills.draft.retryOriginal": "원래 저장 요청 다시 시도",
+  "skills.draft.tags": "태그",
+  "skills.draft.examples": "예시 질문",
+  "skills.draft.addTag": "태그 추가",
+  "skills.draft.removeTag": "태그 제거",
+  "skills.draft.addExample": "예시 추가",
+  "skills.draft.removeExample": "예시 제거",
+  "skills.draft.invalid": "이름, 요약, 태그, 예시와 분류의 내용 및 개수를 확인하세요.",
+  "skills.draft.changed": "초안을 저장했습니다. 이후 변경 사항이 있어 최신 초안을 표시합니다.",
+
   "firstSite.projectOptions": "프로젝트 옵션",
   "firstSite.projectSort": "프로젝트 정렬 기준",
   "firstSite.newProjectSection": "새 섹션",

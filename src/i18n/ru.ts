@@ -4,6 +4,21 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "skills.draft.title": "Редактирование черновиков навыков",
+  "skills.draft.edit": "Изменить черновик",
+  "skills.draft.save": "Сохранить изменения",
+  "skills.draft.reload": "Загрузить текущий черновик заново",
+  "skills.draft.saved": "Черновик сохранён и прочитан заново.",
+  "skills.draft.retryOriginal": "Повторить исходный запрос сохранения",
+  "skills.draft.tags": "Теги",
+  "skills.draft.examples": "Примеры вопросов",
+  "skills.draft.addTag": "Добавить тег",
+  "skills.draft.removeTag": "Удалить тег",
+  "skills.draft.addExample": "Добавить пример",
+  "skills.draft.removeExample": "Удалить пример",
+  "skills.draft.invalid": "Проверьте содержимое и количество символов и элементов в названии, описании, тегах, примерах и категориях.",
+  "skills.draft.changed": "Черновик сохранён. Обнаружены последующие изменения; показан последний черновик.",
+
   "firstSite.projectOptions": "Параметры проекта",
   "firstSite.projectSort": "Порядок сортировки проектов",
   "firstSite.newProjectSection": "Новый раздел",

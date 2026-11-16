@@ -4,6 +4,21 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  "skills.draft.title": "Skill-Entwürfe bearbeiten",
+  "skills.draft.edit": "Entwurf bearbeiten",
+  "skills.draft.save": "Änderungen speichern",
+  "skills.draft.reload": "Aktuellen Entwurf neu laden",
+  "skills.draft.saved": "Entwurf gespeichert und erneut gelesen.",
+  "skills.draft.retryOriginal": "Ursprüngliche Speicheranfrage wiederholen",
+  "skills.draft.tags": "Tags",
+  "skills.draft.examples": "Beispielfragen",
+  "skills.draft.addTag": "Tag hinzufügen",
+  "skills.draft.removeTag": "Tag entfernen",
+  "skills.draft.addExample": "Beispiel hinzufügen",
+  "skills.draft.removeExample": "Beispiel entfernen",
+  "skills.draft.invalid": "Prüfen Sie Inhalt und Anzahl von Name, Zusammenfassung, Tags, Beispielen und Kategorien.",
+  "skills.draft.changed": "Entwurf gespeichert. Es gibt spätere Änderungen; der neueste Entwurf wird angezeigt.",
+
   "firstSite.projectOptions": "Projektoptionen",
   "firstSite.projectSort": "Sortierreihenfolge der Projekte",
   "firstSite.newProjectSection": "Neuer Abschnitt",

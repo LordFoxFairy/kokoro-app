@@ -68,6 +68,7 @@ type SkillCreateMenuItemsProps = {
   onRecordSkill?: (event: Event) => void;
   onUpload: (event: Event) => void;
   onImportGithub: (event: Event) => void;
+  onOpenDrafts?: ((event: Event) => void) | undefined;
 };
 
 /** Reused action list keeps the toolbar and personal empty state on one menu contract. */
@@ -79,10 +80,12 @@ function SkillCreateMenuItems({
   onRecordSkill,
   onUpload,
   onImportGithub,
+  onOpenDrafts,
 }: SkillCreateMenuItemsProps) {
   const t = useT();
   return (
     <DropdownMenuGroup>
+      {onOpenDrafts ? <DropdownMenuItem onSelect={onOpenDrafts}>{t("skills.publishDrafts")}</DropdownMenuItem> : null}
       {includeBrowse ? <DropdownMenuItem onSelect={onBrowse}>
         <Compass aria-hidden="true" />
         {t("skills.browse")}
@@ -127,6 +130,7 @@ export function SkillsPoolTab({
   embedded = false,
   onOpenUpload,
   onOpenGithub,
+  onOpenDrafts,
   createTriggerRef,
   githubImportNotice,
   recentSkillKey,
@@ -172,6 +176,7 @@ export function SkillsPoolTab({
   brandName?: string;
   onOpenUpload: (returnFocusRef?: RefObject<HTMLElement | null>) => void;
   onOpenGithub: (returnFocusRef?: RefObject<HTMLElement | null>) => void;
+  onOpenDrafts?: (() => void) | undefined;
   createTriggerRef: RefObject<HTMLButtonElement | null>;
   githubImportNotice: GithubImported | null;
   recentSkillKey: string | null;
@@ -479,6 +484,7 @@ export function SkillsPoolTab({
             >
               <SkillCreateMenuItems
                 includeBrowse={embedded}
+                {...(onOpenDrafts === undefined ? {} : { onOpenDrafts: (event: Event) => selectCreateAction(onOpenDrafts, event) })}
                 {...(brandName === undefined ? {} : { brandName })}
                 onBrowse={(event) => selectCreateAction(openCatalog, event)}
                 {...(onCreateWithAi === undefined ? {} : {

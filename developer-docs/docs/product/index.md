@@ -28,6 +28,7 @@ Kokoro 把一次工作放在同一个会话里：描述目标、补充资料、�
 - [项目](projects/index.md)：组织会话、保存指令、管理手工 Todo，以及向团队成员授予只读或编辑访问。
 - [定时任务](scheduled-tasks/index.md)：设置时间、暂停恢复及查看执行结果。
 - [连接与语音](connections/index.md)：适用入口、授权与浏览器识别限制。
+- [技能草稿](settings/skills.md)：编辑本人未发布草稿、保存并读回。
 - [个性化与个人知识](settings/personalization.md)：编辑个人资料、维护知识及控制后续新消息的使用。
 - [当前支持范围](availability.md)：执行环境、分享、购买和部署边界。
 

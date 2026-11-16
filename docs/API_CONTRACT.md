@@ -1,3 +1,9 @@
+## H-01：已有本人草稿 metadata（现有契约消费）
+
+继续消费当前固定 Public29，不升级 owner 或生成契约。浏览器 `PATCH /api/hub/self/skills/{skill_id}/draft` 精确映射 BFF `PATCH /v1/skills/{skill_id}/draft`。正文仅 `expected_state_version` 与 `metadata`，后者复用现 create metadata schema；CAS 是正 signed64 十进制字符串，不转 number、不用 If-Match。本轮闭集不接受 `clear_cover`。原 JSON bytes 与 Idempotency-Key 经现有有界同源适配传递，不增任意 PATCH 转发。
+
+成功为 strict `{data:{skill,event_id,replayed}}`，完整 Product record 包含 package_phase，skill/source 必须匹配目标且为 draft；不是 createDraft 简略 ACK。读回使用现 `GET /api/hub/self/skills/managed/{skill_id}`→`GET /v1/self/skills/{skill_id}`，保原 data/meta.request_id envelope。可信 ACK 与 fresh 当前事实分开；unknown 只原 key/body/CAS 显式恢复，ACK 后读失败仅 GET，412 不自动 rebase。沿现 request-id/no-store、正文预算、10 秒期限与取消边界，不新增认证或后台接口。
+
 ## 2026-11-13 B13：Admin 审计桥输入边界（源码阶段已验）
 
 仅 GET /api/admin/identity/audit-events → BFF GET /v1/admin/identity/audit-events。只允许 limit=1–100 与非空≤2048 opaque cursor；重复/未知query、tenant/site selector、GET body、命令/CAS/编码/framing头拒绝。原 request-id、no-store、有限body/response与取消边界保持；不把坏/失败响应替换成成功空数据，不增加generic prefix或任意upstream URL。安全字段及data.items/next_cursor归BFF canonical，App只是具名透明传输；Admin的正式contract检查承担页面schema消费证明。

@@ -51,6 +51,7 @@ import {
   customApiUpdateSchema,
 } from "@/hub/custom-api.schema";
 import {
+  updateSkillDraftRequestSchema,
   createPersonalSkillVersionRequestSchema,
   createPersonalSkillVersionSchema,
   deletePersonalSkillSeriesRequestSchema,
@@ -2426,6 +2427,12 @@ async function proxyHubRequest(
     businessPath.length === 2 &&
     businessPath[0] === "skills" &&
     businessPath[1] === "drafts";
+  const skillDraftPatch =
+    request.method === "PATCH" &&
+    path[0] === "self" &&
+    businessPath.length === 3 &&
+    businessPath[0] === "skills" &&
+    businessPath[2] === "draft";
   const skillWritePost =
     request.method === "POST" &&
     path[0] === "self" &&
@@ -2442,6 +2449,7 @@ async function proxyHubRequest(
     publicProjectionRead ||
     skillUploadGet ||
     skillDraftPost ||
+    skillDraftPatch ||
     skillWritePost;
   const incomingRequestId = request.headers.get("x-kokoro-request-id");
   const requestId = publicSkillBoundary
@@ -2579,15 +2587,15 @@ async function proxyHubRequest(
         ? connectionProjectionError("invalidQuery", requestId)
         : localSkillError("invalidQuery", requestId);
   }
-  if (skillUploadGet || skillDraftPost || skillWritePost) {
+  if (skillUploadGet || skillDraftPost || skillDraftPatch || skillWritePost) {
     if (
       search !== "" ||
-      ((skillUploadGet || skillWritePost) &&
+      ((skillUploadGet || skillDraftPatch || skillWritePost) &&
         !PROJECTION_REQUEST_ID.test(formalSkillId))
     )
       return localSkillError("invalidSkillRequest", requestId);
     if (
-      (skillDraftPost || skillWritePost) &&
+      (skillDraftPost || skillDraftPatch || skillWritePost) &&
       !/^[\x21-\x2B\x2D-\x7E]{1,128}$/u.test(
         request.headers.get("idempotency-key") ?? "",
       )
@@ -2696,18 +2704,22 @@ async function proxyHubRequest(
             ? MAX_SKILL_COMMAND_BYTES
             : undefined,
       );
-      if (skillWritePost && businessPath[2] === "publish") {
+      if (skillDraftPatch || (skillWritePost && businessPath[2] === "publish")) {
         if (!JSON_MEDIA_TYPE.test(request.headers.get("content-type") ?? ""))
           return localSkillError("invalidSkillRequest", requestId);
         let raw: unknown;
         try {
-          raw = JSON.parse(
-            new TextDecoder("utf-8", { fatal: true }).decode(body),
-          ) as unknown;
+          const text = new TextDecoder("utf-8", { fatal: true }).decode(body);
+          raw = skillDraftPatch
+            ? parsePersonalSkillHistoryJson(text)
+            : JSON.parse(text) as unknown;
         } catch {
           return localSkillError("invalidSkillRequest", requestId);
         }
-        if (!skillPublishRequestSchema.safeParse(raw).success)
+        const schema = skillDraftPatch
+          ? updateSkillDraftRequestSchema
+          : skillPublishRequestSchema;
+        if (!schema.safeParse(raw).success)
           return localSkillError("invalidSkillRequest", requestId);
       }
     } catch (error) {
@@ -2884,6 +2896,7 @@ async function proxyHubRequest(
       (upstream.status >= 300 && upstream.status < 400) ||
       ((managedSkillRead ||
         skillDraftPost ||
+        skillDraftPatch ||
         skillUploadGet ||
         skillWritePost) &&
         upstream.status >= 400 &&
